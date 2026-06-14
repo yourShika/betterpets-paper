@@ -1,0 +1,37 @@
+open-cooldown-ticks: 20
+max-pets-per-player: 45
+chest-pet-chance-percent: 2.5
+pet-xp-multiplier: 1.0
+dragon-flight-speed: 0.55
+dragon-flight-lift: 0.36
+save-interval-ticks: 6000
+follow-update-ticks: 3
+ability-update-ticks: 100
+follow-distance: 2.4
+follow-height: 1.2
+follow-side-offset: 0.75
+follow-turn-speed-degrees: 6.0
+follow-teleport-distance: 24.0
+follow-teleport-duration-ticks: 8
+debug-logging: true
+debug-loot-rolls: false
+messages:
+  only-players: "Only players can use /pets."
+  no-permission: "You do not have permission to use /pets."
+  cooldown: "Please wait a moment before opening the pet menu again."
+  pet-added: "Added %pet% to your pet list."
+  duplicate-pet: "You already have this pet."
+  pet-limit: "You have reached the maximum amount of pets."
+  active-pet: "You summoned %pet%."
+  despawned: "Your active pet has been despawned."
+  converted: "Converted %pet% back to an item."
+  no-active-pet: "You do not have an active pet."
+  no-space: "Your inventory is full, so the item was dropped."
+  usage-give: "Usage: /pets give <pet|all> [level] [player]"
+  unknown-pet: "Unknown pet: %pet%"
+  player-not-found: "Player not found: %player%"
+  test-give: "Gave %pet% level %level% to %player%."
+  chances-saved: "Spawn chance for %pet% is now %chance%%."
+  info-opened: "Opening pet catalogue."
+  alpaca-storage-not-empty: "Empty the Alpaca storage before switching, despawning, or converting this pet."
+  no-pet-storage: "Pet items cannot be stored inside pet storage."

@@ -1,0 +1,26 @@
+name: BetterPets
+version: '1.0.0'
+main: de.kamil.betterpets.BetterPetsPlugin
+description: Better Pets converted fully to Paper plugin form.
+api-version: '26.1.2'
+softdepend:
+  - LuckPerms
+authors:
+  - Vanderflys
+  - Kamil Bura
+permissions:
+  betterpets.command.pets:
+    description: Allows opening the Better Pets menu.
+    default: true
+  betterpets.give:
+    description: Allows giving Better Pets test items.
+    default: op
+  betterpets.chances:
+    description: Allows opening and changing Better Pets spawn chances.
+    default: op
+  betterpets.info:
+    description: Allows opening the Better Pets catalogue.
+    default: true
+  betterpets.admin:
+    description: Allows every Better Pets command and management action.
+    default: op
