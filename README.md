@@ -1,6 +1,6 @@
 # 🐾 BetterPets Plugin Fork
 
-> Ein inoffizieller Plugin-Port / Fork des ursprünglichen **Better Pets** Datapacks.
+> An unofficial plugin port / community fork inspired by the original **Better Pets** datapack.
 
 ![Minecraft](https://img.shields.io/badge/Minecraft-Java%20Edition-brightgreen)
 ![Status](https://img.shields.io/badge/Status-In%20Development-yellow)
@@ -8,189 +8,184 @@
 
 ---
 
-## ✨ Über das Projekt
+## ✨ About This Project
 
-Dieses Projekt ist ein **inoffizieller Fork / Plugin-Port** des ursprünglichen **Better Pets** Datapacks.
+This project is an **unofficial plugin port / community fork** inspired by the original **Better Pets** datapack.
 
-Ziel ist es, die Idee und das Spielgefühl von Better Pets in eine Plugin-Form zu bringen und dabei eigene Anpassungen, Verbesserungen und zusätzliche Features einzubauen.
+The goal of this project is to bring the idea and gameplay experience of Better Pets into a plugin format, while adding custom adjustments, improvements, and new features.
 
-Das Projekt ist dafür gedacht, von der Community genutzt, getestet und weiterentwickelt zu werden.
-
----
-
-## 🐶 Was ist BetterPets?
-
-BetterPets erweitert Minecraft um neue Begleiter, die Spieler auf ihren Abenteuern unterstützen können.
-
-Diese Version soll ähnliche Funktionen bieten, aber als Plugin umgesetzt werden, damit sie besser für Server-Setups geeignet ist.
-
-Geplante Inhalte:
-
-* 🐾 Haustiere / Begleiter für Spieler
-* ⚔️ Nützliche Fähigkeiten im Gameplay
-* 🎒 Erweiterte Interaktionen
-* 🧩 Plugin-basierte Nutzung statt reinem Datapack
-* ⚙️ Konfigurierbare Einstellungen
-* 🌍 Serverfreundliche Umsetzung
+This project is intended to be used, tested, and improved by the community.
 
 ---
 
-## 🚧 Projektstatus
+## 🐶 What is BetterPets?
 
-Dieses Projekt befindet sich aktuell noch in Entwicklung.
+BetterPets adds new pet companions to Minecraft, allowing players to have helpful friends by their side during their adventures.
 
-Es können noch Bugs, fehlende Features oder Änderungen an der Struktur auftreten.
+This plugin version aims to provide a similar experience, but in a format that is better suited for Minecraft server setups.
 
-| Bereich        | Status       |
-| -------------- | ------------ |
-| Grundsystem    | 🚧 In Arbeit |
-| Pet-Mechaniken | 🚧 In Arbeit |
-| Konfiguration  | 📝 Geplant   |
-| Permissions    | 📝 Geplant   |
-| Dokumentation  | 🚧 In Arbeit |
+Planned features include:
+
+* 🐾 Pet companions for players
+* ⚔️ Useful gameplay abilities
+* 🎒 Extended pet interactions
+* 🧩 Plugin-based usage instead of a datapack-only setup
+* ⚙️ Configurable settings
+* 🌍 Server-friendly implementation
+
+---
+
+## 🚧 Project Status
+
+This project is currently still in development.
+
+Bugs, missing features, and structural changes may occur during development.
+
+| Area          | Status         |
+| ------------- | -------------- |
+| Core System   | 🚧 In Progress |
+| Pet Mechanics | 🚧 In Progress |
+| Configuration | 📝 Planned     |
+| Permissions   | 📝 Planned     |
+| Documentation | 🚧 In Progress |
 
 ---
 
 ## 📦 Installation
 
-> Eine genaue Installationsanleitung folgt, sobald die erste nutzbare Version verfügbar ist.
+> A detailed installation guide will be added once the first usable version is available.
 
-Geplant:
+Planned installation steps:
 
-1. Plugin herunterladen
-2. `.jar` Datei in den `plugins` Ordner legen
-3. Server starten
-4. Konfiguration anpassen
-5. Spaß mit BetterPets haben 🐾
+1. Download the plugin
+2. Place the `.jar` file into your server's `plugins` folder
+3. Start or restart the server
+4. Adjust the configuration
+5. Enjoy BetterPets 🐾
 
 ---
 
 ## ⚙️ Commands
 
-> Commands können sich während der Entwicklung noch ändern.
+> Commands may change during development.
 
-| Command              | Beschreibung                   |
-| -------------------- | ------------------------------ |
-| `/betterpets`        | Hauptbefehl des Plugins        |
-| `/betterpets help`   | Zeigt Hilfe und Infos an       |
-| `/betterpets reload` | Lädt die Konfiguration neu     |
-| `/pet`               | Öffnet oder verwaltet dein Pet |
+| Command              | Description                       |
+| -------------------- | --------------------------------- |
+| `/betterpets`        | Main plugin command               |
+| `/betterpets help`   | Shows help and plugin information |
+| `/betterpets reload` | Reloads the plugin configuration  |
+| `/pet`               | Opens or manages your pet         |
 
 ---
 
 ## 🔐 Permissions
 
-| Permission          | Beschreibung                    |
-| ------------------- | ------------------------------- |
-| `betterpets.use`    | Erlaubt die Nutzung des Plugins |
-| `betterpets.admin`  | Zugriff auf Admin-Funktionen    |
-| `betterpets.reload` | Erlaubt das Neuladen der Config |
+| Permission          | Description                        |
+| ------------------- | ---------------------------------- |
+| `betterpets.use`    | Allows players to use the plugin   |
+| `betterpets.admin`  | Grants access to admin features    |
+| `betterpets.reload` | Allows reloading the configuration |
 
 ---
 
 ## 🧪 Features
 
-* 🐕 Pets als Begleiter
-* 🧠 Eigene Plugin-Logik
-* 🛠️ Anpassbare Einstellungen
-* 💬 Einfache Commands
-* 🔒 Permissions für Server
-* 🧩 Erweiterbar für zukünftige Features
+* 🐕 Pet companions
+* 🧠 Custom plugin logic
+* 🛠️ Adjustable settings
+* 💬 Simple commands
+* 🔒 Permission support
+* 🧩 Expandable for future features
 
 ---
 
 ## 📜 Credits
 
-Dieses Projekt basiert auf der Idee des originalen **Better Pets** Projekts.
+This project is inspired by the original **Better Pets** project.
 
-Originales Projekt:
+Original project:
 
-🔗 [Better Pets auf Modrinth](https://modrinth.com/datapack/betterpets)
+🔗 [Better Pets on Modrinth](https://modrinth.com/datapack/betterpets)
 
-Original Creator:
+Original creator:
 
 👤 **Vanderflys**
 
-Alle Rechte am originalen Projekt, Namen, Konzepten, Assets oder sonstigen Inhalten liegen bei den jeweiligen Rechteinhabern.
+All rights to the original project, name, concepts, assets, and related content belong to their respective rights holders.
 
 ---
 
 ## ⚠️ Disclaimer
 
-Dieses Projekt ist **kein offizielles Update**, **keine offizielle Fortsetzung** und **nicht direkt mit dem originalen Better Pets Projekt verbunden**, sofern nicht ausdrücklich anders angegeben.
+This project is **not an official update**, **not an official continuation**, and **not directly affiliated with the original Better Pets project**, unless explicitly stated otherwise.
 
-Ich beanspruche **keine Rechte am Originalprojekt**.
+I do **not claim any rights to the original project**.
 
-Dieses Repository ist als **inoffizieller Fork / Plugin-Port** gedacht, damit die Community eine Plugin-Version nutzen, testen und erweitern kann.
+This repository is intended as an **unofficial community fork / plugin port**, allowing the community to use, test, and expand a plugin-based version.
 
-Falls der ursprüngliche Autor oder Rechteinhaber möchte, dass bestimmte Inhalte entfernt, angepasst oder anders gekennzeichnet werden, kann gerne Kontakt aufgenommen werden.
+If the original author or rights holder wants specific content removed, changed, or credited differently, please contact me.
 
 ---
 
-## 🤝 Mitmachen
+## 🤝 Contributing
 
-Pull Requests, Issues und Vorschläge sind willkommen.
+Pull requests, issues, and suggestions are welcome.
 
-Du kannst helfen durch:
+You can help with:
 
-* 🐛 Bug Reports
-* 💡 Feature-Ideen
+* 🐛 Bug reports
+* 💡 Feature ideas
 * 🧪 Testing
-* 📚 Dokumentation
-* 🔧 Code-Beiträge
+* 📚 Documentation
+* 🔧 Code contributions
 
 ---
 
 ## 📌 Roadmap
 
-* [ ] Grundstruktur des Plugins
-* [ ] Pet-System
+* [ ] Plugin core structure
+* [ ] Pet system
 * [ ] Commands
 * [ ] Permissions
-* [ ] Config-Dateien
-* [ ] Mehrere Pet-Typen
-* [ ] Fähigkeiten für Pets
-* [ ] Admin-Tools
-* [ ] Dokumentation
-* [ ] Erste Release-Version
+* [ ] Config files
+* [ ] Multiple pet types
+* [ ] Pet abilities
+* [ ] Admin tools
+* [ ] Documentation
+* [ ] First release version
 
 ---
 
-## ❓ Häufige Fragen
+## ❓ FAQ
 
-### Ist das das originale Better Pets?
+### Is this the original Better Pets?
 
-Nein. Dieses Projekt ist ein inoffizieller Fork / Plugin-Port.
+No. This project is an unofficial plugin port / community fork.
 
-### Darf ich das Plugin auf meinem Server nutzen?
+### Can I use this plugin on my server?
 
-Ja, sobald eine Version veröffentlicht wurde, kannst du sie auf deinem Server testen und nutzen.
+Yes, once a version is released, you can test and use it on your server.
 
-### Ist das Projekt fertig?
+### Is this project finished?
 
-Nein. Es befindet sich aktuell noch in Entwicklung.
+No. It is currently still in development.
 
-### Hat dieses Projekt etwas mit dem Originalautor zu tun?
+### Is this project affiliated with the original author?
 
-Nein, sofern nicht anders angegeben. Credits gehen an den ursprünglichen Creator des Better Pets Projekts.
-
----
-
-## ❤️ Danke
-
-Danke an den ursprünglichen Creator von **Better Pets** für die Idee und Inspiration.
-
-Dieses Projekt entsteht aus Respekt gegenüber dem Original und mit dem Ziel, eine nutzbare Plugin-Version für Server bereitzustellen.
+No, unless stated otherwise. Credits go to the original creator of the Better Pets project.
 
 ---
 
-## 📄 Lizenz
+## ❤️ Special Thanks
 
-Die Lizenz dieses Plugin-Forks wird noch festgelegt.
+Thanks to the original creator of **Better Pets** for the idea and inspiration.
 
-Bitte beachte:
+This project is created with respect for the original work and with the goal of providing a usable plugin version for Minecraft servers.
 
-* Das originale Better Pets Projekt gehört dem ursprünglichen Rechteinhaber.
-* Dieses Repository beansprucht keine Rechte an originalen Inhalten.
-* Eigener Code in diesem Repository kann separat lizenziert werden.
-* Originale Assets, Namen oder Inhalte sollten nur verwendet werden, wenn die Erlaubnis dafür vorliegt.
+---
+
+## 📄 License
+
+* The original Better Pets project belongs to its original rights holder.
+* This repository does not claim rights to original content.
+* Custom code in this repository may be licensed separately.
