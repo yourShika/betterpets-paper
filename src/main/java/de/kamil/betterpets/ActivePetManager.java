@@ -4,11 +4,13 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
+import org.bukkit.EntityEffect;
 import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
+import org.bukkit.Sound;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -18,10 +20,14 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Interaction;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Projectile;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.potion.PotionEffect;
@@ -31,6 +37,7 @@ import org.bukkit.util.Vector;
 
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -122,6 +129,40 @@ public final class ActivePetManager {
         Attribute.MINING_EFFICIENCY
     );
 
+    private static final Set<Material> MOLE_BLOCKS = EnumSet.of(
+        Material.DIRT,
+        Material.COARSE_DIRT,
+        Material.ROOTED_DIRT,
+        Material.GRASS_BLOCK,
+        Material.PODZOL,
+        Material.MYCELIUM,
+        Material.DIRT_PATH,
+        Material.FARMLAND,
+        Material.MUD,
+        Material.CLAY,
+        Material.GRAVEL,
+        Material.SAND,
+        Material.RED_SAND,
+        Material.SUSPICIOUS_SAND,
+        Material.SUSPICIOUS_GRAVEL,
+        Material.SOUL_SAND,
+        Material.SOUL_SOIL
+    );
+
+    private static final List<PotionEffectType> NEGATIVE_EFFECTS = List.of(
+        PotionEffectType.POISON,
+        PotionEffectType.WITHER,
+        PotionEffectType.SLOWNESS,
+        PotionEffectType.WEAKNESS,
+        PotionEffectType.MINING_FATIGUE,
+        PotionEffectType.NAUSEA,
+        PotionEffectType.BLINDNESS,
+        PotionEffectType.HUNGER,
+        PotionEffectType.UNLUCK,
+        PotionEffectType.DARKNESS,
+        PotionEffectType.LEVITATION
+    );
+
     private final JavaPlugin plugin;
     private final PetDefinitions definitions;
     private final PetStorage storage;
@@ -130,6 +171,7 @@ public final class ActivePetManager {
     private final NamespacedKey petUuidKey;
     private final Map<UUID, ActivePet> activePets = new HashMap<>();
     private final Map<UUID, RideState> rides = new HashMap<>();
+    private final Map<UUID, Set<PotionEffectType>> petBuffs = new HashMap<>();
     private BukkitTask task;
     private long tick;
 
@@ -353,13 +395,37 @@ public final class ActivePetManager {
         return HOSTILE.contains(entity.getType()) || isUndead(entity);
     }
 
-    public void handleWardenTarget(final EntityTargetLivingEntityEvent event) {
-        if (event.getEntityType() != EntityType.WARDEN || !(event.getTarget() instanceof Player player)) {
+    public void handlePetTargeting(final EntityTargetLivingEntityEvent event) {
+        if (!(event.getTarget() instanceof Player player)) {
             return;
         }
-        activePet(player)
-            .filter(pet -> pet.definitionId().equals("warden"))
-            .ifPresent(ignored -> event.setCancelled(true));
+        final OwnedPet pet = activePet(player).orElse(null);
+        if (pet == null) {
+            return;
+        }
+        switch (pet.definitionId()) {
+            case "warden" -> {
+                if (event.getEntityType() == EntityType.WARDEN) {
+                    event.setCancelled(true);
+                }
+            }
+            case "cursed_plushie" -> {
+                final double chance = Math.min(0.75, 0.25 + (abilityTier(pet.level()) * 0.025));
+                if (isHostile(event.getEntity()) && ThreadLocalRandom.current().nextDouble() < chance) {
+                    event.setCancelled(true);
+                    spawnPlushieDistraction(player);
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    private void spawnPlushieDistraction(final Player player) {
+        final ActivePet active = activePets.get(player.getUniqueId());
+        final Location location = (active != null ? active.display().getLocation() : player.getLocation()).clone().add(0, 0.4, 0);
+        player.getWorld().spawnParticle(Particle.SOUL, location, 8, 0.2, 0.3, 0.2, 0.01);
+        player.getWorld().playSound(location, Sound.ENTITY_VEX_AMBIENT, 0.7F, 0.6F);
     }
 
     public void applyHitAbility(final Player player, final LivingEntity victim) {
@@ -391,21 +457,38 @@ public final class ActivePetManager {
 
     public void applyDefenseAbility(final Player player, final Entity damager) {
         final OwnedPet pet = activePet(player).orElse(null);
-        if (pet == null || !(damager instanceof LivingEntity living) || damager.equals(player)) {
+        if (pet == null) {
             return;
         }
 
         final int tier = abilityTier(pet.level());
         switch (pet.definitionId()) {
-            case "hedgehog" -> living.damage(Math.min(3.0, 0.4 + (tier * 0.08)));
+            case "hedgehog" -> {
+                if (damager instanceof LivingEntity living && !living.equals(player)) {
+                    living.damage(Math.min(3.0, 0.4 + (tier * 0.08)));
+                }
+            }
             case "platypus" -> {
-                if (isWetOrNearWater(player)) {
-                    living.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60 + (tier * 4), 0, true, false, true));
+                final LivingEntity attacker = resolveAttacker(player, damager);
+                if (attacker != null && isWetOrNearWater(player)) {
+                    // Undead mobs are immune to Poison, so wither them instead for a visible effect.
+                    final PotionEffectType effect = isUndead(attacker) ? PotionEffectType.WITHER : PotionEffectType.POISON;
+                    attacker.addPotionEffect(new PotionEffect(effect, 80 + (tier * 6), 0, true, false, true));
                 }
             }
             default -> {
             }
         }
+    }
+
+    private LivingEntity resolveAttacker(final Player player, final Entity damager) {
+        if (damager instanceof Projectile projectile && projectile.getShooter() instanceof LivingEntity shooter) {
+            return shooter.equals(player) ? null : shooter;
+        }
+        if (damager instanceof LivingEntity living && !living.equals(player)) {
+            return living;
+        }
+        return null;
     }
 
     public void applyKillAbility(final Player player, final LivingEntity killed) {
@@ -445,11 +528,17 @@ public final class ActivePetManager {
                 updateRide(player, active, ride);
             }
             follow(player, active);
-            if (ride != null && tick % 8L == 0L) {
+            if (ride != null && tick % 4L == 0L) {
                 spawnDragonTrail(player, pet);
+            } else if (ride == null && isDragon(pet.definitionId()) && tick % 6L == 0L) {
+                spawnPetWalkTrail(player, pet, active);
             }
-            if (pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 10L == 0L) {
+            if (pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
                 spawnUnicornGlitter(player);
+            }
+            updateReveals(player, pet);
+            if (pet.definitionId().equals("allay") && tick % 10L == 0L) {
+                collectAllayItems(player, Math.min(12.0, 4.0 + (abilityTier(pet.level()) * 0.4)));
             }
             if (tick % abilityInterval == 0L) {
                 applyPassive(player, pet);
@@ -513,10 +602,10 @@ public final class ActivePetManager {
             motion.subtract(right);
         }
         if (motion.lengthSquared() > 0.01) {
-            motion.normalize().multiply(Math.max(0.1, plugin.getConfig().getDouble("dragon-flight-speed", 0.85)));
+            motion.normalize().multiply(Math.max(0.1, plugin.getConfig().getDouble("dragon-flight-speed", 1.5)));
         }
         if (ride.jump()) {
-            motion.setY(Math.max(motion.getY(), Math.max(0.28, plugin.getConfig().getDouble("dragon-flight-lift", 0.36))));
+            motion.setY(Math.max(motion.getY(), Math.max(0.28, plugin.getConfig().getDouble("dragon-flight-lift", 0.55))));
         } else if (motion.lengthSquared() <= 0.01) {
             motion.setY(Math.sin(tick / 12.0) * 0.01);
         }
@@ -553,7 +642,7 @@ public final class ActivePetManager {
         }
         direction.normalize();
         final double bob = Math.sin(tick / 6.0) * 0.08;
-        final Location target = base.add(0, -0.95 + bob, 0);
+        final Location target = base.add(0, -0.35 + bob, 0);
         target.setDirection(player.getLocation().getDirection());
         return target;
     }
@@ -594,13 +683,13 @@ public final class ActivePetManager {
         final Color color = Color.fromRGB(random.nextInt(80, 256), random.nextInt(80, 256), random.nextInt(80, 256));
         player.getWorld().spawnParticle(
             Particle.DUST,
-            player.getLocation().add(0, 0.25, 0),
-            3,
-            0.35,
-            0.12,
-            0.35,
+            player.getLocation().add(0, 0.5, 0),
+            10,
+            0.5,
+            0.3,
+            0.5,
             0.0,
-            new Particle.DustOptions(color, 0.75F)
+            new Particle.DustOptions(color, 1.1F)
         );
     }
 
@@ -608,15 +697,15 @@ public final class ActivePetManager {
         final Location location = player.getLocation().add(0, 0.8, 0);
         try {
             switch (pet.definitionId()) {
-                case "ender_dragon" -> player.getWorld().spawnParticle(Particle.DRAGON_BREATH, location, 2, 0.35, 0.18, 0.35, 0.0, 1.0F);
-                case "blue_dragon" -> player.getWorld().spawnParticle(Particle.ENCHANT, location, 3, 0.35, 0.18, 0.35, 0.0);
-                case "red_dragon" -> player.getWorld().spawnParticle(Particle.FLAME, location, 2, 0.25, 0.12, 0.25, 0.0);
+                case "ender_dragon" -> player.getWorld().spawnParticle(Particle.DRAGON_BREATH, location, 14, 0.55, 0.35, 0.55, 0.01, 1.0F);
+                case "blue_dragon" -> player.getWorld().spawnParticle(Particle.ENCHANT, location, 22, 0.65, 0.45, 0.65, 0.0);
+                case "red_dragon" -> player.getWorld().spawnParticle(Particle.FLAME, location, 14, 0.45, 0.3, 0.45, 0.01);
                 default -> {
                 }
             }
         } catch (final IllegalArgumentException exception) {
             if (pet.definitionId().equals("ender_dragon")) {
-                player.getWorld().spawnParticle(Particle.PORTAL, location, 4, 0.35, 0.18, 0.35, 0.0);
+                player.getWorld().spawnParticle(Particle.PORTAL, location, 16, 0.55, 0.35, 0.55, 0.0);
             }
         }
     }
@@ -628,32 +717,27 @@ public final class ActivePetManager {
 
     private void applyPeriodicAbilities(final Player player, final OwnedPet pet) {
         switch (pet.definitionId()) {
-            case "blue_dragon", "red_dragon" -> player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 220, 3, true, false, true));
-            case "ender_dragon" -> player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 220, 2, true, false, true));
-            case "bat" -> {
-                if (player.getLocation().getY() < 50.0) {
-                    glowNearestHostile(player, Math.min(24, 8 + abilityTier(pet.level())));
-                }
-            }
+            case "blue_dragon", "red_dragon" -> applyPetBuff(player, PotionEffectType.ABSORPTION, 3, 220);
+            case "ender_dragon" -> applyPetBuff(player, PotionEffectType.ABSORPTION, 2, 220);
             case "capybara" -> {
                 if (isWetOrNearWater(player)) {
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 120, player.getWorld().hasStorm() && pet.level() >= 80 ? 1 : 0, true, false, true));
+                    applyPetBuff(player, PotionEffectType.REGENERATION, player.getWorld().hasStorm() && pet.level() >= 80 ? 1 : 0);
                 }
             }
-            case "chicken" -> player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 220, 1, true, false, true));
+            case "chicken" -> applyPetBuff(player, PotionEffectType.SLOW_FALLING, 1);
             case "duck" -> {
                 if (isAirborne(player)) {
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 80, 0, true, false, true));
+                    applyPetBuff(player, PotionEffectType.SLOW_FALLING, 0);
                 }
             }
             case "koala" -> {
                 if (nearTree(player)) {
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 0, true, false, true));
+                    applyPetBuff(player, PotionEffectType.REGENERATION, 0);
                 }
             }
             case "panda" -> {
                 if (biomeKey(player).contains("bamboo_jungle")) {
-                    player.addPotionEffect(new PotionEffect(PotionEffectType.HERO_OF_THE_VILLAGE, 220, 1, true, false, true));
+                    applyPetBuff(player, PotionEffectType.HERO_OF_THE_VILLAGE, 1);
                 }
             }
             case "penguin" -> freezeWaterNear(player);
@@ -665,40 +749,106 @@ public final class ActivePetManager {
                     entity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 160, 1, true, false, true));
                 });
             }
-            case "red_parrot" -> glowNearestHostile(player, Math.min(30, 10 + (pet.level() / 10) * 2));
-            case "warden" -> {
-                glowUndead(player, Math.min(50, Math.max(10, pet.level())));
-                Bukkit.getWorlds().forEach(world -> world.getEntitiesByClass(org.bukkit.entity.Warden.class).forEach(warden -> {
-                    if (warden.getTarget() != null && warden.getTarget().equals(player)) {
-                        warden.setTarget(null);
-                    }
-                }));
-            }
-            case "phoenix" -> maybeGivePhoenixTotem(player, pet);
+            case "warden" -> Bukkit.getWorlds().forEach(world -> world.getEntitiesByClass(org.bukkit.entity.Warden.class).forEach(warden -> {
+                if (warden.getTarget() != null && warden.getTarget().equals(player)) {
+                    warden.setTarget(null);
+                }
+            }));
             case "herobrine" -> {
                 player.getWorld().setStorm(true);
                 player.getWorld().setThundering(true);
             }
-            case "unicorn" -> player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, pet.level() >= 80 ? 1 : 0, true, false, true));
+            case "unicorn" -> applyPetBuff(player, PotionEffectType.REGENERATION, pet.level() >= 80 ? 1 : 0);
             default -> {
             }
         }
     }
 
-    private void maybeGivePhoenixTotem(final Player player, final OwnedPet pet) {
-        final long cooldown = pet.level() >= 100 ? 43_200_000L : pet.level() >= 50 ? 64_800_000L : 86_400_000L;
-        final long now = System.currentTimeMillis();
-        if (now - pet.lastTotemMillis() < cooldown) {
-            return;
+    public static long phoenixCooldownMillis(final int level) {
+        if (level >= 100) {
+            return 43_200_000L; // 12 hours
         }
-        if (player.getInventory().contains(Material.TOTEM_OF_UNDYING)) {
-            return;
+        if (level >= 50) {
+            return 64_800_000L; // 18 hours
         }
+        return 86_400_000L; // 24 hours
+    }
 
+    /**
+     * Saves the player from a lethal hit, exactly as if they had been holding a Totem of Undying.
+     * This is on-demand (triggered by the damage event), so it works even if the server was idle or
+     * asleep, unlike a real-time timer. Returns true if the player was revived.
+     */
+    public boolean tryPhoenixRevive(final Player player) {
+        final OwnedPet pet = activePet(player).orElse(null);
+        if (pet == null || !pet.definitionId().equals("phoenix")) {
+            return false;
+        }
+        final long now = System.currentTimeMillis();
+        if (now - pet.lastTotemMillis() < phoenixCooldownMillis(pet.level())) {
+            return false;
+        }
         pet.setLastTotemMillis(now);
-        player.getInventory().addItem(new org.bukkit.inventory.ItemStack(Material.TOTEM_OF_UNDYING));
-        player.sendMessage(Component.text("Your Phoenix has granted you a Totem of Undying.", net.kyori.adventure.text.format.NamedTextColor.DARK_RED));
+
+        final AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+        player.setHealth(Math.min(maxHealth == null ? 1.0 : maxHealth.getValue(), 1.0));
+        player.setFireTicks(0);
+        player.setFreezeTicks(0);
+        for (final PotionEffectType negative : NEGATIVE_EFFECTS) {
+            player.removePotionEffect(negative);
+        }
+        player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 900, 1, true, true, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 100, 1, true, true, true));
+        player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 800, 0, true, true, true));
+        player.playEffect(EntityEffect.TOTEM_RESURRECT);
+        player.getWorld().playSound(player.getLocation(), Sound.ITEM_TOTEM_USE, 1.0F, 1.0F);
+        player.sendMessage(Component.text("Your Phoenix saved you from death!", net.kyori.adventure.text.format.NamedTextColor.GOLD));
         storage.save();
+        return true;
+    }
+
+    public void handleMoleBreak(final Player player, final Block block) {
+        final OwnedPet pet = activePet(player).orElse(null);
+        if (pet == null || !pet.definitionId().equals("mole") || !MOLE_BLOCKS.contains(block.getType())) {
+            return;
+        }
+        final double chance = Math.min(0.6, 0.1 + (abilityTier(pet.level()) * 0.025));
+        if (ThreadLocalRandom.current().nextDouble() >= chance) {
+            return;
+        }
+        final ItemStack tool = player.getInventory().getItemInMainHand();
+        if (!(tool.getItemMeta() instanceof Damageable)) {
+            return;
+        }
+        final Material toolType = tool.getType();
+        final int before = ((Damageable) tool.getItemMeta()).getDamage();
+        // The tool's durability is consumed right after this break, so refund the lost point next tick.
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            final ItemStack current = player.getInventory().getItemInMainHand();
+            if (current.getType() != toolType || !(current.getItemMeta() instanceof Damageable currentDamageable)) {
+                return;
+            }
+            if (currentDamageable.getDamage() > before) {
+                currentDamageable.setDamage(before);
+                current.setItemMeta(currentDamageable);
+            }
+        });
+    }
+
+    private void collectAllayItems(final Player player, final double radius) {
+        for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
+            if (!(entity instanceof Item itemEntity) || itemEntity.getPickupDelay() > 0 || !itemEntity.canPlayerPickup()) {
+                continue;
+            }
+            final ItemStack stack = itemEntity.getItemStack();
+            final Map<Integer, ItemStack> leftover = player.getInventory().addItem(stack);
+            if (leftover.isEmpty()) {
+                itemEntity.remove();
+                player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.6F, 1.6F);
+            } else {
+                itemEntity.setItemStack(leftover.values().iterator().next());
+            }
+        }
     }
 
     private void applyPassive(final Player player, final OwnedPet pet) {
@@ -725,7 +875,7 @@ public final class ActivePetManager {
             }
             case "cat" -> setTarget(player, Attribute.FALL_DAMAGE_MULTIPLIER, Math.max(0.0, 1.0 - (tier * 0.05)));
             case "dolphin" -> {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.DOLPHINS_GRACE, 220, 1, true, false, true));
+                applyPetBuff(player, PotionEffectType.DOLPHINS_GRACE, 1);
                 setTarget(player, Attribute.WATER_MOVEMENT_EFFICIENCY, tier * 0.05);
             }
             case "elder_guardian" -> setTarget(player, Attribute.SUBMERGED_MINING_SPEED, Math.min(1.0, 0.2 + (tier * 0.04)));
@@ -741,7 +891,7 @@ public final class ActivePetManager {
                 setTarget(player, Attribute.ENTITY_INTERACTION_RANGE, 3.0 + (tier * 0.1125));
             }
             case "owl" -> {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, 220, 1, true, false, true));
+                applyPetBuff(player, PotionEffectType.NIGHT_VISION, 1);
                 setTarget(player, Attribute.LUCK, tier * 25.0);
             }
             case "panda" -> setTarget(player, Attribute.ATTACK_KNOCKBACK, tier * 0.05);
@@ -755,7 +905,7 @@ public final class ActivePetManager {
                     setTarget(player, Attribute.ARMOR, tier * 0.25);
                 }
             }
-            case "phoenix" -> player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 220, 1, true, false, true));
+            case "phoenix" -> applyPetBuff(player, PotionEffectType.FIRE_RESISTANCE, 1);
             case "red_panda" -> {
                 if (isForestBiome(player)) {
                     setTarget(player, Attribute.MOVEMENT_SPEED, 0.1 + (tier * 0.002));
@@ -815,11 +965,31 @@ public final class ActivePetManager {
                 .ifPresent(instance::removeModifier);
         }
 
-        player.removePotionEffect(PotionEffectType.ABSORPTION);
-        player.removePotionEffect(PotionEffectType.DOLPHINS_GRACE);
-        player.removePotionEffect(PotionEffectType.FIRE_RESISTANCE);
-        player.removePotionEffect(PotionEffectType.NIGHT_VISION);
-        player.removePotionEffect(PotionEffectType.HERO_OF_THE_VILLAGE);
+        final Set<PotionEffectType> tracked = petBuffs.remove(player.getUniqueId());
+        if (tracked != null) {
+            for (final PotionEffectType type : tracked) {
+                player.removePotionEffect(type);
+            }
+        }
+    }
+
+    /**
+     * Applies a potion effect that belongs to the active pet. The effect is given an infinite
+     * duration so it never blinks or expires while the pet is active, and only effects that the
+     * pet itself applied are ever removed again (see {@link #resetPlayerState(Player)}). Effects the
+     * player already has from another source are left untouched so pets never overwrite them.
+     */
+    private void applyPetBuff(final Player player, final PotionEffectType type, final int amplifier) {
+        applyPetBuff(player, type, amplifier, PotionEffect.INFINITE_DURATION);
+    }
+
+    private void applyPetBuff(final Player player, final PotionEffectType type, final int amplifier, final int duration) {
+        final Set<PotionEffectType> tracked = petBuffs.computeIfAbsent(player.getUniqueId(), ignored -> new HashSet<>());
+        if (!tracked.contains(type) && player.hasPotionEffect(type)) {
+            return;
+        }
+        tracked.add(type);
+        player.addPotionEffect(new PotionEffect(type, duration, amplifier, true, false, true));
     }
 
     private void setTarget(final Player player, final Attribute attribute, final double targetValue) {
@@ -847,17 +1017,55 @@ public final class ActivePetManager {
         return new NamespacedKey(plugin, "pet_" + attribute.getKey().getKey().toLowerCase(Locale.ROOT).replace('/', '_'));
     }
 
-    private void glowNearestHostile(final Player player, final double radius) {
-        player.getNearbyEntities(radius, radius, radius).stream()
-            .filter(entity -> entity instanceof LivingEntity)
-            .filter(this::isHostile)
-            .min((left, right) -> Double.compare(left.getLocation().distanceSquared(player.getLocation()), right.getLocation().distanceSquared(player.getLocation())))
-            .map(LivingEntity.class::cast)
-            .ifPresent(entity -> entity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 60, 1, true, false, true)));
+    private void updateReveals(final Player player, final OwnedPet pet) {
+        switch (pet.definitionId()) {
+            case "bat" -> {
+                if (player.getLocation().getY() < 50.0) {
+                    revealMobs(player, Math.min(24, 8 + abilityTier(pet.level())), false);
+                }
+            }
+            case "red_parrot" -> {
+                if (player.getLocation().getBlock().getLightFromSky() > 0) {
+                    revealMobs(player, Math.min(30, 10 + (pet.level() / 10) * 2), false);
+                }
+            }
+            case "warden" -> revealMobs(player, Math.min(50, Math.max(10, pet.level())), true);
+            default -> {
+            }
+        }
     }
 
-    private void glowUndead(final Player player, final double radius) {
-        affectNearby(player, radius, true, entity -> entity.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 60, 1, true, false, true)));
+    /**
+     * Keeps every matching mob inside the radius highlighted continuously. The glow is given a short
+     * duration and refreshed every tick run, so a mob stops glowing shortly after it leaves the radius.
+     */
+    private void revealMobs(final Player player, final double radius, final boolean undeadOnly) {
+        for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
+            if (!(entity instanceof LivingEntity living) || entity.equals(player)) {
+                continue;
+            }
+            if (undeadOnly ? !isUndead(living) : !isHostile(living)) {
+                continue;
+            }
+            living.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 15, 0, true, false, false));
+        }
+    }
+
+    private void spawnPetWalkTrail(final Player player, final OwnedPet pet, final ActivePet active) {
+        final Location location = active.display().getLocation().clone().add(0, 0.3, 0);
+        try {
+            switch (pet.definitionId()) {
+                case "ender_dragon" -> player.getWorld().spawnParticle(Particle.DRAGON_BREATH, location, 4, 0.25, 0.18, 0.25, 0.0, 1.0F);
+                case "blue_dragon" -> player.getWorld().spawnParticle(Particle.ENCHANT, location, 8, 0.3, 0.25, 0.3, 0.0);
+                case "red_dragon" -> player.getWorld().spawnParticle(Particle.FLAME, location, 4, 0.22, 0.15, 0.22, 0.0);
+                default -> {
+                }
+            }
+        } catch (final IllegalArgumentException exception) {
+            if (pet.definitionId().equals("ender_dragon")) {
+                player.getWorld().spawnParticle(Particle.PORTAL, location, 6, 0.25, 0.18, 0.25, 0.0);
+            }
+        }
     }
 
     private void affectNearby(final Player player, final double radius, final boolean undeadOnly, final java.util.function.Consumer<LivingEntity> action) {

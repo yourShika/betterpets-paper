@@ -6,10 +6,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDI2M2VhNTQyYjU1MDE4MmE0M2QyZjkxNzJmODliZDU3MjdjZDk0ZTgzMDVmNWI4YmU5NWE2NDZjMjRlNDMzMyJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Ant's Blessing"
-      - "Become 0.5% smaller in scale."
+      - "Tiny Frame"
+      - "Shrinks your size as it levels up."
       - "Common pet"
       - "Click to add to your pet list."
   axolotl:
@@ -19,11 +17,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOGMzYzdkNmYwMmU4NmMzY2ZiMTA2MmJkZjU0ZmVmMjM4ODc5MmFiY2Y1NjQ4MGY4YmEwNmZlN2Y0ZDc0OWQ4ZCJ9fX0="
     weight: 8
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Axolotl's Blessing"
-      - "Allows you to stay underwater"
-      - "for approximately 2.05% longer."
+      - "Aqua Lungs"
+      - "Stay underwater longer as it levels."
       - "Rare pet"
       - "Click to add to your pet list."
   blue_dragon:
@@ -33,15 +28,11 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOThmNjkyMDliMThhZjZkMDZkZjJkZmIzNmFmZTMyYzdhZDFjNmFmYjcxZDJjZDg4NWFjMWQyOGQyZDhmZTdiZCJ9fX0="
     weight: 2
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Blue Dragon's Blessing"
-      - "Unleash your inner blue dragon and"
-      - "deal 3% more damage in The End."
+      - "End Dominion"
+      - "Deal more damage in The End."
       - "Dragon Scales"
-      - "Grants you a protective shield that"
-      - "replenishes every 180 seconds."
-      - "Upgrades every 25 levels."
+      - "Absorption shield that refreshes,"
+      - "and flight from level 50."
       - "Legendary pet"
       - "Click to add to your pet list."
   cat:
@@ -51,10 +42,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWUwMDNjMzVhZGEzMGM2MGFhNzgyNjQzNzE0YjU0N2U0NzRhNjcwYmE0MjcwNzEyMjFlNzE0NTA3NWQwODQ3MCJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Cat's Blessing"
-      - "Decreases fall damage by 1%."
+      - "Soft Paws"
+      - "Reduces fall damage as it levels."
       - "Common pet"
       - "Click to add to your pet list."
   chicken:
@@ -64,12 +53,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYWEzNzc2Nzk2MTNhMTE1MTMzZGRkYzMxMmEwMDk5NDE5OTAxZWM1YWI4NjViOTQ1NDQwNDg4NzRhZDZlYWYxMiJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Chicken's Blessing"
-      - "Gain 10 seconds of slow falling"
-      - "every 30 seconds."
-      - "Upgrades every 10 levels."
+      - "Feather Fall"
+      - "Grants steady Slow Falling pulses."
       - "Common pet"
       - "Click to add to your pet list."
   dog:
@@ -79,12 +64,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDIxMDVjOWUzZDY2OWFjZGJhNDhhOTJmOTYwNDdkMjc3YjhkMzVkOWNmYmViN2EzZTZhOGVjNmJhNTIxMzEwNCJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Dog's Blessing"
-      - "Gain a 1% chance of an extra"
-      - "attack from your dog when"
-      - "in combat against the undead."
+      - "Undead Bane"
+      - "Chance to wither undead you hit;"
+      - "the chance rises with level."
       - "Common pet"
       - "Click to add to your pet list."
   dolphin:
@@ -94,14 +76,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzU2ZjEzYjVmMjJkMmE0YTU2ZTY3NzNmZjNmMDk1MjRkZjA4NmY0Y2FkY2JlZDU0M2U2MjEyNzI1ZGZkMDVkZSJ9fX0="
     weight: 5
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Dolphin's Blessing"
-      - "Increase underwater movement"
-      - "efficiency by 2%."
-      - "Furious Tides"
-      - "Call upon the power of the Sea"
-      - "and recieve the Dolphin's Grace."
+      - "Grace of the Sea"
+      - "Dolphin's Grace and faster"
+      - "movement through water."
       - "Epic pet"
       - "Click to add to your pet list."
   elder_guardian:
@@ -111,11 +88,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOGRmNGZlYzNhYTM0Y2VkZGIwMjVhNDJjOWZjNDM1YTgwMjliMDYyNTk4YjMyNTMyMmJhM2NiNWU1ZjM1MWMxZiJ9fX0="
     weight: 8
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Elder Guardian's Blessing"
-      - "Increase mining speed when"
-      - "underwater by 4%."
+      - "Deep Miner"
+      - "Mine much faster while underwater."
       - "Rare pet"
       - "Click to add to your pet list."
   ghast:
@@ -125,14 +99,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvN2E4YjcxNGQzMmQ3ZjZjZjhiMzdlMjIxYjc1OGI5YzU5OWZmNzY2NjdjN2NkNDViYmM0OWM1ZWYxOTg1ODY0NiJ9fX0="
     weight: 5
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Ghast's Blessing"
-      - "Increase explosion knockback"
-      - "resistance by 1%."
-      - "Ghastly Presence"
-      - "Increase experience gain when"
-      - "in The Nether."
+      - "Nether Born"
+      - "Explosion knockback resistance,"
+      - "plus bonus XP for Nether kills."
       - "Epic pet"
       - "Click to add to your pet list."
   hamster:
@@ -142,12 +111,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTc3MGFhZDg5MjM3M2VjMjE5MzJkNTA4YTc5MDBmZWZjYmM1ZTFmZWJiOGE4YWIzZjRkNjQ4NTJkMjUyOTY4NSJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Hamster's Blessing"
-      - "Increase the amount of blocks"
-      - "you can step on without jumping"
-      - "by 0.2 block."
+      - "Sure Step"
+      - "Step up higher blocks without"
+      - "jumping."
       - "Common pet"
       - "Click to add to your pet list."
   herobrine:
@@ -157,20 +123,11 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOGQwNzUwZWY5NDlkOGVjYjUzOWI2MDk4YTk2Y2Y0NmNlNDU3YjY1MjQ4MmQ0OWRlZWJjYWRkYmM0ODk3YjQzMyJ9fX0="
     weight: 1
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Herobrine's Blessing"
-      - "Absorb the life force of nearby"
-      - "beings and increase max health"
-      - "by 1%."
-      - "Myth or Reality"
-      - "Break the boundries between"
-      - "myth and reality, allowing you to"
-      - "to increase attack range by 0.75%."
+      - "Cursed Might"
+      - "More max health and longer reach."
       - "God of the Overworld"
-      - "Your presence makes the world"
-      - "turn into a eerie place, where"
-      - "constant thunderstorms appear."
+      - "Your presence summons an eerie"
+      - "constant thunderstorm."
       - "Extraordinary pet"
       - "Click to add to your pet list."
   owl:
@@ -180,13 +137,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZGEzMjE2ZGE1NGU3MzY4ZmI0MGI3MjEyMzlhZDk1ZTA3ZWY0Zjk3ZDkzZjFjNDJmZjMxOWJhYjlhNTM4ODJhZiJ9fX0="
     weight: 5
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Owl's Blessing"
-      - "Increase luck by 5% for higher"
-      - "chances to find rare items."
-      - "Enchanced Vision"
-      - "Gain permanent night vision."
+      - "Night Eyes"
+      - "Permanent Night Vision and"
+      - "increased luck."
       - "Epic pet"
       - "Click to add to your pet list."
   panda:
@@ -196,13 +149,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDhjZGQ0ZjI4NTYzMmMyNWQ3NjJlY2UyNWY0MTkzYjk2NmMyNjQxYjE1ZDliZGJjMGExMTMwMjNkZTc2YWIifX19"
     weight: 5
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Panda's Blessing"
-      - "Increase attack knockback by 0.75%."
-      - "Nature's Guardian"
-      - "Grants Hero of the Village effect"
-      - "when in a bamboo jungle biome."
+      - "Bamboo Spirit"
+      - "More attack knockback, plus Hero"
+      - "of the Village in bamboo jungles."
       - "Epic pet"
       - "Click to add to your pet list."
   penguin:
@@ -212,15 +161,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODkyMDM3ZmVlZGY0YzExZmFiOGU0MTc3YjVmNzYxZTc5ZDBmZmJlYzQ2ZmEwZWIxZGJlOTExM2JhZTEyZDViYyJ9fX0="
     weight: 2
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Penguin's Blessing"
-      - "Increase movement speed when"
-      - "in a cold biome by 1%."
-      - "Ice Walker"
-      - "Create blocks of frosted ice"
-      - "below you when you try to step"
-      - "on water."
+      - "Frost Walker"
+      - "Speed in cold biomes and a"
+      - "frosted-ice trail over water."
       - "Legendary pet"
       - "Click to add to your pet list."
   phoenix:
@@ -230,18 +173,12 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjNhYWY3YjFhNzc4OTQ5Njk2Y2I5OWQ0ZjA0YWQxYWE1MThjZWVlMjU2YzcyZTVlZDY1YmZhNWMyZDg4ZDllIn19fQ=="
     weight: 1
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Phoenix's Blessing"
-      - "Sets undead mobs ablaze when"
-      - "hit for 0.1 seconds."
       - "Flames of Rebirth"
-      - "Grants you a Totem of Undying"
-      - "every 24 hours."
-      - "Upgrades every 50 levels."
-      - "Blazing Enlightenment"
-      - "Become one with the flames"
-      - "and nullify all fire damage."
+      - "Revives you from death like a"
+      - "Totem; cooldown shrinks with level."
+      - "Blazing Soul"
+      - "Permanent Fire Resistance and"
+      - "burns undead you strike."
       - "Extraordinary pet"
       - "Click to add to your pet list."
   pufferfish:
@@ -251,12 +188,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjkyMzUwYzlmMDk5M2VkNTRkYjJjNzExMzkzNjMyNTY4M2ZmYzIwMTA0YTliNjIyYWE0NTdkMzdlNzA4ZDkzMSJ9fX0="
     weight: 8
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Pufferfish's Blessing"
-      - "Poison nearby undead mobs"
-      - "every 30 seconds."
-      - "Upgrades every 10 levels."
+      - "Toxic Spines"
+      - "Withers nearby undead mobs"
+      - "in a small aura."
       - "Rare pet"
       - "Click to add to your pet list."
   rabbit:
@@ -266,13 +200,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMTE3YmZmYzE5NzJhY2Q3ZjNiNGE4ZjQzYjViNmM3NTM0Njk1YjhmZDYyNjc3ZTAzMDZiMjgzMTU3NGIifX19"
     weight: 5
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Rabbit's Blessing"
-      - "Increases jump strength by 1.6%."
-      - "Safe Landing"
-      - "Fall damage is fully negated when"
-      - "falling from 10 blocks or less."
+      - "Spring Step"
+      - "Higher jumps and safe landings"
+      - "from up to 10 blocks."
       - "Epic pet"
       - "Click to add to your pet list."
   reaper:
@@ -282,21 +212,12 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTM5YjVkMmU2MjRjMTQ3ZWZlNDdiMTMwZTFjZGRiOGEzNzdjZGIzZTc3NDJiZDJjZjRkZGRmNjlhNjg5MjcyIn19fQ=="
     weight: 1
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Reaper's Blessing"
-      - "The very image of death, spreads"
-      - "fear and poison to all nearby"
-      - "undead mobs in a 15 block radius."
-      - "Upgrades every 50 levels."
-      - "Death's Touch"
-      - "The all-powerful Reaper's Scythe"
-      - "grants you an increase in attack"
-      - "speed of 1%."
+      - "Aura of Death"
+      - "Withers and slows nearby undead;"
+      - "radius grows with level."
       - "Harvest of Wrath"
-      - "Steal the life energy from your"
-      - "victim, making each strike on them"
-      - "grant you strength and healing."
+      - "Faster attacks, plus strength and"
+      - "healing on every hit."
       - "Extraordinary pet"
       - "Click to add to your pet list."
   red_dragon:
@@ -306,15 +227,11 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYWI2ZTVjZDYxMmM3M2NkOGU2YzdhNzIwYzI2MjgzZTc1NDhjYTcyOGQ4YjMwNjAxODQwZjdkYTVkNDMzZDgzYiJ9fX0="
     weight: 2
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Red Dragon's Blessing"
-      - "Unleash your inner red dragon and"
-      - "deal 3% more damage in The Nether."
+      - "Nether Dominion"
+      - "Deal more damage in The Nether."
       - "Dragon Scales"
-      - "Grants you a protective shield that"
-      - "replenishes every 180 seconds."
-      - "Upgrades every 25 levels."
+      - "Absorption shield that refreshes,"
+      - "and flight from level 50."
       - "Legendary pet"
       - "Click to add to your pet list."
   red_parrot:
@@ -324,14 +241,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNWQxYTE2OGJjNzJjYjMxNGY3Yzg2ZmVlZjlkOWJjNzYxMjM2NTI0NGNlNjdmMGExMDRmY2UwNDIwMzQzMGMxZCJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Red Parrot's Blessing"
-      - "Your parrot mimics nearby mob"
-      - "sounds to alert you by showing"
-      - "you the closest hostile mob in a"
-      - "radius of 10 blocks."
-      - "Upgrades every 10 levels."
+      - "Lookout"
+      - "Highlights nearby hostile mobs,"
+      - "but only on the surface."
       - "Common pet"
       - "Click to add to your pet list."
   snail:
@@ -341,11 +253,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNTBhOTkzM2EzYjEwNDg5ZDM4ZjY5NTBjNGU2MjhiZmNmOWY3YTI3ZjhkODQ2NjZmMDRmMTRkNTM3NDI1Mjk3MiJ9fX0="
     weight: 8
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Snail's Blessing"
-      - "Increases movement speed"
-      - "when sneaking by 2.33%."
+      - "Slow & Steady"
+      - "Move faster while sneaking."
       - "Rare pet"
       - "Click to add to your pet list."
   spinosaurus:
@@ -355,10 +264,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDNjOWQ0Nzk0NzFhMmYxM2YyMjU0ODMxNTE1OTU5MTcyMDk5MmU3MGM5MjBmZWY4M2E5MDFiNzE4NjcyMGUzYyJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Spinosaurus's Blessing"
-      - "Become 0.5% bigger in scale."
+      - "Towering"
+      - "Grows your size as it levels up."
       - "Common pet"
       - "Click to add to your pet list."
   tiger:
@@ -368,14 +275,9 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMmM4YjQ3MGJlZDNjMDI3OTliZGFkN2E5MzJlYWQ4NjU4Njk4NmE0ODVjMDlhMjk2NzRmMTU5MWEwZWI5MzJmNyJ9fX0="
     weight: 5
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Tiger's Blessing"
-      - "Increase movement speed on"
-      - "land by 1%."
-      - "Emperor of the Wild"
-      - "Sweeping damage now deals"
-      - "100% of your attack damage."
+      - "Apex Hunter"
+      - "Faster movement and full"
+      - "sweeping attack damage."
       - "Epic pet"
       - "Click to add to your pet list."
   turtle:
@@ -385,11 +287,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZTU1YzkxN2Q5NjhkZDc3YWQyYmY3MWMzMWQxZjA3MDBhNGUzMDExMGEwZmRmMTI4ODZiOGM3ZDAzYTQzZWRlMCJ9fX0="
     weight: 8
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Turtle's Blessing"
-      - "Incoming knockback is reduced"
-      - "by 1%."
+      - "Shell Guard"
+      - "Reduces the knockback you take."
       - "Rare pet"
       - "Click to add to your pet list."
   warden:
@@ -399,15 +298,11 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNmNmMzY3NGIyZGRjMGVmN2MzOWUzYjljNmI1ODY3N2RlNWNmMzc3ZDJlYjA3M2YyZjNmZTUwOTE5YjFjYTRjOSJ9fX0="
     weight: 2
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Warden's Blessing"
-      - "Detect the sound frequency of mobs"
-      - "in a 10 block radius and reveal them."
+      - "Sculk Sense"
+      - "Reveals nearby undead mobs."
       - "Reverse Reverberation"
-      - "Hide your presence by softening"
-      - "the sound of your footsteps, making"
-      - "you undetectable by the warden."
+      - "Wardens can no longer detect"
+      - "or target you."
       - "Legendary pet"
       - "Click to add to your pet list."
   worm:
@@ -417,11 +312,8 @@ pets:
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNjQwM2JhNDAyN2EzMzNkOGQyZmQzMmFiNTlkMWNmZGJhYTdkOTA4ZDgwZDIzODFkYjJhNjljYmU2NTQ1MGFkOCJ9fX0="
     weight: 12
     lore:
-      - "A loyal companion that offers"
-      - "unique abilities to its owner."
-      - "Worm's Blessing"
-      - "Increase mining speed by 6.5%"
-      - "when using the correct tool."
+      - "Earthmover"
+      - "Mine faster with the right tool."
       - "Common pet"
       - "Click to add to your pet list."
   polar_bear:
@@ -531,7 +423,8 @@ pets:
     weight: 6
     lore:
       - "Venom Spur"
-      - "Poison attackers while you are wet."
+      - "Poisons attackers while you are wet"
+      - "(withers undead instead)."
       - "Rare pet"
       - "Click to add to your pet list."
   duck:
@@ -565,5 +458,41 @@ pets:
     lore:
       - "Gentle Magic"
       - "Luck and light healing; glitter trail at level 50."
+      - "Legendary pet"
+      - "Click to add to your pet list."
+  mole:
+    name: "Mole"
+    color: "green"
+    rarity: "Common"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOGI1MTUwMTU5MmQyZWFiMjZkMDcyNjA2MzQ2YjBkNGJkNjM1ZDM2YjM1NTUwYzFmNjlhNzdmZTNlNTZkM2QxNSJ9fX0="
+    weight: 10
+    lore:
+      - "Tunneler"
+      - "Chance to dig dirt, sand and gravel"
+      - "without spending tool durability."
+      - "Common pet"
+      - "Click to add to your pet list."
+  allay:
+    name: "Allay"
+    color: "blue"
+    rarity: "Epic"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYmVlYTg0NWNjMGI1OGZmNzYzZGVjZmZlMTFjZDFjODQ1YzVkMDljM2IwNGZlODBiMDY2M2RhNWM3YzY5OWViMyJ9fX0="
+    weight: 4
+    lore:
+      - "Collector"
+      - "Gathers nearby dropped items in a"
+      - "wide radius straight to your inventory."
+      - "Epic pet"
+      - "Click to add to your pet list."
+  cursed_plushie:
+    name: "Cursed Plushie"
+    color: "dark_red"
+    rarity: "Legendary"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNTJhYWY4YTY2MWRlNTkxZGM2OGZhMjQ5OTAwYmFjY2ViYzc3YTIxNjA4M2RmYTAxOGYyZGI2NmYyNDg5NmE0YSJ9fX0="
+    weight: 2
+    lore:
+      - "Distraction Dummy"
+      - "Hostile mobs sometimes focus the"
+      - "plushie and lose interest in you."
       - "Legendary pet"
       - "Click to add to your pet list."

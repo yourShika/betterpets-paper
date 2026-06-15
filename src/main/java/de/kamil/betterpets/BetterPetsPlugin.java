@@ -12,6 +12,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Container;
 import org.bukkit.block.TileState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
@@ -21,13 +22,17 @@ import org.bukkit.entity.Projectile;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerExpChangeEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -375,25 +380,21 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
 
+        // Only inject into block containers (chests, barrels, dispensers, ...). This covers both
+        // vanilla structures and custom structures added by data packs, no matter which loot table
+        // namespace or path they use, as long as the loot is generated into a placed container.
+        if (!(event.getInventoryHolder() instanceof Container container)) {
+            return;
+        }
+
         final NamespacedKey key = lootTable.getKey();
-        if (key == null) {
+        final Player opener = openerFor(container);
+
+        if (container.getPersistentDataContainer().has(generatedChestKey, PersistentDataType.BYTE)) {
             return;
         }
-        if (!key.getKey().startsWith("chests/")) {
-            return;
-        }
-
-        final Player opener = event.getInventoryHolder() instanceof BlockState blockState
-            ? openerFor(blockState)
-            : null;
-
-        if (event.getInventoryHolder() instanceof TileState tileState) {
-            if (tileState.getPersistentDataContainer().has(generatedChestKey, PersistentDataType.BYTE)) {
-                return;
-            }
-            tileState.getPersistentDataContainer().set(generatedChestKey, PersistentDataType.BYTE, (byte) 1);
-            tileState.update();
-        }
+        container.getPersistentDataContainer().set(generatedChestKey, PersistentDataType.BYTE, (byte) 1);
+        container.update();
 
         final boolean alreadyHasPet = event.getLoot().stream().anyMatch(item -> itemFactory.petId(item).isPresent());
         if (alreadyHasPet) {
@@ -481,7 +482,77 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onEntityTarget(final EntityTargetLivingEntityEvent event) {
-        activePets.handleWardenTarget(event);
+        activePets.handlePetTargeting(event);
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onEntityDamage(final EntityDamageEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        if (event.getCause() == EntityDamageEvent.DamageCause.VOID) {
+            return;
+        }
+        if (player.getHealth() - event.getFinalDamage() > 0.0) {
+            return;
+        }
+        if (activePets.tryPhoenixRevive(player)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onBlockBreak(final BlockBreakEvent event) {
+        activePets.handleMoleBreak(event.getPlayer(), event.getBlock());
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPetEquipAttempt(final InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        final InventoryHolder holder = event.getView().getTopInventory().getHolder();
+        if (holder instanceof PetMenuHolder || holder instanceof ChanceMenuHolder || holder instanceof NotifyMenuHolder
+            || holder instanceof XpMenuHolder || holder instanceof InfoMenuHolder || holder instanceof PetDetailMenuHolder
+            || holder instanceof AlpacaStorageHolder) {
+            return;
+        }
+        if (event.getSlotType() == InventoryType.SlotType.ARMOR) {
+            if (itemFactory.petId(event.getCursor()).isPresent()) {
+                event.setCancelled(true);
+                return;
+            }
+            if (event.getClick() == ClickType.NUMBER_KEY && event.getHotbarButton() >= 0
+                && itemFactory.petId(player.getInventory().getItem(event.getHotbarButton())).isPresent()) {
+                event.setCancelled(true);
+                return;
+            }
+            if (event.getClick() == ClickType.SWAP_OFFHAND && itemFactory.petId(player.getInventory().getItemInOffHand()).isPresent()) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+        if (event.isShiftClick()
+            && event.getView().getTopInventory().getType() == InventoryType.CRAFTING
+            && itemFactory.petId(event.getCurrentItem()).isPresent()) {
+            final ItemStack helmet = player.getInventory().getHelmet();
+            if (helmet == null || helmet.getType().isAir()) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPetArmorDrag(final InventoryDragEvent event) {
+        if (itemFactory.petId(event.getOldCursor()).isEmpty()) {
+            return;
+        }
+        for (final int rawSlot : event.getRawSlots()) {
+            if (event.getView().getSlotType(rawSlot) == InventoryType.SlotType.ARMOR) {
+                event.setCancelled(true);
+                return;
+            }
+        }
     }
 
     private void renderMenu(final Player player, final Inventory inventory) {
@@ -513,8 +584,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         inventory.setItem(45, itemFactory.control(
             holder.page() > 0 ? Material.ARROW : Material.GRAY_STAINED_GLASS_PANE,
-            Component.text("Zurueck", holder.page() > 0 ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
-            List.of(Component.text("Seite " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            Component.text("Back", holder.page() > 0 ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
+            List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
         ));
         inventory.setItem(46, itemFactory.control(
             Material.KNOWLEDGE_BOOK,
@@ -546,8 +617,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         ));
         inventory.setItem(51, itemFactory.control(
             holder.page() + 1 < pages ? Material.ARROW : Material.GRAY_STAINED_GLASS_PANE,
-            Component.text("Weiter", holder.page() + 1 < pages ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
-            List.of(Component.text("Seite " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            Component.text("Next", holder.page() + 1 < pages ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
+            List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
         ));
         inventory.setItem(52, itemFactory.control(
             Material.PURPLE_DYE,
@@ -573,6 +644,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         lore.add(Component.empty());
         lore.add(Component.text("Current ability value", NamedTextColor.AQUA));
         lore.add(Component.text(abilityValue(definition.id(), pet.level()), NamedTextColor.GRAY));
+        if (definition.id().equals("phoenix")) {
+            final long remaining = ActivePetManager.phoenixCooldownMillis(pet.level()) - (System.currentTimeMillis() - pet.lastTotemMillis());
+            lore.add(Component.empty());
+            if (remaining <= 0) {
+                lore.add(Component.text("Revive: ready", NamedTextColor.GREEN));
+            } else {
+                lore.add(Component.text("Revive cooldown: " + formatDuration(remaining), NamedTextColor.GRAY));
+            }
+        }
         if (isDragonPet(definition.id()) && pet.level() >= 50) {
             lore.add(Component.text("Right-click the active pet to fly.", NamedTextColor.GOLD));
         }
@@ -759,11 +839,43 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         Bukkit.broadcast(Component.text("[BetterPets] ", NamedTextColor.GOLD)
             .append(Component.text(player.getName(), NamedTextColor.AQUA))
-            .append(Component.text(" hat ein ", NamedTextColor.GRAY))
+            .append(Component.text(" found a ", NamedTextColor.GRAY))
             .append(Component.text(definition.rarity() + " Pet", definition.rarityColor()))
-            .append(Component.text(" gefunden: ", NamedTextColor.GRAY))
+            .append(Component.text(": ", NamedTextColor.GRAY))
             .append(Component.text(definition.name(), definition.rarityColor()))
             .append(Component.text("!", NamedTextColor.GRAY)));
+
+        playDiscoverySound(definition.rarity());
+    }
+
+    private void playDiscoverySound(final String rarity) {
+        final Sound sound;
+        final float pitch;
+        switch (rarity.toLowerCase(Locale.ROOT)) {
+            case "rare" -> {
+                sound = Sound.BLOCK_NOTE_BLOCK_BELL;
+                pitch = 1.2F;
+            }
+            case "epic" -> {
+                sound = Sound.ENTITY_PLAYER_LEVELUP;
+                pitch = 1.0F;
+            }
+            case "legendary" -> {
+                sound = Sound.UI_TOAST_CHALLENGE_COMPLETE;
+                pitch = 1.0F;
+            }
+            case "extraordinary" -> {
+                sound = Sound.ENTITY_ENDER_DRAGON_GROWL;
+                pitch = 1.0F;
+            }
+            default -> {
+                sound = Sound.BLOCK_NOTE_BLOCK_PLING;
+                pitch = 1.4F;
+            }
+        }
+        for (final Player online : Bukkit.getOnlinePlayers()) {
+            online.playSound(online.getLocation(), sound, 1.0F, pitch);
+        }
     }
 
     private List<String> rarityOrder() {
@@ -934,6 +1046,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         for (final PetDefinition definition : definitions.ordered()) {
             inventory.setItem(slot++, itemFactory.infoItem(definition, catalogueLore(definition)));
         }
+        inventory.setItem(45, itemFactory.control(
+            Material.ARROW,
+            Component.text("Back", NamedTextColor.YELLOW),
+            List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
+        ));
         inventory.setItem(49, itemFactory.control(
             Material.BARRIER,
             Component.text("Close", NamedTextColor.RED),
@@ -945,6 +1062,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private void handleInfoClick(final InventoryClickEvent event) {
         event.setCancelled(true);
         if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        if (event.getRawSlot() == 45) {
+            openPetsMenu(player);
             return;
         }
         if (event.getRawSlot() == 49) {
@@ -1026,6 +1147,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         for (final PetDefinition definition : definitions.ordered()) {
             inventory.setItem(slot++, itemFactory.chanceItem(definition, spawnChance(definition)));
         }
+        inventory.setItem(45, itemFactory.control(
+            Material.ARROW,
+            Component.text("Back", NamedTextColor.YELLOW),
+            List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
+        ));
         inventory.setItem(49, itemFactory.control(
             Material.BARRIER,
             Component.text("Close", NamedTextColor.RED),
@@ -1048,6 +1174,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (!has(player, CHANCES_PERMISSION)) {
             player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        if (event.getRawSlot() == 45) {
+            openPetsMenu(player);
             return;
         }
         if (event.getRawSlot() == 49) {
@@ -1107,7 +1237,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final boolean enabled = discoveryBroadcastEnabled(rarity);
             inventory.setItem(slots[i], itemFactory.control(
                 enabled ? Material.LIME_DYE : Material.GRAY_DYE,
-                Component.text(rarity + ": " + (enabled ? "AN" : "AUS"), rarityColor(rarity)),
+                Component.text(rarity + ": " + (enabled ? "ON" : "OFF"), rarityColor(rarity)),
                 List.of(Component.text("Click to toggle all-chat find messages.", NamedTextColor.GRAY))
             ));
         }
@@ -1179,6 +1309,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             Component.text("+0.1x", NamedTextColor.GREEN),
             List.of(Component.text("Left-click or click this side.", NamedTextColor.GRAY))
         ));
+        inventory.setItem(18, itemFactory.control(
+            Material.ARROW,
+            Component.text("Back", NamedTextColor.YELLOW),
+            List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
+        ));
         inventory.setItem(22, itemFactory.control(
             Material.BARRIER,
             Component.text("Close", NamedTextColor.RED),
@@ -1193,6 +1328,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (!has(player, CHANCES_PERMISSION)) {
             player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        if (event.getRawSlot() == 18) {
+            openPetsMenu(player);
             return;
         }
         if (event.getRawSlot() == 22) {
@@ -1263,9 +1402,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (id.equals("phoenix")) {
             if (level == 50) {
-                unlocks.add("Totem cooldown reduced to 18h");
+                unlocks.add("Revive cooldown reduced to 18h");
             } else if (level == 100) {
-                unlocks.add("Totem cooldown reduced to 12h");
+                unlocks.add("Revive cooldown reduced to 12h");
             }
         }
         if (id.equals("capybara") && level == 80) {
@@ -1295,11 +1434,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "hedgehog" -> "Reflects a small amount of melee damage.";
             case "herobrine" -> "More health, longer reach, thunder aura.";
             case "koala" -> "Regeneration when resting near trees.";
+            case "mole" -> "Chance to mine dirt, sand, and gravel without spending tool durability.";
+            case "allay" -> "Pulls in nearby dropped items straight to your inventory.";
+            case "cursed_plushie" -> "Distraction dummy: hostile mobs sometimes lose interest in you.";
             case "owl" -> "Night Vision and increased luck.";
             case "panda" -> "More attack knockback, bamboo biome hero effect.";
             case "penguin" -> "Speed in cold biomes and frosted ice trail.";
-            case "phoenix" -> "Fire Resistance, burns undead, grants totems.";
-            case "platypus" -> "Poisons attackers while you are wet.";
+            case "phoenix" -> "Fire Resistance, burns undead, revives you from death once off cooldown.";
+            case "platypus" -> "Poisons melee and ranged attackers while you are wet (water or rain).";
             case "polar_bear" -> "Extra armor in cold biomes.";
             case "pufferfish" -> "Wither aura against undead.";
             case "rabbit" -> "Higher jumps and safer falls.";
@@ -1341,11 +1483,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "hedgehog" -> formatDecimal(Math.min(3.0, 0.4 + tier * 0.08)) + " reflected damage";
             case "herobrine" -> "+" + tier + " hearts/reach tier";
             case "koala" -> "Regen I near leaves/logs";
+            case "mole" -> Math.round(Math.min(0.6, 0.1 + (tier * 0.025)) * 100) + "% no-durability chance";
+            case "allay" -> formatDecimal(Math.min(12.0, 4.0 + (tier * 0.4))) + " block pickup radius";
+            case "cursed_plushie" -> Math.round(Math.min(0.75, 0.25 + (tier * 0.025)) * 100) + "% mob distraction chance";
             case "owl" -> "+" + (tier * 25) + " luck";
             case "panda" -> "+" + Math.round(tier * 5.0) + "% knockback";
             case "penguin" -> "+" + formatDecimal(tier * 0.00375) + " cold speed";
-            case "phoenix" -> level >= 100 ? "12h totem cooldown" : level >= 50 ? "18h totem cooldown" : "24h totem cooldown";
-            case "platypus" -> (60 + tier * 4) + " tick poison on attackers while wet";
+            case "phoenix" -> level >= 100 ? "12h revive cooldown" : level >= 50 ? "18h revive cooldown" : "24h revive cooldown";
+            case "platypus" -> (80 + tier * 6) + " tick poison on attackers while wet";
             case "polar_bear" -> "+" + formatDecimal(tier * 0.25) + " armor in cold biomes";
             case "pufferfish" -> "7 block wither aura";
             case "rabbit" -> formatDecimal(Math.min(1.01, 0.4 + tier * 0.03158)) + " jump";
@@ -1457,6 +1602,20 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private String formatDecimal(final double value) {
         return String.format(Locale.ROOT, "%.3f", value);
+    }
+
+    private String formatDuration(final long millis) {
+        final long totalSeconds = Math.max(0L, millis / 1000L);
+        final long hours = totalSeconds / 3600L;
+        final long minutes = (totalSeconds % 3600L) / 60L;
+        final long seconds = totalSeconds % 60L;
+        if (hours > 0) {
+            return hours + "h " + minutes + "m";
+        }
+        if (minutes > 0) {
+            return minutes + "m " + seconds + "s";
+        }
+        return seconds + "s";
     }
 
     private Component message(final String path) {

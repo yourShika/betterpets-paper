@@ -136,7 +136,7 @@ public final class PetItemFactory {
         if (pet != null && !discovery) {
             lore.add(Component.empty());
             lore.add(Component.text("Level: ", NamedTextColor.GRAY).append(Component.text(pet.level() + " / 100", NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("EXP: ", NamedTextColor.GRAY).append(Component.text(pet.exp() + " / " + pet.nextLevelExp(), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
+            lore.add(Component.text("EXP: ", NamedTextColor.GRAY).append(Component.text(pet.level() >= 100 ? "MAXED" : pet.exp() + " / " + pet.nextLevelExp(), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.text(active ? "Currently active" : "Click to summon", active ? NamedTextColor.GREEN : NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
         } else {
             lore.add(Component.empty());

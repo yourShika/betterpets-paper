@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Status](https://img.shields.io/badge/Status-In%20Development-yellow)
+![Version](https://img.shields.io/badge/Version-1.1.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -18,6 +18,22 @@ It does **not** require datapacks, command functions, minecart menus, or resourc
 Everything is handled directly through the plugin.
 
 This version is designed to be easier to use on Paper servers while keeping the Better Pets experience alive in a plugin-based format.
+
+---
+
+## 🆕 What's New in v1.1.0
+
+* 🐹 **Three new pets:** **Mole** (mine dirt/sand/gravel without spending tool durability), **Allay** (vacuums nearby dropped items straight into your inventory), and **Cursed Plushie** (a distraction dummy that makes hostile mobs lose interest in you).
+* 🔥 **Reworked Phoenix:** instead of handing out totems on a real-time timer, it now **revives you on a lethal hit**, exactly like a Totem of Undying. This works even if the server was idle or asleep. The remaining cooldown is shown in the pet menu.
+* 🔦 **Continuous mob reveal:** Bat, Red Parrot, and Warden now keep **every** matching mob in range highlighted the whole time, and the glow fades shortly after a mob leaves the radius. Red Parrot only works on the surface (not in caves).
+* ✨ **Particle trails while walking:** dragons leave an element trail on the ground, not just while flying.
+* 🏛️ **Custom structure loot:** chest pet rolls now trigger in **any** generated container, including custom structures added by data packs — not only vanilla `chests/` loot tables.
+* 🔊 **Rarity broadcast sounds:** a distinct sound plays for everyone on a discovery, scaling up to a mighty sound for Extraordinary pets.
+* 🧪 **Platypus fix:** poisons melee **and** ranged attackers while wet, and withers undead (which are immune to poison).
+* 🪖 Pets can **no longer be worn as a helmet**.
+* 🔙 **Back buttons** added across the menus, English **Back / Next** pagination, and English find broadcasts.
+* 🆙 Level 100 pets now display **`EXP: MAXED`**.
+* 🐉 Faster dragon flight and a higher mount seating position.
 
 ---
 
@@ -36,13 +52,14 @@ This version is designed to be easier to use on Paper servers while keeping the 
 * 🐾 `/pets` inventory GUI for owned pets
 * 📖 Pet catalogue with per-level milestone pages
 * 🎲 Per-pet chest spawn chance GUI
-* 📢 Discovery broadcast GUI by rarity
+* 📢 Discovery broadcast GUI by rarity, with rarity-based sounds
 * ✨ Pet XP multiplier GUI
 * 💾 Persistent player pet storage with backups
 * 🦙 Persistent Alpaca storage using Paper item byte serialization
 * 📦 Dynamic Alpaca storage size based on level
 * 🐉 Dragon mount flight unlocked from level 50
-* 🏛️ Chest loot integration for generated structure chest loot tables
+* 🏛️ Chest loot integration for vanilla **and** custom structure chests
+* 🐹 42 unique pets across five rarities, each with its own scaling ability
 
 ---
 
@@ -76,8 +93,8 @@ This version is designed to be easier to use on Paper servers while keeping the 
 max-pets-per-player: 45
 chest-pet-chance-percent: 2.5
 pet-xp-multiplier: 1.0
-dragon-flight-speed: 0.85
-dragon-flight-lift: 0.36
+dragon-flight-speed: 1.5
+dragon-flight-lift: 0.55
 debug-loot-rolls: false
 
 discovery-broadcasts:
@@ -132,6 +149,16 @@ The plugin saves open Alpaca inventories when:
 
 ---
 
+## 🔥 Phoenix Revive
+
+Phoenix no longer grants Totem items. Instead, when a lethal hit would kill you while a Phoenix is active and off cooldown, it **revives you on the spot**, just like holding a Totem of Undying (heal, cleanse, Regeneration, Fire Resistance, and the totem animation).
+
+* Works even if the server was idle or asleep, because it is triggered by the damage event rather than a real-time timer.
+* The remaining cooldown is shown directly in the pet menu.
+* Cooldown shrinks with level: **24h** → **18h** (level 50) → **12h** (level 100).
+
+---
+
 ## 🛠️ Building
 
 ### Build with Maven
@@ -156,7 +183,7 @@ target/better-pets-26.1.2-plugin.jar
 
 ## 📦 Installation
 
-1. Build the plugin jar.
+1. Build the plugin jar (or download it from the [latest release](https://github.com/yourshika/betterpets-paper/releases/latest)).
 2. Put `better-pets-26.1.2-plugin.jar` into your Paper server's `plugins` folder.
 3. Start the server once to generate the config and storage files.
 4. Use LuckPerms or `paper-plugin.yml` defaults to assign permissions.
@@ -172,8 +199,9 @@ This usually happens when an unopened generated chest is opened for the first ti
 
 Important notes:
 
+* Pets can roll in **any** generated block container, including custom structures added by data packs.
 * Existing opened chests will not reroll.
-* Only newly generated / unopened loot chests can roll pets.
+* Only newly generated / unopened loot containers can roll pets.
 * Enable `debug-loot-rolls: true` to see chest roll attempts in the console.
 
 ---
@@ -194,9 +222,7 @@ Alpaca inventories are also saved there using Paper's item byte serialization.
 
 ## 🧪 Development Status
 
-This project is currently under development.
-
-Features may change, commands may be adjusted, and config values may be expanded in future versions.
+This project is actively developed. Features may change, commands may be adjusted, and config values may be expanded in future versions.
 
 | Area                   | Status         |
 | ---------------------- | -------------- |
@@ -206,6 +232,7 @@ Features may change, commands may be adjusted, and config values may be expanded
 | Alpaca Storage         | ✅ Implemented  |
 | Dragon Flight          | ✅ Implemented  |
 | Chest Loot Integration | ✅ Implemented  |
+| Phoenix Revive         | ✅ Implemented  |
 | Documentation          | 🚧 In Progress |
 
 ---
