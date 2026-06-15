@@ -1,191 +1,106 @@
-# 🐾 BetterPets Plugin Fork
+# Better Pets Paper
 
-> An unofficial plugin port / community fork inspired by the original **Better Pets** datapack.
+Better Pets Paper is a full Paper plugin rewrite of the Better Pets datapack.
+It does not require datapacks, command functions, minecart menus, or resource pack logic.
 
-![Minecraft](https://img.shields.io/badge/Minecraft-Java%20Edition-brightgreen)
-![Status](https://img.shields.io/badge/Status-In%20Development-yellow)
-![Type](https://img.shields.io/badge/Type-Community%20Fork-blue)
+## Target
 
----
+- Minecraft / Paper: `26.1.2`
+- Java: `21`
+- Optional: LuckPerms for permission assignment
 
-## ✨ About This Project
+## Features
 
-This project is an **unofficial plugin port / community fork** inspired by the original **Better Pets** datapack.
+- `/pets` inventory GUI for owned pets
+- Pet catalogue with per-level milestone pages
+- Per-pet chest spawn chance GUI
+- Discovery broadcast GUI by rarity
+- Pet XP multiplier GUI
+- Persistent player pet storage with backups
+- Persistent Alpaca storage with Paper item byte serialization
+- Dynamic Alpaca storage size by level
+- Dragon mount flight from level 50
+- Chest loot integration for generated structure chest loot tables
 
-The goal of this project is to bring the idea and gameplay experience of Better Pets into a plugin format, while adding custom adjustments, improvements, and new features.
+## Commands
 
-This project is intended to be used, tested, and improved by the community.
+- `/pets` opens the main menu
+- `/pets info` opens the pet catalogue
+- `/pets chances` opens spawn chance settings
+- `/pets notify` opens discovery broadcast settings
+- `/pets give <pet|all> [level] [player]` gives test pet items
 
----
+## Permissions
 
-## 🐶 What is BetterPets?
+- `betterpets.command.pets` opens the main menu
+- `betterpets.info` opens the catalogue
+- `betterpets.chances` edits spawn chances, broadcasts, and XP multiplier
+- `betterpets.give` gives test pet items
+- `betterpets.admin` grants all Better Pets permissions
 
-BetterPets adds new pet companions to Minecraft, allowing players to have helpful friends by their side during their adventures.
+## Important Config
 
-This plugin version aims to provide a similar experience, but in a format that is better suited for Minecraft server setups.
+```yaml
+max-pets-per-player: 45
+chest-pet-chance-percent: 2.5
+pet-xp-multiplier: 1.0
+dragon-flight-speed: 0.85
+dragon-flight-lift: 0.36
+debug-loot-rolls: false
 
-Planned features include:
+discovery-broadcasts:
+  common: true
+  rare: true
+  epic: true
+  legendary: true
+  extraordinary: true
+```
 
-* 🐾 Pet companions for players
-* ⚔️ Useful gameplay abilities
-* 🎒 Extended pet interactions
-* 🧩 Plugin-based usage instead of a datapack-only setup
-* ⚙️ Configurable settings
-* 🌍 Server-friendly implementation
+## Alpaca Storage
 
----
+Alpaca storage is owner-only and saved inside `plugins/BetterPets/pets.yml`.
+Items are stored with `ItemStack.serializeItemsAsBytes`, which preserves modern item data such as custom enchantments, PersistentDataContainer values, and plugin metadata.
 
-## 🚧 Project Status
+Storage size by Alpaca level:
 
-This project is currently still in development.
+- Level 1: 9 slots
+- Level 30: 18 slots
+- Level 50: 27 slots
+- Level 70: 36 slots
+- Level 100: 54 slots
 
-Bugs, missing features, and structural changes may occur during development.
+The plugin saves open Alpaca inventories on close, logout, autosave, and shutdown.
+An Alpaca with stored items cannot be switched away, despawned, or converted into an item until the storage is empty.
 
-| Area          | Status         |
-| ------------- | -------------- |
-| Core System   | 🚧 In Progress |
-| Pet Mechanics | 🚧 In Progress |
-| Configuration | 📝 Planned     |
-| Permissions   | 📝 Planned     |
-| Documentation | 🚧 In Progress |
+## Building
 
----
+With Maven:
 
-## 📦 Installation
+```powershell
+mvn clean package
+```
 
-> A detailed installation guide will be added once the first usable version is available.
+Local fallback build script:
 
-Planned installation steps:
+```powershell
+.\build.ps1
+```
 
-1. Download the plugin
-2. Place the `.jar` file into your server's `plugins` folder
-3. Start or restart the server
-4. Adjust the configuration
-5. Enjoy BetterPets 🐾
+The output jar is:
 
----
+```text
+target/better-pets-26.1.2-plugin.jar
+```
 
-## ⚙️ Commands
+## Installation
 
-> Commands may change during development.
+1. Build the jar.
+2. Put `better-pets-26.1.2-plugin.jar` into the Paper server `plugins` folder.
+3. Start the server once to generate config and storage files.
+4. Use LuckPerms or `paper-plugin.yml` defaults to assign permissions.
 
-| Command              | Description                       |
-| -------------------- | --------------------------------- |
-| `/betterpets`        | Main plugin command               |
-| `/betterpets help`   | Shows help and plugin information |
-| `/betterpets reload` | Reloads the plugin configuration  |
-| `/pet`               | Opens or manages your pet         |
+## Notes
 
----
-
-## 🔐 Permissions
-
-| Permission          | Description                        |
-| ------------------- | ---------------------------------- |
-| `betterpets.use`    | Allows players to use the plugin   |
-| `betterpets.admin`  | Grants access to admin features    |
-| `betterpets.reload` | Allows reloading the configuration |
-
----
-
-## 🧪 Features
-
-* 🐕 Pet companions
-* 🧠 Custom plugin logic
-* 🛠️ Adjustable settings
-* 💬 Simple commands
-* 🔒 Permission support
-* 🧩 Expandable for future features
-
----
-
-## 📜 Credits
-
-This project is inspired by the original **Better Pets** project.
-
-Original project:
-
-🔗 [Better Pets on Modrinth](https://modrinth.com/datapack/betterpets)
-
-Original creator:
-
-👤 **Vanderflys**
-
-All rights to the original project, name, concepts, assets, and related content belong to their respective rights holders.
-
----
-
-## ⚠️ Disclaimer
-
-This project is **not an official update**, **not an official continuation**, and **not directly affiliated with the original Better Pets project**, unless explicitly stated otherwise.
-
-I do **not claim any rights to the original project**.
-
-This repository is intended as an **unofficial community fork / plugin port**, allowing the community to use, test, and expand a plugin-based version.
-
-If the original author or rights holder wants specific content removed, changed, or credited differently, please contact me.
-
----
-
-## 🤝 Contributing
-
-Pull requests, issues, and suggestions are welcome.
-
-You can help with:
-
-* 🐛 Bug reports
-* 💡 Feature ideas
-* 🧪 Testing
-* 📚 Documentation
-* 🔧 Code contributions
-
----
-
-## 📌 Roadmap
-
-* [ ] Plugin core structure
-* [ ] Pet system
-* [ ] Commands
-* [ ] Permissions
-* [ ] Config files
-* [ ] Multiple pet types
-* [ ] Pet abilities
-* [ ] Admin tools
-* [ ] Documentation
-* [ ] First release version
-
----
-
-## ❓ FAQ
-
-### Is this the original Better Pets?
-
-No. This project is an unofficial plugin port / community fork.
-
-### Can I use this plugin on my server?
-
-Yes, once a version is released, you can test and use it on your server.
-
-### Is this project finished?
-
-No. It is currently still in development.
-
-### Is this project affiliated with the original author?
-
-No, unless stated otherwise. Credits go to the original creator of the Better Pets project.
-
----
-
-## ❤️ Special Thanks
-
-Thanks to the original creator of **Better Pets** for the idea and inspiration.
-
-This project is created with respect for the original work and with the goal of providing a usable plugin version for Minecraft servers.
-
----
-
-## 📄 License
-
-* The original Better Pets project belongs to its original rights holder.
-* This repository does not claim rights to original content.
-* Custom code in this repository may be licensed separately.
+- Structure chest pet rolls happen when Minecraft generates chest loot, usually when an unopened generated chest is first opened.
+- Existing opened chests will not reroll.
+- Enable `debug-loot-rolls: true` to see chest roll attempts in the console.

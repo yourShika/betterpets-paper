@@ -10,6 +10,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
+import org.bukkit.block.Block;
+import org.bukkit.block.BlockState;
 import org.bukkit.block.TileState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
@@ -93,6 +95,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private NamespacedKey generatedChestKey;
     private BukkitTask saveTask;
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
+    private final Map<String, UUID> pendingLootOpeners = new HashMap<>();
 
     @Override
     public void onEnable() {
@@ -180,6 +183,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (!(event.getView().getTopInventory().getHolder() instanceof PetMenuHolder holder)) {
             if (event.getView().getTopInventory().getHolder() instanceof ChanceMenuHolder chanceHolder) {
                 handleChanceClick(event, chanceHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof NotifyMenuHolder notifyHolder) {
+                handleNotifyClick(event, notifyHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof XpMenuHolder xpHolder) {
                 handleXpClick(event, xpHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof AlpacaStorageHolder alpacaHolder) {
@@ -279,6 +284,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     public void onInventoryDrag(final InventoryDragEvent event) {
         if (event.getView().getTopInventory().getHolder() instanceof PetMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof ChanceMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof NotifyMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof XpMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof PetDetailMenuHolder) {
@@ -312,6 +318,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
+        rememberLootOpener(event);
 
         final ItemStack item = event.getItem();
         final Optional<String> petId = itemFactory.petId(item);
@@ -376,6 +383,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
 
+        final Player opener = event.getInventoryHolder() instanceof BlockState blockState
+            ? openerFor(blockState)
+            : null;
+
         if (event.getInventoryHolder() instanceof TileState tileState) {
             if (tileState.getPersistentDataContainer().has(generatedChestKey, PersistentDataType.BYTE)) {
                 return;
@@ -405,6 +416,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         final PetDefinition definition = randomPetBySpawnChance(random, totalWeight);
         event.getLoot().add(itemFactory.discoveryItem(definition));
+        if (opener != null) {
+            broadcastPetDiscovery(opener, definition);
+        }
         debug("Injected " + definition.name() + " into chest loot table " + key + ".");
     }
 
@@ -707,6 +721,65 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         debug(player.getName() + " added pet " + definition.id() + " level " + pet.level() + " from item.");
     }
 
+    private void rememberLootOpener(final PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        final Block block = event.getClickedBlock();
+        if (block == null || !(block.getState() instanceof TileState)) {
+            return;
+        }
+        if (pendingLootOpeners.size() > 1024) {
+            pendingLootOpeners.clear();
+        }
+        pendingLootOpeners.put(blockKey(block.getState()), event.getPlayer().getUniqueId());
+    }
+
+    private Player openerFor(final BlockState blockState) {
+        final UUID playerId = pendingLootOpeners.remove(blockKey(blockState));
+        return playerId == null ? null : Bukkit.getPlayer(playerId);
+    }
+
+    private String blockKey(final BlockState blockState) {
+        return blockState.getWorld().getUID() + ":" + blockState.getX() + ":" + blockState.getY() + ":" + blockState.getZ();
+    }
+
+    private boolean discoveryBroadcastEnabled(final String rarity) {
+        return getConfig().getBoolean("discovery-broadcasts." + rarity.toLowerCase(Locale.ROOT), true);
+    }
+
+    private void setDiscoveryBroadcastEnabled(final String rarity, final boolean enabled) {
+        getConfig().set("discovery-broadcasts." + rarity.toLowerCase(Locale.ROOT), enabled);
+        saveConfig();
+    }
+
+    private void broadcastPetDiscovery(final Player player, final PetDefinition definition) {
+        if (!discoveryBroadcastEnabled(definition.rarity())) {
+            return;
+        }
+        Bukkit.broadcast(Component.text("[BetterPets] ", NamedTextColor.GOLD)
+            .append(Component.text(player.getName(), NamedTextColor.AQUA))
+            .append(Component.text(" hat ein ", NamedTextColor.GRAY))
+            .append(Component.text(definition.rarity() + " Pet", definition.rarityColor()))
+            .append(Component.text(" gefunden: ", NamedTextColor.GRAY))
+            .append(Component.text(definition.name(), definition.rarityColor()))
+            .append(Component.text("!", NamedTextColor.GRAY)));
+    }
+
+    private List<String> rarityOrder() {
+        return List.of("Common", "Rare", "Epic", "Legendary", "Extraordinary");
+    }
+
+    private NamedTextColor rarityColor(final String rarity) {
+        return switch (rarity.toLowerCase(Locale.ROOT)) {
+            case "rare" -> NamedTextColor.BLUE;
+            case "epic" -> NamedTextColor.DARK_PURPLE;
+            case "legendary" -> NamedTextColor.GOLD;
+            case "extraordinary" -> NamedTextColor.DARK_RED;
+            default -> NamedTextColor.GREEN;
+        };
+    }
+
     private void convertActivePet(final Player player, final PlayerPetData data, final Inventory inventory) {
         final OwnedPet pet = data.activePet().orElse(null);
         if (pet == null) {
@@ -958,6 +1031,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             Component.text("Close", NamedTextColor.RED),
             List.of(Component.text("Changes save instantly.", NamedTextColor.GRAY))
         ));
+        inventory.setItem(48, itemFactory.control(
+            Material.BELL,
+            Component.text("Find Broadcasts", NamedTextColor.GOLD),
+            List.of(Component.text("Toggle public pet-find messages.", NamedTextColor.GRAY))
+        ));
     }
 
     private void handleChanceClick(final InventoryClickEvent event, final ChanceMenuHolder holder) {
@@ -974,6 +1052,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (event.getRawSlot() == 49) {
             player.closeInventory();
+            return;
+        }
+        if (event.getRawSlot() == 48) {
+            openNotifyMenu(player);
             return;
         }
 
@@ -1002,6 +1084,63 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         player.sendMessage(message("messages.chances-saved")
             .replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name()))
             .replaceText(builder -> builder.matchLiteral("%chance%").replacement(formattedChance)));
+    }
+
+    private void openNotifyMenu(final Player player) {
+        if (!has(player, CHANCES_PERMISSION)) {
+            player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        final NotifyMenuHolder holder = new NotifyMenuHolder(player.getUniqueId());
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Component.text("Better Pets Broadcasts", NamedTextColor.GOLD));
+        holder.setInventory(inventory);
+        renderNotifyMenu(inventory);
+        player.openInventory(inventory);
+    }
+
+    private void renderNotifyMenu(final Inventory inventory) {
+        inventory.clear();
+        final int[] slots = {10, 11, 12, 13, 14};
+        final List<String> rarities = rarityOrder();
+        for (int i = 0; i < rarities.size(); i++) {
+            final String rarity = rarities.get(i);
+            final boolean enabled = discoveryBroadcastEnabled(rarity);
+            inventory.setItem(slots[i], itemFactory.control(
+                enabled ? Material.LIME_DYE : Material.GRAY_DYE,
+                Component.text(rarity + ": " + (enabled ? "AN" : "AUS"), rarityColor(rarity)),
+                List.of(Component.text("Click to toggle all-chat find messages.", NamedTextColor.GRAY))
+            ));
+        }
+        inventory.setItem(22, itemFactory.control(
+            Material.ARROW,
+            Component.text("Back", NamedTextColor.YELLOW),
+            List.of(Component.text("Return to spawn chances.", NamedTextColor.GRAY))
+        ));
+    }
+
+    private void handleNotifyClick(final InventoryClickEvent event, final NotifyMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player) || !player.getUniqueId().equals(holder.owner())) {
+            return;
+        }
+        if (!has(player, CHANCES_PERMISSION)) {
+            player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        if (event.getRawSlot() == 22) {
+            openChanceMenu(player);
+            return;
+        }
+        final int[] slots = {10, 11, 12, 13, 14};
+        final List<String> rarities = rarityOrder();
+        for (int i = 0; i < slots.length; i++) {
+            if (event.getRawSlot() == slots[i]) {
+                final String rarity = rarities.get(i);
+                setDiscoveryBroadcastEnabled(rarity, !discoveryBroadcastEnabled(rarity));
+                renderNotifyMenu(event.getView().getTopInventory());
+                return;
+            }
+        }
     }
 
     private void openXpMenu(final Player player) {
@@ -1427,6 +1566,28 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    private static final class NotifyMenuHolder implements InventoryHolder {
+        private final UUID owner;
+        private Inventory inventory;
+
+        private NotifyMenuHolder(final UUID owner) {
+            this.owner = owner;
+        }
+
+        private UUID owner() {
+            return owner;
+        }
+
+        private void setInventory(final Inventory inventory) {
+            this.inventory = inventory;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return inventory;
+        }
+    }
+
     private static final class XpMenuHolder implements InventoryHolder {
         private final UUID owner;
         private Inventory inventory;
@@ -1505,6 +1666,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 }
                 return;
             }
+            if (args.length > 0 && args[0].equalsIgnoreCase("notify")) {
+                if (sender instanceof Player player) {
+                    plugin.openNotifyMenu(player);
+                } else {
+                    sender.sendMessage(plugin.message("messages.only-players"));
+                }
+                return;
+            }
 
             final Entity executor = stack.getExecutor();
             final Player player = executor instanceof Player executingPlayer
@@ -1536,6 +1705,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 }
                 if (plugin.has(stack.getSender(), CHANCES_PERMISSION)) {
                     suggestions.add("chances");
+                    suggestions.add("notify");
                 }
                 return suggestions;
             }

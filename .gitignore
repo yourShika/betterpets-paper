@@ -1,0 +1,8 @@
+target/
+lib/*.jar
+*.log
+*.tmp
+*.bak
+.idea/
+.vscode/
+*.iml

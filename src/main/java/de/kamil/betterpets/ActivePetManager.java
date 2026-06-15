@@ -513,7 +513,7 @@ public final class ActivePetManager {
             motion.subtract(right);
         }
         if (motion.lengthSquared() > 0.01) {
-            motion.normalize().multiply(Math.max(0.1, plugin.getConfig().getDouble("dragon-flight-speed", 0.55)));
+            motion.normalize().multiply(Math.max(0.1, plugin.getConfig().getDouble("dragon-flight-speed", 0.85)));
         }
         if (ride.jump()) {
             motion.setY(Math.max(motion.getY(), Math.max(0.28, plugin.getConfig().getDouble("dragon-flight-lift", 0.36))));
@@ -553,7 +553,7 @@ public final class ActivePetManager {
         }
         direction.normalize();
         final double bob = Math.sin(tick / 6.0) * 0.08;
-        final Location target = base.add(direction.multiply(-0.7)).add(0, -0.95 + bob, 0);
+        final Location target = base.add(0, -0.95 + bob, 0);
         target.setDirection(player.getLocation().getDirection());
         return target;
     }
@@ -606,11 +606,17 @@ public final class ActivePetManager {
 
     private void spawnDragonTrail(final Player player, final OwnedPet pet) {
         final Location location = player.getLocation().add(0, 0.8, 0);
-        switch (pet.definitionId()) {
-            case "ender_dragon" -> player.getWorld().spawnParticle(Particle.DRAGON_BREATH, location, 2, 0.35, 0.18, 0.35, 0.0);
-            case "blue_dragon" -> player.getWorld().spawnParticle(Particle.ENCHANT, location, 3, 0.35, 0.18, 0.35, 0.0);
-            case "red_dragon" -> player.getWorld().spawnParticle(Particle.FLAME, location, 2, 0.25, 0.12, 0.25, 0.0);
-            default -> {
+        try {
+            switch (pet.definitionId()) {
+                case "ender_dragon" -> player.getWorld().spawnParticle(Particle.DRAGON_BREATH, location, 2, 0.35, 0.18, 0.35, 0.0, 1.0F);
+                case "blue_dragon" -> player.getWorld().spawnParticle(Particle.ENCHANT, location, 3, 0.35, 0.18, 0.35, 0.0);
+                case "red_dragon" -> player.getWorld().spawnParticle(Particle.FLAME, location, 2, 0.25, 0.12, 0.25, 0.0);
+                default -> {
+                }
+            }
+        } catch (final IllegalArgumentException exception) {
+            if (pet.definitionId().equals("ender_dragon")) {
+                player.getWorld().spawnParticle(Particle.PORTAL, location, 4, 0.35, 0.18, 0.35, 0.0);
             }
         }
     }
