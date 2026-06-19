@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.2.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.2.1-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -18,6 +18,12 @@ It does **not** require datapacks, command functions, minecart menus, or resourc
 Everything is handled directly through the plugin.
 
 This version is designed to be easier to use on Paper servers while keeping the Better Pets experience alive in a plugin-based format.
+
+---
+
+## 🆕 What's New in v1.2.1
+
+* 👁️ **Owner-only glow reveal:** Bat, Red Parrot, and Warden now show a real **glow outline that is visible through walls**, sent to the **pet owner only** (via a per-viewer metadata packet). If the server internals are unavailable, it safely falls back to a normal shared glow, so the through-walls reveal always works.
 
 ---
 

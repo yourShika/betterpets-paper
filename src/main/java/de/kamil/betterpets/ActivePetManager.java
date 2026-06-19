@@ -174,6 +174,8 @@ public final class ActivePetManager {
     private final Map<UUID, RideState> rides = new HashMap<>();
     private final Map<UUID, Set<PotionEffectType>> petBuffs = new HashMap<>();
     private final Set<UUID> herobrineWeather = new HashSet<>();
+    private final Map<UUID, Set<UUID>> revealedMobs = new HashMap<>();
+    private final GlowController glow;
     private BukkitTask task;
     private long tick;
 
@@ -184,6 +186,7 @@ public final class ActivePetManager {
         this.itemFactory = itemFactory;
         this.ownerKey = new NamespacedKey(plugin, "active_owner");
         this.petUuidKey = new NamespacedKey(plugin, "active_pet");
+        this.glow = new GlowController(plugin);
     }
 
     public void start() {
@@ -205,6 +208,7 @@ public final class ActivePetManager {
             active.hitbox().remove();
         });
         activePets.clear();
+        Bukkit.getOnlinePlayers().forEach(this::clearReveal);
         Bukkit.getOnlinePlayers().forEach(this::resetPlayerState);
     }
 
@@ -254,6 +258,7 @@ public final class ActivePetManager {
 
     public void despawn(final Player player, final boolean clearActive) {
         stopRide(player, false);
+        clearReveal(player);
         final ActivePet active = activePets.remove(player.getUniqueId());
         if (active != null) {
             active.display().remove();
@@ -1044,30 +1049,26 @@ public final class ActivePetManager {
     }
 
     private void updateReveals(final Player player, final OwnedPet pet) {
+        final Set<UUID> desired = new HashSet<>();
         switch (pet.definitionId()) {
             case "bat" -> {
                 if (player.getLocation().getY() < 50.0) {
-                    revealMobs(player, Math.min(24, 8 + abilityTier(pet.level())), false);
+                    collectRevealTargets(player, Math.min(24, 8 + abilityTier(pet.level())), false, desired);
                 }
             }
             case "red_parrot" -> {
                 if (player.getLocation().getBlock().getLightFromSky() > 0) {
-                    revealMobs(player, Math.min(30, 10 + (pet.level() / 10) * 2), false);
+                    collectRevealTargets(player, Math.min(30, 10 + (pet.level() / 10) * 2), false, desired);
                 }
             }
-            case "warden" -> revealMobs(player, Math.min(50, Math.max(10, pet.level())), true);
+            case "warden" -> collectRevealTargets(player, Math.min(50, Math.max(10, pet.level())), true, desired);
             default -> {
             }
         }
+        reconcileReveal(player, desired);
     }
 
-    /**
-     * Marks every matching mob inside the radius for the pet owner only. The marker is drawn with
-     * player-specific particles (sent to this player alone), so other players never see the reveal.
-     */
-    private void revealMobs(final Player player, final double radius, final boolean undeadOnly) {
-        final Particle.DustOptions options = new Particle.DustOptions(
-            undeadOnly ? Color.fromRGB(150, 40, 200) : Color.fromRGB(255, 50, 50), 1.0F);
+    private void collectRevealTargets(final Player player, final double radius, final boolean undeadOnly, final Set<UUID> out) {
         for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
             if (!(entity instanceof LivingEntity living) || entity.equals(player)) {
                 continue;
@@ -1075,8 +1076,54 @@ public final class ActivePetManager {
             if (undeadOnly ? !isUndead(living) : !isHostile(living)) {
                 continue;
             }
-            final Location marker = living.getLocation().add(0, living.getHeight() + 0.4, 0);
-            player.spawnParticle(Particle.DUST, marker, 5, 0.12, 0.2, 0.12, 0.0, options);
+            if (glow.isAvailable()) {
+                out.add(living.getUniqueId());
+            } else {
+                // No per-viewer glow on this server: fall back to a normal glow (through walls, seen by all).
+                living.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 15, 0, true, false, false));
+            }
+        }
+    }
+
+    /**
+     * Drives a glowing outline that only the pet owner sees. Newly revealed mobs are turned on, mobs
+     * that left the radius are turned off again, so the reveal follows the mobs and stays owner-only.
+     */
+    private void reconcileReveal(final Player player, final Set<UUID> desired) {
+        if (!glow.isAvailable()) {
+            return;
+        }
+        final Set<UUID> current = revealedMobs.computeIfAbsent(player.getUniqueId(), ignored -> new HashSet<>());
+        for (final UUID id : Set.copyOf(current)) {
+            if (!desired.contains(id)) {
+                final Entity entity = Bukkit.getEntity(id);
+                if (entity != null) {
+                    glow.setGlow(player, entity, false);
+                }
+                current.remove(id);
+            }
+        }
+        for (final UUID id : desired) {
+            final Entity entity = Bukkit.getEntity(id);
+            if (entity != null && glow.setGlow(player, entity, true)) {
+                current.add(id);
+            }
+        }
+        if (current.isEmpty()) {
+            revealedMobs.remove(player.getUniqueId());
+        }
+    }
+
+    private void clearReveal(final Player player) {
+        final Set<UUID> current = revealedMobs.remove(player.getUniqueId());
+        if (current == null || !glow.isAvailable()) {
+            return;
+        }
+        for (final UUID id : current) {
+            final Entity entity = Bukkit.getEntity(id);
+            if (entity != null) {
+                glow.setGlow(player, entity, false);
+            }
         }
     }
 
