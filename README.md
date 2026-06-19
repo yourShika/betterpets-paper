@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.1.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.2.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -18,6 +18,18 @@ It does **not** require datapacks, command functions, minecart menus, or resourc
 Everything is handled directly through the plugin.
 
 This version is designed to be easier to use on Paper servers while keeping the Better Pets experience alive in a plugin-based format.
+
+---
+
+## 🆕 What's New in v1.2.0
+
+Multiplayer-focused fixes and polish:
+
+* 👁️ **Owner-only mob reveal:** Bat, Red Parrot, and Warden now mark mobs with **player-specific particles** that only the pet owner sees, instead of a glow visible to everyone. The reveal scan also runs less often for better performance.
+* 🌩️ **Herobrine personal weather:** the eerie thunderstorm is now **client-side for the owner only** and no longer forces world-wide weather on other players.
+* 🪺 **Allay no longer takes other players' items:** it only collects natural drops and items you dropped yourself.
+* 🧹 **Crash-safe join cleanup:** leftover pet stat modifiers are stripped on join, so a player never keeps a pet stat without an active pet after an unclean shutdown.
+* 🛢️ **Wider loot support:** pets can now roll in **double chests** and **barrels** too, in addition to single chests and other containers.
 
 ---
 

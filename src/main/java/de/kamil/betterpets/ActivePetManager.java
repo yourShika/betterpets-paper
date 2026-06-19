@@ -11,6 +11,7 @@ import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.WeatherType;
 import org.bukkit.World;
 import org.bukkit.attribute.Attribute;
 import org.bukkit.attribute.AttributeInstance;
@@ -172,6 +173,7 @@ public final class ActivePetManager {
     private final Map<UUID, ActivePet> activePets = new HashMap<>();
     private final Map<UUID, RideState> rides = new HashMap<>();
     private final Map<UUID, Set<PotionEffectType>> petBuffs = new HashMap<>();
+    private final Set<UUID> herobrineWeather = new HashSet<>();
     private BukkitTask task;
     private long tick;
 
@@ -536,7 +538,9 @@ public final class ActivePetManager {
             if (pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
                 spawnUnicornGlitter(player);
             }
-            updateReveals(player, pet);
+            if (tick % 2L == 0L) {
+                updateReveals(player, pet);
+            }
             if (pet.definitionId().equals("allay") && tick % 10L == 0L) {
                 collectAllayItems(player, Math.min(12.0, 4.0 + (abilityTier(pet.level()) * 0.4)));
             }
@@ -755,8 +759,9 @@ public final class ActivePetManager {
                 }
             }));
             case "herobrine" -> {
-                player.getWorld().setStorm(true);
-                player.getWorld().setThundering(true);
+                // Personal, client-side weather only, so other players and the world are unaffected.
+                herobrineWeather.add(player.getUniqueId());
+                player.setPlayerWeather(WeatherType.DOWNFALL);
             }
             case "unicorn" -> applyPetBuff(player, PotionEffectType.REGENERATION, pet.level() >= 80 ? 1 : 0);
             default -> {
@@ -836,8 +841,16 @@ public final class ActivePetManager {
     }
 
     private void collectAllayItems(final Player player, final double radius) {
+        final UUID ownerId = player.getUniqueId();
         for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
             if (!(entity instanceof Item itemEntity) || itemEntity.getPickupDelay() > 0 || !itemEntity.canPlayerPickup()) {
+                continue;
+            }
+            // Never pull items that another player dropped or that are reserved for someone else.
+            if (itemEntity.getThrower() != null && !itemEntity.getThrower().equals(ownerId)) {
+                continue;
+            }
+            if (itemEntity.getOwner() != null && !itemEntity.getOwner().equals(ownerId)) {
                 continue;
             }
             final ItemStack stack = itemEntity.getItemStack();
@@ -971,6 +984,19 @@ public final class ActivePetManager {
                 player.removePotionEffect(type);
             }
         }
+
+        if (herobrineWeather.remove(player.getUniqueId())) {
+            player.resetPlayerWeather();
+        }
+    }
+
+    /**
+     * Strips any leftover pet attribute modifiers from a joining player. After an unclean shutdown
+     * (a crash with no onDisable) the keyed modifiers can persist in player data; calling this on join
+     * removes them so a player never keeps a pet stat without an active pet.
+     */
+    public void prepareJoiningPlayer(final Player player) {
+        resetPlayerState(player);
     }
 
     /**
@@ -1036,10 +1062,12 @@ public final class ActivePetManager {
     }
 
     /**
-     * Keeps every matching mob inside the radius highlighted continuously. The glow is given a short
-     * duration and refreshed every tick run, so a mob stops glowing shortly after it leaves the radius.
+     * Marks every matching mob inside the radius for the pet owner only. The marker is drawn with
+     * player-specific particles (sent to this player alone), so other players never see the reveal.
      */
     private void revealMobs(final Player player, final double radius, final boolean undeadOnly) {
+        final Particle.DustOptions options = new Particle.DustOptions(
+            undeadOnly ? Color.fromRGB(150, 40, 200) : Color.fromRGB(255, 50, 50), 1.0F);
         for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
             if (!(entity instanceof LivingEntity living) || entity.equals(player)) {
                 continue;
@@ -1047,7 +1075,8 @@ public final class ActivePetManager {
             if (undeadOnly ? !isUndead(living) : !isHostile(living)) {
                 continue;
             }
-            living.addPotionEffect(new PotionEffect(PotionEffectType.GLOWING, 15, 0, true, false, false));
+            final Location marker = living.getLocation().add(0, living.getHeight() + 0.4, 0);
+            player.spawnParticle(Particle.DUST, marker, 5, 0.12, 0.2, 0.12, 0.0, options);
         }
     }
 

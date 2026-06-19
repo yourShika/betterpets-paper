@@ -13,6 +13,7 @@ import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Container;
+import org.bukkit.block.DoubleChest;
 import org.bukkit.block.TileState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
@@ -380,10 +381,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        // Only inject into block containers (chests, barrels, dispensers, ...). This covers both
-        // vanilla structures and custom structures added by data packs, no matter which loot table
-        // namespace or path they use, as long as the loot is generated into a placed container.
-        if (!(event.getInventoryHolder() instanceof Container container)) {
+        // Only inject into block containers: single chests, double chests, barrels, dispensers, ...
+        // This covers both vanilla structures and custom structures added by data packs, no matter
+        // which loot table namespace or path they use, as long as the loot fills a placed container.
+        final InventoryHolder lootHolder = event.getInventoryHolder();
+        final Container container;
+        if (lootHolder instanceof Container directContainer) {
+            container = directContainer;
+        } else if (lootHolder instanceof DoubleChest doubleChest && doubleChest.getLeftSide() instanceof Container leftContainer) {
+            container = leftContainer;
+        } else {
             return;
         }
 
@@ -425,6 +432,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerJoin(final PlayerJoinEvent event) {
+        activePets.prepareJoiningPlayer(event.getPlayer());
         Bukkit.getScheduler().runTaskLater(this, () -> activePets.spawnSavedActivePet(event.getPlayer()), 20L);
     }
 
