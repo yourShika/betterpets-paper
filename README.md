@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.2.3-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.2.4-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,13 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.2.4
+
+* 👀 **Pets look at you again:** fixed the recurring bug where pets faced the player's gaze direction instead of looking **at** the player (a regression from 1.2.2). Documented in code so it cannot be flipped again.
+* ⬇️ **`/pets update`:** downloads the latest release jar straight from GitHub into the server's update folder; it is applied automatically on the next **server restart**. Admin only.
 
 ---
 
@@ -63,6 +70,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 | ---------------------------------------- | ---------------------------------------- |
 | `/pets`                                  | Opens the main pet menu                  |
 | `/pets version`                          | Shows version, active modules, updates   |
+| `/pets update`                           | Downloads the latest version (admin)     |
 | `/pets help`                             | Shows command help                       |
 | `/pets info`                             | Opens the pet catalogue                  |
 | `/pets chances`                          | Opens spawn chance settings              |
@@ -251,6 +259,7 @@ Pet rolls happen when Minecraft generates container loot for unopened generated 
 
 ## 🗒️ Previous Releases
 
+* **v1.2.3** — Mending-proof XP, lighter saving, `/pets version`, animation-driven model movement, ground-height caching.
 * **v1.2.2** — Optional module system (experimental) + BetterModel module; particles stop when the pet is hidden.
 * **v1.2.1** — Owner-only glow reveal (through walls) for Bat / Red Parrot / Warden.
 * **v1.2.0** — Multiplayer fixes: personal Herobrine weather, Allay no longer takes others' items, crash-safe join cleanup, double chests + barrels.

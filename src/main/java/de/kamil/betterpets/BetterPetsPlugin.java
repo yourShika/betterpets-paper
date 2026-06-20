@@ -1565,6 +1565,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private String fetchLatestReleaseTag() {
+        final ReleaseInfo info = fetchLatestRelease();
+        return info == null ? null : info.tag();
+    }
+
+    private ReleaseInfo fetchLatestRelease() {
         try {
             final java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
                 .connectTimeout(java.time.Duration.ofSeconds(5))
@@ -1580,10 +1585,91 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             if (response.statusCode() != 200) {
                 return null;
             }
-            final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").matcher(response.body());
-            return matcher.find() ? matcher.group(1) : null;
+            final java.util.regex.Matcher tagMatcher = java.util.regex.Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").matcher(response.body());
+            final String tag = tagMatcher.find() ? tagMatcher.group(1) : null;
+            // Only accept a jar asset URL served by GitHub itself, never an arbitrary URL.
+            final java.util.regex.Matcher urlMatcher = java.util.regex.Pattern.compile("\"browser_download_url\"\\s*:\\s*\"(https://[^\"]+\\.jar)\"").matcher(response.body());
+            final String jarUrl = urlMatcher.find() ? urlMatcher.group(1) : null;
+            return new ReleaseInfo(tag, jarUrl);
         } catch (final Exception exception) {
             return null;
+        }
+    }
+
+    private record ReleaseInfo(String tag, String jarUrl) {
+    }
+
+    void handleUpdateCommand(final CommandSender sender) {
+        if (!has(sender, ADMIN_PERMISSION)) {
+            sender.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        final String currentVersion = getPluginMeta().getVersion();
+        sender.sendMessage(Component.text("Checking for a Better Pets update...", NamedTextColor.GOLD));
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            final ReleaseInfo info = fetchLatestRelease();
+            if (info == null || info.tag() == null) {
+                runOnMain(() -> sender.sendMessage(Component.text("Could not reach GitHub to check for updates.", NamedTextColor.RED)));
+                return;
+            }
+            final String latest = info.tag().startsWith("v") ? info.tag().substring(1) : info.tag();
+            if (compareVersions(currentVersion, latest) >= 0) {
+                runOnMain(() -> sender.sendMessage(Component.text("You are already on the latest version (v" + currentVersion + ").", NamedTextColor.GREEN)));
+                return;
+            }
+            if (info.jarUrl() == null) {
+                runOnMain(() -> sender.sendMessage(Component.text("Release v" + latest + " has no downloadable jar asset.", NamedTextColor.RED)));
+                return;
+            }
+            final boolean downloaded = downloadUpdate(info.jarUrl());
+            runOnMain(() -> {
+                if (downloaded) {
+                    sender.sendMessage(Component.text("Downloaded Better Pets v" + latest + " (you have v" + currentVersion + ").", NamedTextColor.GREEN));
+                    sender.sendMessage(Component.text("Restart the server to apply the update.", NamedTextColor.YELLOW));
+                } else {
+                    sender.sendMessage(Component.text("Update download failed - see the console for details.", NamedTextColor.RED));
+                }
+            });
+        });
+    }
+
+    private void runOnMain(final Runnable runnable) {
+        Bukkit.getScheduler().runTask(this, runnable);
+    }
+
+    private boolean downloadUpdate(final String jarUrl) {
+        try {
+            final java.io.File updateFolder = Bukkit.getUpdateFolderFile();
+            if (!updateFolder.exists() && !updateFolder.mkdirs()) {
+                getLogger().severe("Could not create the plugin update folder: " + updateFolder.getAbsolutePath());
+                return false;
+            }
+            // Place the new jar in the server's update folder under the current plugin's file name.
+            // Bukkit applies it automatically on the next start, which avoids the locked-jar problem.
+            final java.nio.file.Path target = new java.io.File(updateFolder, getFile().getName()).toPath();
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                .followRedirects(java.net.http.HttpClient.Redirect.NORMAL)
+                .connectTimeout(java.time.Duration.ofSeconds(10))
+                .build();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create(jarUrl))
+                .header("User-Agent", "BetterPets-UpdateCheck")
+                .header("Accept", "application/octet-stream")
+                .timeout(java.time.Duration.ofSeconds(120))
+                .GET()
+                .build();
+            final java.net.http.HttpResponse<java.nio.file.Path> response =
+                client.send(request, java.net.http.HttpResponse.BodyHandlers.ofFile(target));
+            if (response.statusCode() != 200) {
+                getLogger().severe("Update download returned HTTP " + response.statusCode() + ".");
+                java.nio.file.Files.deleteIfExists(target);
+                return false;
+            }
+            getLogger().info("Downloaded Better Pets update to " + target + "; it will be applied on the next server start.");
+            return true;
+        } catch (final Exception exception) {
+            getLogger().severe("Update download failed: " + exception.getMessage());
+            return false;
         }
     }
 
@@ -1629,6 +1715,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (has(sender, ADMIN_PERMISSION)) {
             sender.sendMessage(Component.text("/pets modules - optional modules GUI", NamedTextColor.AQUA));
             sender.sendMessage(Component.text("/pets reload - reload config, modules, and models", NamedTextColor.AQUA));
+            sender.sendMessage(Component.text("/pets update - download the latest version (restart to apply)", NamedTextColor.AQUA));
         }
     }
 
@@ -2122,6 +2209,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 plugin.handleVersionCommand(sender);
                 return;
             }
+            if (args.length > 0 && args[0].equalsIgnoreCase("update")) {
+                plugin.handleUpdateCommand(sender);
+                return;
+            }
             if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
                 plugin.reloadBetterPets(sender);
                 return;
@@ -2194,6 +2285,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                         suggestions.add("modules");
                     }
                     suggestions.add("reload");
+                    suggestions.add("update");
                 }
                 return suggestions;
             }

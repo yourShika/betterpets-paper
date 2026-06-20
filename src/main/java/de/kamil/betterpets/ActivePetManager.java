@@ -962,11 +962,16 @@ public final class ActivePetManager {
     }
 
     private void faceTargetAtPlayer(final Location target, final Player player, final boolean model) {
-        final Vector lookAtPlayer = player.getEyeLocation().toVector().subtract(target.toVector());
-        if (lookAtPlayer.lengthSquared() < 0.01) {
-            lookAtPlayer.setZ(1);
+        // IMPORTANT: do not "simplify" this to playerEye - target.
+        // The floating pet head renders its face on the side OPPOSITE the entity's facing direction,
+        // so to make the pet look AT the player we must point the entity AWAY from the player (its face
+        // then turns toward the player). Using playerEye - target makes pets stare where the player
+        // looks instead of at the player (regression that happened in 1.2.2, fixed again in 1.2.4).
+        final Vector awayFromPlayer = target.toVector().subtract(player.getEyeLocation().toVector());
+        if (awayFromPlayer.lengthSquared() < 0.01) {
+            awayFromPlayer.setZ(1);
         }
-        target.setDirection(lookAtPlayer);
+        target.setDirection(awayFromPlayer);
         if (model) {
             target.setYaw(target.getYaw() + (float) plugin.getConfig().getDouble("model-facing-yaw-offset-degrees", 0.0));
         }
