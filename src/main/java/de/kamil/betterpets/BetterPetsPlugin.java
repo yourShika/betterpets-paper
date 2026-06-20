@@ -38,6 +38,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
+import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
 import org.bukkit.event.player.PlayerExpChangeEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
@@ -108,6 +109,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private NamespacedKey generatedChestKey;
     private BukkitTask saveTask;
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
+    private final Map<UUID, Long> lastOrbPickupTick = new HashMap<>();
     private final Map<String, UUID> pendingLootOpeners = new HashMap<>();
 
     @Override
@@ -469,17 +471,40 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         saveOpenAlpacaStorage(event.getPlayer());
         activePets.despawn(event.getPlayer(), false);
         menuCooldowns.remove(event.getPlayer().getUniqueId());
+        lastOrbPickupTick.remove(event.getPlayer().getUniqueId());
         storage.save();
+    }
+
+    @EventHandler
+    public void onPlayerPickupExperience(final PlayerPickupExperienceEvent event) {
+        final Player player = event.getPlayer();
+        // Count the orb's full value, before Mending diverts any of it to tool repair.
+        lastOrbPickupTick.put(player.getUniqueId(), (long) Bukkit.getCurrentTick());
+        grantPetExp(player, event.getExperienceOrb().getExperience());
     }
 
     @EventHandler
     public void onPlayerExpChange(final PlayerExpChangeEvent event) {
         final Player player = event.getPlayer();
+        // Orb pickups are handled (at full value) by onPlayerPickupExperience. Skip them here so they
+        // are not counted twice; this branch only catches non-orb XP (commands, plugins, etc.).
+        final Long pickupTick = lastOrbPickupTick.get(player.getUniqueId());
+        if (pickupTick != null && pickupTick == (long) Bukkit.getCurrentTick()) {
+            return;
+        }
+        grantPetExp(player, event.getAmount());
+    }
+
+    private void grantPetExp(final Player player, final int amount) {
+        if (amount <= 0) {
+            return;
+        }
         activePets.activePet(player).ifPresent(pet -> {
-            final boolean leveled = pet.addExp(event.getAmount(), petXpMultiplier());
-            activePets.refreshDisplay(player);
-            storage.save();
+            // XP is persisted by the periodic autosave and on quit/disable, so this hot path no longer
+            // writes the whole storage file on every single XP gain.
+            final boolean leveled = pet.addExp(amount, petXpMultiplier());
             if (leveled) {
+                activePets.refreshDisplay(player);
                 definitions.get(pet.definitionId()).ifPresent(definition ->
                     player.sendMessage(Component.text("Your " + definition.name() + " reached level " + pet.level() + ".", NamedTextColor.GREEN))
                 );
@@ -1499,8 +1524,98 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         getLogger().info("Better Pets reload completed.");
     }
 
+    void handleVersionCommand(final CommandSender sender) {
+        final String version = getPluginMeta().getVersion();
+        sender.sendMessage(Component.text("Better Pets ", NamedTextColor.GOLD)
+            .append(Component.text("v" + version, NamedTextColor.AQUA)));
+        sender.sendMessage(Component.text("Modules:", NamedTextColor.GOLD));
+        if (moduleManager != null) {
+            for (final Module module : moduleManager.modules()) {
+                final boolean active = moduleManager.isActive(module.id());
+                sender.sendMessage(Component.text("  - " + module.displayName() + ": ", NamedTextColor.GRAY)
+                    .append(Component.text(active ? "ON" : "OFF", active ? NamedTextColor.GREEN : NamedTextColor.RED)));
+            }
+        }
+        if (!experimentalModulesEnabled()) {
+            sender.sendMessage(Component.text("  (external modules are experimental and disabled)", NamedTextColor.DARK_GRAY));
+        }
+        checkLatestVersionAsync(sender, version);
+    }
+
+    private void checkLatestVersionAsync(final CommandSender sender, final String currentVersion) {
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            final String latest = fetchLatestReleaseTag();
+            Bukkit.getScheduler().runTask(this, () -> {
+                if (latest == null) {
+                    sender.sendMessage(Component.text("Could not check for updates (GitHub unreachable).", NamedTextColor.DARK_GRAY));
+                    return;
+                }
+                final String latestClean = latest.startsWith("v") ? latest.substring(1) : latest;
+                final int comparison = compareVersions(currentVersion, latestClean);
+                if (comparison < 0) {
+                    sender.sendMessage(Component.text("A newer version is available: v" + latestClean + " (you have v" + currentVersion + ").", NamedTextColor.YELLOW));
+                    sender.sendMessage(Component.text("https://github.com/yourShika/betterpets-paper/releases/latest", NamedTextColor.AQUA));
+                } else if (comparison > 0) {
+                    sender.sendMessage(Component.text("You are running a newer build (v" + currentVersion + ") than the latest release (v" + latestClean + ").", NamedTextColor.GRAY));
+                } else {
+                    sender.sendMessage(Component.text("You are on the latest version.", NamedTextColor.GREEN));
+                }
+            });
+        });
+    }
+
+    private String fetchLatestReleaseTag() {
+        try {
+            final java.net.http.HttpClient client = java.net.http.HttpClient.newBuilder()
+                .connectTimeout(java.time.Duration.ofSeconds(5))
+                .build();
+            final java.net.http.HttpRequest request = java.net.http.HttpRequest.newBuilder()
+                .uri(java.net.URI.create("https://api.github.com/repos/yourShika/betterpets-paper/releases/latest"))
+                .header("Accept", "application/vnd.github+json")
+                .header("User-Agent", "BetterPets-UpdateCheck")
+                .timeout(java.time.Duration.ofSeconds(5))
+                .GET()
+                .build();
+            final java.net.http.HttpResponse<String> response = client.send(request, java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() != 200) {
+                return null;
+            }
+            final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\"tag_name\"\\s*:\\s*\"([^\"]+)\"").matcher(response.body());
+            return matcher.find() ? matcher.group(1) : null;
+        } catch (final Exception exception) {
+            return null;
+        }
+    }
+
+    private int compareVersions(final String left, final String right) {
+        final String[] leftParts = left.split("\\.");
+        final String[] rightParts = right.split("\\.");
+        final int length = Math.max(leftParts.length, rightParts.length);
+        for (int i = 0; i < length; i++) {
+            final int leftValue = i < leftParts.length ? parseVersionPart(leftParts[i]) : 0;
+            final int rightValue = i < rightParts.length ? parseVersionPart(rightParts[i]) : 0;
+            if (leftValue != rightValue) {
+                return Integer.compare(leftValue, rightValue);
+            }
+        }
+        return 0;
+    }
+
+    private int parseVersionPart(final String value) {
+        final String digits = value.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(digits);
+        } catch (final NumberFormatException exception) {
+            return 0;
+        }
+    }
+
     private void sendHelp(final CommandSender sender) {
         sender.sendMessage(Component.text("/pets - open your pet menu", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("/pets version - show version, modules, and update check", NamedTextColor.AQUA));
         if (has(sender, INFO_PERMISSION)) {
             sender.sendMessage(Component.text("/pets info - pet catalogue", NamedTextColor.YELLOW));
         }
@@ -2003,6 +2118,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 plugin.sendHelp(sender);
                 return;
             }
+            if (args.length > 0 && args[0].equalsIgnoreCase("version")) {
+                plugin.handleVersionCommand(sender);
+                return;
+            }
             if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
                 plugin.reloadBetterPets(sender);
                 return;
@@ -2059,6 +2178,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             if (args.length == 1) {
                 final List<String> suggestions = new ArrayList<>();
                 suggestions.add("help");
+                suggestions.add("version");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {
                     suggestions.add("give");
                 }

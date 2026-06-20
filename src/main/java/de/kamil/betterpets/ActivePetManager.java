@@ -393,7 +393,7 @@ public final class ActivePetManager {
         Location location = player.getLocation().clone();
         final boolean grounded = modelCandidate && modelService.modelName(definition).map(this::groundedByModelName).orElse(false);
         if (grounded) {
-            location = groundModelLocation(player, location);
+            location = groundModelLocation(player, location, null);
         } else {
             location.add(0, plugin.getConfig().getDouble("follow-height", 1.2), 0);
         }
@@ -410,6 +410,14 @@ public final class ActivePetManager {
         if (modelName == null) {
             return false;
         }
+        // Force by model name suffix (e.g. ant_grounded / ant_flying), otherwise decide by animations.
+        final String lower = modelName.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("_grounded") || lower.endsWith("_ground")) {
+            return true;
+        }
+        if (lower.endsWith("_flying") || lower.endsWith("_fly")) {
+            return false;
+        }
         final java.util.Set<String> anims = modelService.animations(modelName);
         if (anims.contains("flying")) {
             return false;
@@ -417,7 +425,7 @@ public final class ActivePetManager {
         if (anims.contains("walking")) {
             return true;
         }
-        return modelGroundMovement();
+        return false;
     }
 
     private boolean isModelGrounded(final ActivePet active) {
@@ -913,7 +921,7 @@ public final class ActivePetManager {
         Location target = base.add(offset);
         final boolean modelGrounded = active.modelHandle() != null && isModelGrounded(active);
         if (modelGrounded) {
-            target = groundModelLocation(player, target);
+            target = groundModelLocation(player, target, active);
         } else {
             target.add(0, plugin.getConfig().getDouble("follow-height", 1.2) + bob, 0);
         }
@@ -921,23 +929,31 @@ public final class ActivePetManager {
         return target;
     }
 
-    private boolean modelGroundMovement() {
-        final String mode = plugin.getConfig().getString("model-movement-mode", "flying");
-        return mode != null && (mode.equalsIgnoreCase("ground") || mode.equalsIgnoreCase("grounded") || mode.equalsIgnoreCase("floor"));
-    }
-
-    private Location groundModelLocation(final Player player, final Location target) {
+    private Location groundModelLocation(final Player player, final Location target, final ActivePet active) {
+        final int blockX = target.getBlockX();
+        final int blockZ = target.getBlockZ();
+        // Reuse the last ground height while the pet stays in the same block column, so a standing pet
+        // does not re-scan the ground every follow tick. The scan only runs when the column changes.
+        if (active != null) {
+            final Double cached = active.cachedGroundY(blockX, blockZ);
+            if (cached != null) {
+                target.setY(cached);
+                return target;
+            }
+        }
         final World world = target.getWorld();
         final int startY = Math.min(world.getMaxHeight() - 2, Math.max(world.getMinHeight() + 2, player.getLocation().getBlockY() + 3));
         final int minY = Math.max(world.getMinHeight() + 1, player.getLocation().getBlockY() - 12);
-        final int blockX = target.getBlockX();
-        final int blockZ = target.getBlockZ();
         for (int y = startY; y >= minY; y--) {
             final Block feet = world.getBlockAt(blockX, y, blockZ);
             final Block head = world.getBlockAt(blockX, y + 1, blockZ);
             final Block below = world.getBlockAt(blockX, y - 1, blockZ);
             if (feet.isPassable() && head.isPassable() && !below.isPassable()) {
-                target.setY(y + Math.max(0.0, plugin.getConfig().getDouble("model-ground-offset", 0.05)));
+                final double groundY = y + Math.max(0.0, plugin.getConfig().getDouble("model-ground-offset", 0.05));
+                if (active != null) {
+                    active.cacheGroundY(blockX, blockZ, groundY);
+                }
+                target.setY(groundY);
                 return target;
             }
         }
@@ -1543,6 +1559,9 @@ public final class ActivePetManager {
         private String currentAnimation;
         private Location lastLocation;
         private long tempAnimationUntil;
+        private int groundCacheX = Integer.MIN_VALUE;
+        private int groundCacheZ = Integer.MIN_VALUE;
+        private double groundCacheY;
 
         private ActivePet(final OwnedPet pet, final ItemDisplay display, final Interaction hitbox, final float followYaw, final PetModelHandle modelHandle, final String modelName, final TextDisplay nametag) {
             this.pet = pet;
@@ -1608,6 +1627,16 @@ public final class ActivePetManager {
 
         private void tempAnimationUntil(final long tempAnimationUntil) {
             this.tempAnimationUntil = tempAnimationUntil;
+        }
+
+        private Double cachedGroundY(final int blockX, final int blockZ) {
+            return (blockX == groundCacheX && blockZ == groundCacheZ) ? groundCacheY : null;
+        }
+
+        private void cacheGroundY(final int blockX, final int blockZ, final double y) {
+            this.groundCacheX = blockX;
+            this.groundCacheZ = blockZ;
+            this.groundCacheY = y;
         }
 
         private void model(final PetModelHandle modelHandle, final String modelName, final TextDisplay nametag) {

@@ -18,7 +18,6 @@ debug-loot-rolls: false
 # External modules (e.g. BetterModel) are experimental. While this is false the
 # /pets modules command is blocked and no external module can be activated.
 experimental-modules: false
-model-movement-mode: "flying"
 model-ground-offset: 0.05
 model-nametag-height: 2.6
 model-facing-yaw-offset-degrees: 0.0
