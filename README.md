@@ -24,6 +24,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 
 * 👀 **Pets look at you again:** fixed the recurring bug where pets faced the player's gaze direction instead of looking **at** the player (a regression from 1.2.2). Documented in code so it cannot be flipped again.
 * ⬇️ **`/pets update`:** downloads the latest release jar straight from GitHub into the server's update folder; it is applied automatically on the next **server restart**. Admin only.
+* 📢 **Double-chest discovery broadcasts:** fixed missing find notifications when opening **double chests** (and other containers) — the opener is now matched against both halves of a double chest, so the broadcast no longer gets lost.
 
 ---
 

@@ -420,7 +420,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final NamespacedKey key = lootTable.getKey();
-        final Player opener = openerFor(container);
+        final Player opener = resolveOpener(lootHolder, container);
 
         if (container.getPersistentDataContainer().has(generatedChestKey, PersistentDataType.BYTE)) {
             return;
@@ -869,6 +869,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             pendingLootOpeners.clear();
         }
         pendingLootOpeners.put(blockKey(block.getState()), event.getPlayer().getUniqueId());
+    }
+
+    private Player resolveOpener(final InventoryHolder lootHolder, final Container container) {
+        // A double chest is two blocks; the player may have clicked either half, so check both,
+        // otherwise discovery broadcasts get lost when the loot is keyed to the other half.
+        if (lootHolder instanceof DoubleChest doubleChest) {
+            Player opener = null;
+            if (doubleChest.getLeftSide() instanceof BlockState left) {
+                opener = openerFor(left);
+            }
+            if (opener == null && doubleChest.getRightSide() instanceof BlockState right) {
+                opener = openerFor(right);
+            }
+            return opener;
+        }
+        return openerFor(container);
     }
 
     private Player openerFor(final BlockState blockState) {
