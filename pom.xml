@@ -6,7 +6,7 @@
 
     <groupId>de.kamil</groupId>
     <artifactId>better-pets-paper</artifactId>
-    <version>1.2.1</version>
+    <version>1.2.2</version>
     <packaging>jar</packaging>
 
     <name>BetterPets</name>
@@ -16,6 +16,7 @@
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <paper.version>26.1.2.build.69-stable</paper.version>
+        <bettermodel.version>3.2.0</bettermodel.version>
     </properties>
 
     <repositories>
@@ -30,6 +31,12 @@
             <groupId>io.papermc.paper</groupId>
             <artifactId>paper-api</artifactId>
             <version>${paper.version}</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.toxicity188</groupId>
+            <artifactId>bettermodel-bukkit-api</artifactId>
+            <version>${bettermodel.version}</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>

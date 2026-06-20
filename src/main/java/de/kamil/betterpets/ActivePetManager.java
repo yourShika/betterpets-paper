@@ -1,5 +1,7 @@
 package de.kamil.betterpets;
 
+import de.kamil.betterpets.model.PetModelHandle;
+import de.kamil.betterpets.model.PetModelService;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
@@ -26,6 +28,7 @@ import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
@@ -168,6 +171,7 @@ public final class ActivePetManager {
     private final PetDefinitions definitions;
     private final PetStorage storage;
     private final PetItemFactory itemFactory;
+    private final PetModelService modelService;
     private final NamespacedKey ownerKey;
     private final NamespacedKey petUuidKey;
     private final Map<UUID, ActivePet> activePets = new HashMap<>();
@@ -179,11 +183,12 @@ public final class ActivePetManager {
     private BukkitTask task;
     private long tick;
 
-    public ActivePetManager(final JavaPlugin plugin, final PetDefinitions definitions, final PetStorage storage, final PetItemFactory itemFactory) {
+    public ActivePetManager(final JavaPlugin plugin, final PetDefinitions definitions, final PetStorage storage, final PetItemFactory itemFactory, final PetModelService modelService) {
         this.plugin = plugin;
         this.definitions = definitions;
         this.storage = storage;
         this.itemFactory = itemFactory;
+        this.modelService = modelService;
         this.ownerKey = new NamespacedKey(plugin, "active_owner");
         this.petUuidKey = new NamespacedKey(plugin, "active_pet");
         this.glow = new GlowController(plugin);
@@ -204,6 +209,7 @@ public final class ActivePetManager {
         }
         Bukkit.getOnlinePlayers().forEach(player -> stopRide(player, false));
         activePets.values().forEach(active -> {
+            active.closeModel();
             active.display().remove();
             active.hitbox().remove();
         });
@@ -223,22 +229,33 @@ public final class ActivePetManager {
             return;
         }
 
-        final Location location = player.getLocation().clone().add(0, plugin.getConfig().getDouble("follow-height", 1.2), 0);
+        final boolean modelCandidate = modelService.canRender(definition);
+        final Location location = initialPetLocation(player, definition, modelCandidate);
         final ItemDisplay display = player.getWorld().spawn(location, ItemDisplay.class, entity -> {
-            entity.setItemStack(itemFactory.menuItem(definition, pet, true));
+            entity.setItemStack(modelCandidate ? ItemStack.empty() : itemFactory.menuItem(definition, pet, true));
             entity.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.GROUND);
             entity.setBillboard(org.bukkit.entity.Display.Billboard.FIXED);
             entity.setTeleportDuration(Math.max(1, plugin.getConfig().getInt("follow-teleport-duration-ticks", 8)));
             entity.setShadowRadius(0.15F);
             entity.setViewRange(storage.data(player.getUniqueId()).visible() ? 32.0F : 0.0F);
             entity.customName(petNickname(definition, pet));
-            entity.setCustomNameVisible(true);
+            entity.setCustomNameVisible(!modelCandidate);
             entity.setPersistent(false);
             entity.addScoreboardTag("BetterPets.Pet");
             entity.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, player.getUniqueId().toString());
             entity.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, pet.uuid().toString());
         });
         final boolean visible = storage.data(player.getUniqueId()).visible();
+        final PetModelHandle modelHandle = modelCandidate ? modelService.render(definition, display).orElse(null) : null;
+        final String modelName = modelHandle == null ? null : modelService.modelName(definition).orElse(null);
+        if (modelCandidate && modelHandle == null) {
+            display.setItemStack(itemFactory.menuItem(definition, pet, true));
+            display.setCustomNameVisible(true);
+        }
+        final TextDisplay nametag = modelHandle == null ? null : spawnModelNametag(location, definition, pet, visible, player.getUniqueId());
+        if (modelHandle != null && !visible) {
+            modelHandle.hideFromAll();
+        }
         final Interaction hitbox = player.getWorld().spawn(location, Interaction.class, entity -> {
             entity.setInteractionWidth(visible ? 1.2F : 0.1F);
             entity.setInteractionHeight(visible ? 1.8F : 0.1F);
@@ -249,10 +266,10 @@ public final class ActivePetManager {
             entity.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, pet.uuid().toString());
         });
 
-        activePets.put(player.getUniqueId(), new ActivePet(pet, display, hitbox, player.getLocation().getYaw()));
+        activePets.put(player.getUniqueId(), new ActivePet(pet, display, hitbox, player.getLocation().getYaw(), modelHandle, modelName, nametag));
         applyPassive(player, pet);
         if (plugin.getConfig().getBoolean("debug-logging", true)) {
-            plugin.getLogger().info("[Debug] Spawned active pet " + definition.id() + " for " + player.getName() + ".");
+            plugin.getLogger().info("[Debug] Spawned active pet " + definition.id() + " for " + player.getName() + (modelHandle == null ? " with head fallback." : " with BetterModel model " + modelName + "."));
         }
     }
 
@@ -261,6 +278,7 @@ public final class ActivePetManager {
         clearReveal(player);
         final ActivePet active = activePets.remove(player.getUniqueId());
         if (active != null) {
+            active.closeModel();
             active.display().remove();
             active.hitbox().remove();
         }
@@ -284,10 +302,32 @@ public final class ActivePetManager {
             return;
         }
         definitions.get(active.pet().definitionId()).ifPresent(definition -> {
-            active.display().setItemStack(itemFactory.menuItem(definition, active.pet(), true));
             active.display().customName(petNickname(definition, active.pet()));
+            active.updateNametag(petNickname(definition, active.pet()));
+            updatePetVisual(player, active, definition);
         });
         applyPassive(player, active.pet());
+    }
+
+    public void refreshAllDisplays() {
+        for (final Player player : Bukkit.getOnlinePlayers()) {
+            refreshDisplay(player);
+        }
+    }
+
+    /**
+     * Fully rebuilds every active pet (despawn + spawn). Used when a module is toggled or on reload, so
+     * a disabled model module cleanly removes its trackers and falls back to heads with no leftovers.
+     */
+    public void respawnAllActivePets() {
+        for (final Player player : Bukkit.getOnlinePlayers()) {
+            final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+            if (pet != null) {
+                spawn(player, pet);
+            } else {
+                despawn(player, false);
+            }
+        }
     }
 
     public void setVisible(final Player player, final boolean visible) {
@@ -297,7 +337,187 @@ public final class ActivePetManager {
             active.hitbox().setInteractionWidth(visible ? 1.2F : 0.1F);
             active.hitbox().setInteractionHeight(visible ? 1.8F : 0.1F);
             active.hitbox().setResponsive(visible);
+            active.setNametagVisible(visible);
+            if (active.modelHandle() != null) {
+                if (visible) {
+                    active.modelHandle().showToAll();
+                } else {
+                    active.modelHandle().hideFromAll();
+                }
+            }
         }
+    }
+
+    private void updatePetVisual(final Player owner, final ActivePet active, final PetDefinition definition) {
+        final boolean visible = storage.data(owner.getUniqueId()).visible();
+        final String wantedModel = modelService.modelName(definition).orElse(null);
+        if (modelService.canRender(definition)) {
+            if (active.modelHandle() == null || !active.modelNameMatches(wantedModel)) {
+                active.closeModel();
+                final PetModelHandle handle = modelService.render(definition, active.display()).orElse(null);
+                if (handle != null) {
+                    final TextDisplay nametag = spawnModelNametag(active.display().getLocation(), definition, active.pet(), visible, owner.getUniqueId());
+                    active.model(handle, wantedModel, nametag);
+                    active.display().setItemStack(ItemStack.empty());
+                    active.display().setCustomNameVisible(false);
+                    if (visible) {
+                        handle.showToAll();
+                    } else {
+                        handle.hideFromAll();
+                    }
+                    return;
+                }
+            } else {
+                active.display().setItemStack(ItemStack.empty());
+                active.display().setCustomNameVisible(false);
+                ensureModelNametag(active, definition, visible);
+                return;
+            }
+        }
+        active.closeModel();
+        active.display().setItemStack(itemFactory.menuItem(definition, active.pet(), true));
+        active.display().setCustomNameVisible(true);
+    }
+
+    private void ensureModelNametag(final ActivePet active, final PetDefinition definition, final boolean visible) {
+        if (active.nametagMissing()) {
+            active.nametag(spawnModelNametag(active.display().getLocation(), definition, active.pet(), visible, ownerId(active)));
+        } else {
+            active.updateNametag(petNickname(definition, active.pet()));
+            active.setNametagVisible(visible);
+            active.teleportNametag(modelNametagLocation(active.display().getLocation()));
+        }
+    }
+
+    private Location initialPetLocation(final Player player, final PetDefinition definition, final boolean modelCandidate) {
+        Location location = player.getLocation().clone();
+        final boolean grounded = modelCandidate && modelService.modelName(definition).map(this::groundedByModelName).orElse(false);
+        if (grounded) {
+            location = groundModelLocation(player, location);
+        } else {
+            location.add(0, plugin.getConfig().getDouble("follow-height", 1.2), 0);
+        }
+        faceTargetAtPlayer(location, player, modelCandidate);
+        return location;
+    }
+
+    /**
+     * Whether a model should walk on the ground or fly. Decided by the model's own animations:
+     * a "flying" animation forces flying, a "walking" animation (without flying) forces grounded,
+     * and a model that declares neither falls back to the model-movement-mode config value.
+     */
+    private boolean groundedByModelName(final String modelName) {
+        if (modelName == null) {
+            return false;
+        }
+        final java.util.Set<String> anims = modelService.animations(modelName);
+        if (anims.contains("flying")) {
+            return false;
+        }
+        if (anims.contains("walking")) {
+            return true;
+        }
+        return modelGroundMovement();
+    }
+
+    private boolean isModelGrounded(final ActivePet active) {
+        return groundedByModelName(active.modelName());
+    }
+
+    /**
+     * Drives idle / walking / flying animations from player movement, and occasionally plays a random
+     * idle2-9 variant while standing still. All driven by animations present in the .bbmodel.
+     */
+    private void updateModelAnimation(final Player player, final ActivePet active) {
+        final PetModelHandle handle = active.modelHandle();
+        if (handle == null) {
+            return;
+        }
+        final java.util.Set<String> anims = modelService.animations(active.modelName());
+        if (anims.isEmpty()) {
+            return;
+        }
+
+        final Location now = player.getLocation();
+        final Location last = active.lastLocation();
+        final boolean moving = last != null && last.getWorld() != null && last.getWorld().equals(now.getWorld())
+            && last.distanceSquared(now) > 0.0025;
+        active.lastLocation(now.clone());
+
+        if (tick < active.tempAnimationUntil()) {
+            return;
+        }
+
+        final String desired;
+        if (moving) {
+            final boolean grounded = isModelGrounded(active);
+            if (grounded && anims.contains("walking")) {
+                desired = "walking";
+            } else if (!grounded && anims.contains("flying")) {
+                desired = "flying";
+            } else {
+                desired = "idle";
+            }
+        } else {
+            if (tick % 40L == 0L && ThreadLocalRandom.current().nextDouble() < 0.2) {
+                final String variant = randomIdleVariant(anims);
+                if (variant != null) {
+                    playModelAnimation(active, variant);
+                    active.tempAnimationUntil(tick + 60L);
+                    return;
+                }
+            }
+            desired = "idle";
+        }
+        if (!desired.equals(active.currentAnimation())) {
+            playModelAnimation(active, desired);
+        }
+    }
+
+    private void playModelAnimation(final ActivePet active, final String animation) {
+        try {
+            active.modelHandle().play(animation);
+            active.currentAnimation(animation);
+        } catch (final RuntimeException | LinkageError ignored) {
+            // BetterModel rejected the animation name; keep the current animation.
+        }
+    }
+
+    private String randomIdleVariant(final java.util.Set<String> anims) {
+        final java.util.List<String> variants = new java.util.ArrayList<>();
+        for (int i = 2; i <= 9; i++) {
+            if (anims.contains("idle" + i)) {
+                variants.add("idle" + i);
+            }
+        }
+        return variants.isEmpty() ? null : variants.get(ThreadLocalRandom.current().nextInt(variants.size()));
+    }
+
+    private TextDisplay spawnModelNametag(final Location base, final PetDefinition definition, final OwnedPet pet, final boolean visible, final UUID owner) {
+        final Location location = modelNametagLocation(base);
+        return location.getWorld().spawn(location, TextDisplay.class, entity -> {
+            entity.text(petNickname(definition, pet));
+            entity.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+            entity.setShadowed(true);
+            entity.setSeeThrough(false);
+            entity.setViewRange(visible ? 32.0F : 0.0F);
+            entity.setPersistent(false);
+            entity.addScoreboardTag("BetterPets.Pet");
+            entity.addScoreboardTag("BetterPets.Nametag");
+            entity.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, owner.toString());
+            entity.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, pet.uuid().toString());
+        });
+    }
+
+    private UUID ownerId(final ActivePet active) {
+        final String ownerText = active.display().getPersistentDataContainer().get(ownerKey, PersistentDataType.STRING);
+        if (ownerText != null) {
+            try {
+                return UUID.fromString(ownerText);
+            } catch (final IllegalArgumentException ignored) {
+            }
+        }
+        return new UUID(0L, 0L);
     }
 
     public boolean handlePetInteraction(final Player player, final Entity clicked) {
@@ -522,7 +742,7 @@ public final class ActivePetManager {
             }
 
             ActivePet active = activePets.get(player.getUniqueId());
-            if (active == null || active.display().isDead() || active.hitbox().isDead() || !active.pet().uuid().equals(pet.uuid())) {
+            if (active == null || active.display().isDead() || active.hitbox().isDead() || active.modelNametagDead() || !active.pet().uuid().equals(pet.uuid())) {
                 spawn(player, pet);
                 active = activePets.get(player.getUniqueId());
             }
@@ -535,13 +755,17 @@ public final class ActivePetManager {
                 updateRide(player, active, ride);
             }
             follow(player, active);
-            if (ride != null && tick % 4L == 0L) {
+            final boolean petVisible = data.visible();
+            if (petVisible && ride != null && tick % 4L == 0L) {
                 spawnDragonTrail(player, pet);
-            } else if (ride == null && isDragon(pet.definitionId()) && tick % 6L == 0L) {
+            } else if (petVisible && ride == null && isDragon(pet.definitionId()) && tick % 6L == 0L) {
                 spawnPetWalkTrail(player, pet, active);
             }
-            if (pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
+            if (petVisible && pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
                 spawnUnicornGlitter(player);
+            }
+            if (active.modelHandle() != null) {
+                updateModelAnimation(player, active);
             }
             if (tick % 2L == 0L) {
                 updateReveals(player, pet);
@@ -566,14 +790,18 @@ public final class ActivePetManager {
         final double teleportDistance = Math.max(4.0, plugin.getConfig().getDouble("follow-teleport-distance", 24.0));
         if (!display.getWorld().equals(player.getWorld()) || display.getLocation().distanceSquared(target) > teleportDistance * teleportDistance) {
             active.followYaw(player.getLocation().getYaw());
-            display.teleport(target);
-            active.hitbox().teleport(target);
+            teleportActive(active, target);
             return;
         }
         if (ride != null || display.getLocation().distanceSquared(target) > 0.10) {
-            display.teleport(target);
-            active.hitbox().teleport(target);
+            teleportActive(active, target);
         }
+    }
+
+    private void teleportActive(final ActivePet active, final Location target) {
+        active.display().teleport(target);
+        active.hitbox().teleport(target);
+        active.teleportNametag(modelNametagLocation(target));
     }
 
     private void updateRide(final Player player, final ActivePet active, final RideState ride) {
@@ -682,9 +910,54 @@ public final class ActivePetManager {
         }
 
         final double bob = Math.sin(tick / 8.0) * 0.12;
-        final Location target = base.add(offset).add(0, plugin.getConfig().getDouble("follow-height", 1.2) + bob, 0);
-        target.setDirection(target.toVector().subtract(player.getEyeLocation().toVector()));
+        Location target = base.add(offset);
+        final boolean modelGrounded = active.modelHandle() != null && isModelGrounded(active);
+        if (modelGrounded) {
+            target = groundModelLocation(player, target);
+        } else {
+            target.add(0, plugin.getConfig().getDouble("follow-height", 1.2) + bob, 0);
+        }
+        faceTargetAtPlayer(target, player, active.modelHandle() != null);
         return target;
+    }
+
+    private boolean modelGroundMovement() {
+        final String mode = plugin.getConfig().getString("model-movement-mode", "flying");
+        return mode != null && (mode.equalsIgnoreCase("ground") || mode.equalsIgnoreCase("grounded") || mode.equalsIgnoreCase("floor"));
+    }
+
+    private Location groundModelLocation(final Player player, final Location target) {
+        final World world = target.getWorld();
+        final int startY = Math.min(world.getMaxHeight() - 2, Math.max(world.getMinHeight() + 2, player.getLocation().getBlockY() + 3));
+        final int minY = Math.max(world.getMinHeight() + 1, player.getLocation().getBlockY() - 12);
+        final int blockX = target.getBlockX();
+        final int blockZ = target.getBlockZ();
+        for (int y = startY; y >= minY; y--) {
+            final Block feet = world.getBlockAt(blockX, y, blockZ);
+            final Block head = world.getBlockAt(blockX, y + 1, blockZ);
+            final Block below = world.getBlockAt(blockX, y - 1, blockZ);
+            if (feet.isPassable() && head.isPassable() && !below.isPassable()) {
+                target.setY(y + Math.max(0.0, plugin.getConfig().getDouble("model-ground-offset", 0.05)));
+                return target;
+            }
+        }
+        target.add(0, plugin.getConfig().getDouble("follow-height", 1.2), 0);
+        return target;
+    }
+
+    private void faceTargetAtPlayer(final Location target, final Player player, final boolean model) {
+        final Vector lookAtPlayer = player.getEyeLocation().toVector().subtract(target.toVector());
+        if (lookAtPlayer.lengthSquared() < 0.01) {
+            lookAtPlayer.setZ(1);
+        }
+        target.setDirection(lookAtPlayer);
+        if (model) {
+            target.setYaw(target.getYaw() + (float) plugin.getConfig().getDouble("model-facing-yaw-offset-degrees", 0.0));
+        }
+    }
+
+    private Location modelNametagLocation(final Location base) {
+        return base.clone().add(0, Math.max(0.5, plugin.getConfig().getDouble("model-nametag-height", 2.2)), 0);
     }
 
     private void spawnUnicornGlitter(final Player player) {
@@ -1245,6 +1518,11 @@ public final class ActivePetManager {
                 .toList();
             removed += staleHitboxes.size();
             staleHitboxes.forEach(Entity::remove);
+            final List<TextDisplay> staleNametags = world.getEntitiesByClass(TextDisplay.class).stream()
+                .filter(entity -> entity.getScoreboardTags().contains("BetterPets.Pet"))
+                .toList();
+            removed += staleNametags.size();
+            staleNametags.forEach(Entity::remove);
             final List<ArmorStand> staleMounts = world.getEntitiesByClass(ArmorStand.class).stream()
                 .filter(entity -> entity.getScoreboardTags().contains("BetterPets.Ride"))
                 .toList();
@@ -1259,12 +1537,21 @@ public final class ActivePetManager {
         private final ItemDisplay display;
         private final Interaction hitbox;
         private float followYaw;
+        private PetModelHandle modelHandle;
+        private String modelName;
+        private TextDisplay nametag;
+        private String currentAnimation;
+        private Location lastLocation;
+        private long tempAnimationUntil;
 
-        private ActivePet(final OwnedPet pet, final ItemDisplay display, final Interaction hitbox, final float followYaw) {
+        private ActivePet(final OwnedPet pet, final ItemDisplay display, final Interaction hitbox, final float followYaw, final PetModelHandle modelHandle, final String modelName, final TextDisplay nametag) {
             this.pet = pet;
             this.display = display;
             this.hitbox = hitbox;
             this.followYaw = followYaw;
+            this.modelHandle = modelHandle;
+            this.modelName = modelName;
+            this.nametag = nametag;
         }
 
         private OwnedPet pet() {
@@ -1285,6 +1572,91 @@ public final class ActivePetManager {
 
         private void followYaw(final float followYaw) {
             this.followYaw = followYaw;
+        }
+
+        private PetModelHandle modelHandle() {
+            return modelHandle;
+        }
+
+        private String modelName() {
+            return modelName;
+        }
+
+        private boolean modelNameMatches(final String modelName) {
+            return this.modelName != null && this.modelName.equals(modelName);
+        }
+
+        private String currentAnimation() {
+            return currentAnimation;
+        }
+
+        private void currentAnimation(final String currentAnimation) {
+            this.currentAnimation = currentAnimation;
+        }
+
+        private Location lastLocation() {
+            return lastLocation;
+        }
+
+        private void lastLocation(final Location lastLocation) {
+            this.lastLocation = lastLocation;
+        }
+
+        private long tempAnimationUntil() {
+            return tempAnimationUntil;
+        }
+
+        private void tempAnimationUntil(final long tempAnimationUntil) {
+            this.tempAnimationUntil = tempAnimationUntil;
+        }
+
+        private void model(final PetModelHandle modelHandle, final String modelName, final TextDisplay nametag) {
+            this.modelHandle = modelHandle;
+            this.modelName = modelName;
+            this.nametag = nametag;
+        }
+
+        private void nametag(final TextDisplay nametag) {
+            this.nametag = nametag;
+        }
+
+        private void updateNametag(final Component text) {
+            if (nametag != null && !nametag.isDead()) {
+                nametag.text(text);
+            }
+        }
+
+        private void setNametagVisible(final boolean visible) {
+            if (nametag != null && !nametag.isDead()) {
+                nametag.setViewRange(visible ? 32.0F : 0.0F);
+            }
+        }
+
+        private void teleportNametag(final Location location) {
+            if (nametag != null && !nametag.isDead()) {
+                nametag.teleport(location);
+            }
+        }
+
+        private boolean modelNametagDead() {
+            return modelHandle != null && (nametag == null || nametag.isDead());
+        }
+
+        private boolean nametagMissing() {
+            return nametag == null || nametag.isDead();
+        }
+
+        private void closeModel() {
+            if (modelHandle != null) {
+                modelHandle.close();
+                modelHandle = null;
+                modelName = null;
+                currentAnimation = null;
+            }
+            if (nametag != null) {
+                nametag.remove();
+                nametag = null;
+            }
         }
     }
 

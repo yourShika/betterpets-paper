@@ -1,5 +1,9 @@
 package de.kamil.betterpets;
 
+import de.kamil.betterpets.model.PetModelService;
+import de.kamil.betterpets.modules.BetterModelModule;
+import de.kamil.betterpets.modules.Module;
+import de.kamil.betterpets.modules.ModuleManager;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
@@ -91,13 +95,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         Map.entry("messages.chances-saved", "Spawn chance for %pet% is now %chance%%."),
         Map.entry("messages.info-opened", "Opening pet catalogue."),
         Map.entry("messages.alpaca-storage-not-empty", "Empty the Alpaca storage before switching, despawning, or converting this pet."),
-        Map.entry("messages.no-pet-storage", "Pet items cannot be stored inside pet storage.")
+        Map.entry("messages.no-pet-storage", "Pet items cannot be stored inside pet storage."),
+        Map.entry("messages.modules-experimental", "External modules are experimental and disabled. Set experimental-modules: true in config.yml to use /pets modules.")
     );
 
     private PetDefinitions definitions;
     private PetStorage storage;
     private PetItemFactory itemFactory;
     private ActivePetManager activePets;
+    private PetModelService modelService;
+    private ModuleManager moduleManager;
     private NamespacedKey generatedChestKey;
     private BukkitTask saveTask;
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
@@ -124,7 +131,17 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         recalculateAllPetExp();
         getLogger().info("Loaded pet storage for " + storage.playerCount() + " player(s).");
 
-        activePets = new ActivePetManager(this, definitions, storage, itemFactory);
+        modelService = new PetModelService(this);
+        moduleManager = new ModuleManager(this);
+        moduleManager.register(new BetterModelModule(this, modelService));
+        moduleManager.load();
+        if (experimentalModulesEnabled()) {
+            moduleManager.enablePersistedAvailable();
+        } else {
+            getLogger().info("External modules are experimental and disabled (experimental-modules: false). Skipping module activation.");
+        }
+
+        activePets = new ActivePetManager(this, definitions, storage, itemFactory, modelService);
         activePets.start();
         getLogger().info("Registered Java abilities for " + definitions.all().size() + " pet(s).");
 
@@ -155,6 +172,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (activePets != null) {
             activePets.stop();
+        }
+        if (moduleManager != null) {
+            moduleManager.shutdown();
         }
         if (storage != null) {
             saveOpenAlpacaStorages();
@@ -193,6 +213,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handleNotifyClick(event, notifyHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof XpMenuHolder xpHolder) {
                 handleXpClick(event, xpHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof ModulesMenuHolder modulesHolder) {
+                handleModulesClick(event, modulesHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof AlpacaStorageHolder alpacaHolder) {
                 handleAlpacaStorageClick(event, alpacaHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder) {
@@ -292,6 +314,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             || event.getView().getTopInventory().getHolder() instanceof ChanceMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof NotifyMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof XpMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof ModulesMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof PetDetailMenuHolder) {
             event.setCancelled(true);
@@ -521,7 +544,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final InventoryHolder holder = event.getView().getTopInventory().getHolder();
         if (holder instanceof PetMenuHolder || holder instanceof ChanceMenuHolder || holder instanceof NotifyMenuHolder
-            || holder instanceof XpMenuHolder || holder instanceof InfoMenuHolder || holder instanceof PetDetailMenuHolder
+            || holder instanceof XpMenuHolder || holder instanceof ModulesMenuHolder || holder instanceof InfoMenuHolder || holder instanceof PetDetailMenuHolder
             || holder instanceof AlpacaStorageHolder) {
             return;
         }
@@ -1361,6 +1384,139 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         player.sendMessage(Component.text("Pet XP multiplier is now " + formatDecimal(petXpMultiplier()) + "x.", NamedTextColor.AQUA));
     }
 
+    boolean experimentalModulesEnabled() {
+        return getConfig().getBoolean("experimental-modules", false);
+    }
+
+    private void openModulesMenu(final Player player) {
+        if (!has(player, ADMIN_PERMISSION)) {
+            player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        if (!experimentalModulesEnabled()) {
+            player.sendMessage(message("messages.modules-experimental"));
+            return;
+        }
+        final ModulesMenuHolder holder = new ModulesMenuHolder(player.getUniqueId());
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Component.text("Better Pets Modules", NamedTextColor.GOLD));
+        holder.setInventory(inventory);
+        renderModulesMenu(inventory);
+        player.openInventory(inventory);
+    }
+
+    private void renderModulesMenu(final Inventory inventory) {
+        inventory.clear();
+        int slot = 10;
+        for (final Module module : moduleManager.modules()) {
+            inventory.setItem(slot++, moduleItem(module));
+        }
+        inventory.setItem(22, itemFactory.control(
+            Material.BARRIER,
+            Component.text("Close", NamedTextColor.RED),
+            List.of(Component.text("Close module settings.", NamedTextColor.GRAY))
+        ));
+    }
+
+    private ItemStack moduleItem(final Module module) {
+        final boolean available = module.isAvailable();
+        final boolean active = moduleManager.isActive(module.id());
+        final Material material = !available ? Material.BARRIER : active ? Material.LIME_DYE : Material.RED_DYE;
+        final NamedTextColor color = !available ? NamedTextColor.DARK_GRAY : active ? NamedTextColor.GREEN : NamedTextColor.RED;
+        final List<Component> lore = new ArrayList<>();
+        lore.add(Component.text(module.description(), NamedTextColor.GRAY));
+        lore.add(Component.text("Icon: " + module.iconMaterial().name().toLowerCase(Locale.ROOT), NamedTextColor.DARK_GRAY));
+        lore.add(Component.empty());
+        if (!available) {
+            lore.add(Component.text("Benoetigt " + module.requiredPluginName() + " - nicht installiert oder deaktiviert.", NamedTextColor.DARK_GRAY));
+        } else if (active) {
+            lore.add(Component.text("Klick zum Deaktivieren.", NamedTextColor.GREEN));
+        } else {
+            lore.add(Component.text("Klick zum Aktivieren.", NamedTextColor.RED));
+        }
+        if (moduleManager.isRequestedEnabled(module.id()) && !active) {
+            lore.add(Component.text("In modules.yml aktiv, wartet auf verfuegbares Plugin.", NamedTextColor.YELLOW));
+        }
+        return itemFactory.control(material, Component.text(module.displayName(), color), lore);
+    }
+
+    private void handleModulesClick(final InventoryClickEvent event, final ModulesMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player) || !player.getUniqueId().equals(holder.owner())) {
+            return;
+        }
+        if (!has(player, ADMIN_PERMISSION)) {
+            player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        if (event.getRawSlot() == 22) {
+            player.closeInventory();
+            return;
+        }
+        final int index = event.getRawSlot() - 10;
+        final List<Module> modules = new ArrayList<>(moduleManager.modules());
+        if (index < 0 || index >= modules.size()) {
+            return;
+        }
+        final Module module = modules.get(index);
+        if (!module.isAvailable()) {
+            return;
+        }
+        moduleManager.toggle(module.id());
+        if (activePets != null) {
+            activePets.respawnAllActivePets();
+        }
+        renderModulesMenu(event.getView().getTopInventory());
+    }
+
+    private void reloadBetterPets(final CommandSender sender) {
+        if (!has(sender, ADMIN_PERMISSION)) {
+            sender.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        saveOpenAlpacaStorages();
+        reloadConfig();
+        getConfig().options().copyDefaults(true);
+        saveConfig();
+        ensureSpawnChanceDefaults();
+        if (moduleManager != null) {
+            if (experimentalModulesEnabled()) {
+                moduleManager.reload();
+            } else {
+                moduleManager.shutdown();
+            }
+        }
+        if (experimentalModulesEnabled() && modelService != null && modelService.isEnabled()) {
+            modelService.reloadModels();
+        }
+        if (activePets != null) {
+            activePets.respawnAllActivePets();
+        }
+        if (storage != null) {
+            recalculateAllPetExp();
+            storage.save();
+        }
+        sender.sendMessage(Component.text("Better Pets reloaded config, modules, models, and active pets.", NamedTextColor.GREEN));
+        getLogger().info("Better Pets reload completed.");
+    }
+
+    private void sendHelp(final CommandSender sender) {
+        sender.sendMessage(Component.text("/pets - open your pet menu", NamedTextColor.GOLD));
+        if (has(sender, INFO_PERMISSION)) {
+            sender.sendMessage(Component.text("/pets info - pet catalogue", NamedTextColor.YELLOW));
+        }
+        if (has(sender, CHANCES_PERMISSION)) {
+            sender.sendMessage(Component.text("/pets chances - spawn chance GUI", NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("/pets notify - discovery broadcast GUI", NamedTextColor.YELLOW));
+        }
+        if (has(sender, GIVE_PERMISSION)) {
+            sender.sendMessage(Component.text("/pets give <pet|all> [level] [player] - give test pet items", NamedTextColor.YELLOW));
+        }
+        if (has(sender, ADMIN_PERMISSION)) {
+            sender.sendMessage(Component.text("/pets modules - optional modules GUI", NamedTextColor.AQUA));
+            sender.sendMessage(Component.text("/pets reload - reload config, modules, and models", NamedTextColor.AQUA));
+        }
+    }
+
     private List<Component> catalogueLore(final PetDefinition definition) {
         final List<Component> lore = new ArrayList<>();
         lore.add(Component.text(abilitySummary(definition.id()), NamedTextColor.GRAY));
@@ -1777,6 +1933,28 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    private static final class ModulesMenuHolder implements InventoryHolder {
+        private final UUID owner;
+        private Inventory inventory;
+
+        private ModulesMenuHolder(final UUID owner) {
+            this.owner = owner;
+        }
+
+        private UUID owner() {
+            return owner;
+        }
+
+        private void setInventory(final Inventory inventory) {
+            this.inventory = inventory;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return inventory;
+        }
+    }
+
     private static final class AlpacaStorageHolder implements InventoryHolder {
         private final UUID owner;
         private final UUID pet;
@@ -1821,6 +1999,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         @Override
         public void execute(final CommandSourceStack stack, final String[] args) {
             final CommandSender sender = stack.getSender();
+            if (args.length > 0 && args[0].equalsIgnoreCase("help")) {
+                plugin.sendHelp(sender);
+                return;
+            }
+            if (args.length > 0 && args[0].equalsIgnoreCase("reload")) {
+                plugin.reloadBetterPets(sender);
+                return;
+            }
             if (args.length > 0 && args[0].equalsIgnoreCase("give")) {
                 plugin.handleGiveCommand(sender, args);
                 return;
@@ -1836,6 +2022,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             if (args.length > 0 && args[0].equalsIgnoreCase("notify")) {
                 if (sender instanceof Player player) {
                     plugin.openNotifyMenu(player);
+                } else {
+                    sender.sendMessage(plugin.message("messages.only-players"));
+                }
+                return;
+            }
+            if (args.length > 0 && args[0].equalsIgnoreCase("modules")) {
+                if (sender instanceof Player player) {
+                    plugin.openModulesMenu(player);
                 } else {
                     sender.sendMessage(plugin.message("messages.only-players"));
                 }
@@ -1864,6 +2058,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         public Collection<String> suggest(final CommandSourceStack stack, final String[] args) {
             if (args.length == 1) {
                 final List<String> suggestions = new ArrayList<>();
+                suggestions.add("help");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {
                     suggestions.add("give");
                 }
@@ -1873,6 +2068,12 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 if (plugin.has(stack.getSender(), CHANCES_PERMISSION)) {
                     suggestions.add("chances");
                     suggestions.add("notify");
+                }
+                if (plugin.has(stack.getSender(), ADMIN_PERMISSION)) {
+                    if (plugin.experimentalModulesEnabled()) {
+                        suggestions.add("modules");
+                    }
+                    suggestions.add("reload");
                 }
                 return suggestions;
             }
@@ -1898,7 +2099,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return plugin.has(sender, USE_PERMISSION)
                 || plugin.has(sender, GIVE_PERMISSION)
                 || plugin.has(sender, CHANCES_PERMISSION)
-                || plugin.has(sender, INFO_PERMISSION);
+                || plugin.has(sender, INFO_PERMISSION)
+                || plugin.has(sender, ADMIN_PERMISSION);
         }
 
         @Override

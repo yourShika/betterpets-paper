@@ -1,119 +1,115 @@
-# 🐾 Better Pets Paper
+# Better Pets Paper
 
-> A full **Paper plugin rewrite** of the original Better Pets datapack.
+Better Pets Paper is a full Paper plugin rewrite of the Better Pets datapack for Minecraft / Paper `26.1.2`.
 
-![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
-![Java](https://img.shields.io/badge/Java-21-orange)
-![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.2.1-blueviolet)
-![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
+No datapack, command-function menu, minecart menu, or external manual resource pack is required by Better Pets itself. Optional 3D pet models are handled through BetterModel when that plugin is installed and the module is enabled.
 
----
+## Requirements
 
-## ✨ About
+| Requirement | Version / Info |
+| --- | --- |
+| Minecraft / Paper | `26.1.2` |
+| Java | `21` for Better Pets, Java `25` recommended when using BetterModel 3.x |
+| Optional | LuckPerms for permissions |
+| Optional | BetterModel `3.x` for animated `.bbmodel` pets |
 
-**Better Pets Paper** is a complete **Paper plugin rewrite** of the Better Pets datapack.
+## Commands
 
-It does **not** require datapacks, command functions, minecart menus, or resource pack logic.
-Everything is handled directly through the plugin.
+| Command | Description |
+| --- | --- |
+| `/pets` | Opens the main pet menu |
+| `/pets help` | Shows command help |
+| `/pets info` | Opens the pet catalogue |
+| `/pets chances` | Opens spawn chance settings |
+| `/pets notify` | Opens discovery broadcast settings |
+| `/pets modules` | Opens optional module settings |
+| `/pets reload` | Reloads config, modules, models, and active pets |
+| `/pets give <pet\|all> [level] [player]` | Gives test pet items |
 
-This version is designed to be easier to use on Paper servers while keeping the Better Pets experience alive in a plugin-based format.
+## Permissions
 
----
+| Permission | Description |
+| --- | --- |
+| `betterpets.command.pets` | Allows opening the main pet menu |
+| `betterpets.info` | Allows opening the pet catalogue |
+| `betterpets.chances` | Allows editing spawn chances, discovery broadcasts, and XP multiplier |
+| `betterpets.give` | Allows giving test pet items |
+| `betterpets.admin` | Grants all Better Pets admin actions, including `/pets modules` and `/pets reload` |
 
-## 🆕 What's New in v1.2.1
+## Optional Modules
 
-* 👁️ **Owner-only glow reveal:** Bat, Red Parrot, and Warden now show a real **glow outline that is visible through walls**, sent to the **pet owner only** (via a per-viewer metadata packet). If the server internals are unavailable, it safely falls back to a normal shared glow, so the through-walls reveal always works.
+> **Experimental.** External modules (such as BetterModel) are experimental and **disabled by default**. While `experimental-modules: false` in `config.yml`, the `/pets modules` command is blocked and no external module is activated, even if it is enabled in `modules.yml`. Set `experimental-modules: true` to use them.
 
----
+Better Pets stores module state in:
 
-## 🆕 What's New in v1.2.0
+```text
+plugins/BetterPets/modules.yml
+```
 
-Multiplayer-focused fixes and polish:
+Modules can be toggled in `/pets modules` (once `experimental-modules` is enabled). A module can only be enabled when its required plugin is installed and enabled. If a module is enabled in `modules.yml` but the required plugin is missing, Better Pets keeps the flag and skips activation until the dependency becomes available.
 
-* 👁️ **Owner-only mob reveal:** Bat, Red Parrot, and Warden now mark mobs with **player-specific particles** that only the pet owner sees, instead of a glow visible to everyone. The reveal scan also runs less often for better performance.
-* 🌩️ **Herobrine personal weather:** the eerie thunderstorm is now **client-side for the owner only** and no longer forces world-wide weather on other players.
-* 🪺 **Allay no longer takes other players' items:** it only collects natural drops and items you dropped yourself.
-* 🧹 **Crash-safe join cleanup:** leftover pet stat modifiers are stripped on join, so a player never keeps a pet stat without an active pet after an unclean shutdown.
-* 🛢️ **Wider loot support:** pets can now roll in **double chests** and **barrels** too, in addition to single chests and other containers.
+## BetterModel Module
 
----
+The `bettermodel` module requires the `BetterModel` plugin. When enabled, pets can render as animated 3D `.bbmodel` models instead of floating pet heads.
 
-## 🆕 What's New in v1.1.0
+Model folder:
 
-* 🐹 **Three new pets:** **Mole** (mine dirt/sand/gravel without spending tool durability), **Allay** (vacuums nearby dropped items straight into your inventory), and **Cursed Plushie** (a distraction dummy that makes hostile mobs lose interest in you).
-* 🔥 **Reworked Phoenix:** instead of handing out totems on a real-time timer, it now **revives you on a lethal hit**, exactly like a Totem of Undying. This works even if the server was idle or asleep. The remaining cooldown is shown in the pet menu.
-* 🔦 **Continuous mob reveal:** Bat, Red Parrot, and Warden now keep **every** matching mob in range highlighted the whole time, and the glow fades shortly after a mob leaves the radius. Red Parrot only works on the surface (not in caves).
-* ✨ **Particle trails while walking:** dragons leave an element trail on the ground, not just while flying.
-* 🏛️ **Custom structure loot:** chest pet rolls now trigger in **any** generated container, including custom structures added by data packs — not only vanilla `chests/` loot tables.
-* 🔊 **Rarity broadcast sounds:** a distinct sound plays for everyone on a discovery, scaling up to a mighty sound for Extraordinary pets.
-* 🧪 **Platypus fix:** poisons melee **and** ranged attackers while wet, and withers undead (which are immune to poison).
-* 🪖 Pets can **no longer be worn as a helmet**.
-* 🔙 **Back buttons** added across the menus, English **Back / Next** pagination, and English find broadcasts.
-* 🆙 Level 100 pets now display **`EXP: MAXED`**.
-* 🐉 Faster dragon flight and a higher mount seating position.
+```text
+plugins/BetterPets/models/
+```
 
----
+File naming convention:
 
-## 🎯 Target
+```text
+ant.bbmodel
+bat.bbmodel
+blue_dragon.bbmodel
+```
 
-| Requirement         | Version / Info                      |
-| ------------------- | ----------------------------------- |
-| Minecraft / Paper   | `26.1.2`                            |
-| Java                | `21`                                |
-| Optional Dependency | LuckPerms for permission assignment |
+The file name without `.bbmodel` is matched case-insensitively against the pet id/name. You can override model names in `config.yml`:
 
----
+```yaml
+model-overrides:
+  Ant: tiny_ant
+  Blue Dragon: blue_dragon_variant
+```
 
-## 🌟 Features
+Model movement can be tuned globally:
 
-* 🐾 `/pets` inventory GUI for owned pets
-* 📖 Pet catalogue with per-level milestone pages
-* 🎲 Per-pet chest spawn chance GUI
-* 📢 Discovery broadcast GUI by rarity, with rarity-based sounds
-* ✨ Pet XP multiplier GUI
-* 💾 Persistent player pet storage with backups
-* 🦙 Persistent Alpaca storage using Paper item byte serialization
-* 📦 Dynamic Alpaca storage size based on level
-* 🐉 Dragon mount flight unlocked from level 50
-* 🏛️ Chest loot integration for vanilla **and** custom structure chests
-* 🐹 42 unique pets across five rarities, each with its own scaling ability
+```yaml
+model-movement-mode: "flying" # flying, ground, grounded, or floor
+model-ground-offset: 0.05
+model-nametag-height: 2.2
+model-facing-yaw-offset-degrees: 0.0
+```
 
----
+Use `ground`/`grounded` if your models should walk on the terrain instead of floating. If a specific `.bbmodel` was built with its front side rotated differently, adjust `model-facing-yaw-offset-degrees` in steps like `90`, `180`, or `-90`.
 
-## 💬 Commands
+When the module is enabled or `/pets reload` is run, Better Pets scans `plugins/BetterPets/models/`, copies changed `.bbmodel` files into BetterModel's `models/` folder, and reloads BetterModel. It first tries the BetterModel API reload and falls back to the console command:
 
-| Command                                  | Description                        |
-| ---------------------------------------- | ---------------------------------- |
-| `/pets`                                  | Opens the main pet menu            |
-| `/pets info`                             | Opens the pet catalogue            |
-| `/pets chances`                          | Opens spawn chance settings        |
-| `/pets notify`                           | Opens discovery broadcast settings |
-| `/pets give <pet\|all> [level] [player]` | Gives test pet items               |
+```text
+bettermodel reload
+```
 
----
+If BetterModel is missing, disabled, or does not contain a matching loaded model, Better Pets falls back to the existing pet-head rendering.
 
-## 🔐 Permissions
+### Resource Pack Note
 
-| Permission                | Description                                                 |
-| ------------------------- | ----------------------------------------------------------- |
-| `betterpets.command.pets` | Allows opening the main pet menu                            |
-| `betterpets.info`         | Allows opening the pet catalogue                            |
-| `betterpets.chances`      | Allows editing spawn chances, broadcasts, and XP multiplier |
-| `betterpets.give`         | Allows giving test pet items                                |
-| `betterpets.admin`        | Grants all Better Pets permissions                          |
+BetterModel generates its own resource pack from the `.bbmodel` files and embedded textures. Vanilla clients still need BetterModel's auto-send/host resource-pack option enabled on the server.
 
----
-
-## ⚙️ Important Config
+## Important Config
 
 ```yaml
 max-pets-per-player: 45
 chest-pet-chance-percent: 2.5
 pet-xp-multiplier: 1.0
-dragon-flight-speed: 1.5
-dragon-flight-lift: 0.55
+dragon-flight-speed: 0.85
+dragon-flight-lift: 0.36
 debug-loot-rolls: false
+model-movement-mode: "flying"
+model-ground-offset: 0.05
+model-nametag-height: 2.2
+model-facing-yaw-offset-degrees: 0.0
 
 discovery-broadcasts:
   common: true
@@ -121,166 +117,88 @@ discovery-broadcasts:
   epic: true
   legendary: true
   extraordinary: true
+
+model-overrides: {}
 ```
 
----
+## Features
 
-## 🦙 Alpaca Storage
+- `/pets` inventory GUI for owned pets
+- Pet catalogue with level milestone detail pages
+- Spawn chance GUI
+- Discovery broadcast GUI by rarity
+- Pet XP multiplier GUI
+- Persistent player pet storage with backups
+- Owner-only Alpaca storage using Paper item byte serialization
+- Dynamic Alpaca storage size by level
+- Dragon mount flight from level 50
+- Generated chest loot integration for vanilla and custom structure containers
+- Optional BetterModel 3D pet rendering with head fallback
 
-Alpaca storage is **owner-only** and saved inside:
+## Alpaca Storage
+
+Alpaca storage is owner-only and saved in:
 
 ```text
 plugins/BetterPets/pets.yml
 ```
 
-Items are stored using:
+Items are stored with:
 
 ```text
 ItemStack.serializeItemsAsBytes
 ```
 
-This preserves modern item data such as:
-
-* Custom enchantments
-* PersistentDataContainer values
-* Plugin metadata
-* Modern Paper item data
-
-### 📦 Storage Size by Alpaca Level
+That preserves modern item data such as custom enchantments, PersistentDataContainer values, plugin metadata, and Paper item data.
 
 | Alpaca Level | Storage Size |
-| ------------ | ------------ |
-| Level 1      | 9 slots      |
-| Level 30     | 18 slots     |
-| Level 50     | 27 slots     |
-| Level 70     | 36 slots     |
-| Level 100    | 54 slots     |
+| --- | --- |
+| Level 1 | 9 slots |
+| Level 30 | 18 slots |
+| Level 50 | 27 slots |
+| Level 70 | 36 slots |
+| Level 100 | 54 slots |
 
-The plugin saves open Alpaca inventories when:
+An Alpaca with stored items cannot be switched away, despawned, or converted into an item until its storage is empty.
 
-* The inventory is closed
-* The player logs out
-* Autosave runs
-* The server shuts down
+## Building
 
-> An Alpaca with stored items cannot be switched away, despawned, or converted into an item until its storage is empty.
-
----
-
-## 🔥 Phoenix Revive
-
-Phoenix no longer grants Totem items. Instead, when a lethal hit would kill you while a Phoenix is active and off cooldown, it **revives you on the spot**, just like holding a Totem of Undying (heal, cleanse, Regeneration, Fire Resistance, and the totem animation).
-
-* Works even if the server was idle or asleep, because it is triggered by the damage event rather than a real-time timer.
-* The remaining cooldown is shown directly in the pet menu.
-* Cooldown shrinks with level: **24h** → **18h** (level 50) → **12h** (level 100).
-
----
-
-## 🛠️ Building
-
-### Build with Maven
+With Maven:
 
 ```powershell
 mvn clean package
 ```
 
-### Local Fallback Build Script
+Local fallback build script:
 
 ```powershell
 .\build.ps1
 ```
 
-The output jar will be created here:
+The output jar is created at:
 
 ```text
 target/better-pets-26.1.2-plugin.jar
 ```
 
----
+## Installation
 
-## 📦 Installation
+1. Build the plugin jar.
+2. Put `better-pets-26.1.2-plugin.jar` into the Paper server `plugins` folder.
+3. Install BetterModel only if you want animated 3D models.
+4. Start the server once to generate config and storage files.
+5. Use LuckPerms or `paper-plugin.yml` defaults to assign permissions.
+6. Put optional `.bbmodel` files into `plugins/BetterPets/models/`.
+7. Run `/pets reload`.
 
-1. Build the plugin jar (or download it from the [latest release](https://github.com/yourshika/betterpets-paper/releases/latest)).
-2. Put `better-pets-26.1.2-plugin.jar` into your Paper server's `plugins` folder.
-3. Start the server once to generate the config and storage files.
-4. Use LuckPerms or `paper-plugin.yml` defaults to assign permissions.
-5. Enjoy Better Pets Paper 🐾
+## Chest Loot Notes
 
----
+Pet rolls happen when Minecraft generates container loot for unopened generated containers.
 
-## 🏛️ Chest Loot Notes
+- Existing opened containers will not reroll.
+- Each generated container can get at most one Better Pets item.
+- Enable `debug-loot-rolls: true` to see loot roll attempts in the console.
 
-Structure chest pet rolls happen when Minecraft generates chest loot.
+## Credits
 
-This usually happens when an unopened generated chest is opened for the first time.
-
-Important notes:
-
-* Pets can roll in **any** generated block container, including custom structures added by data packs.
-* Existing opened chests will not reroll.
-* Only newly generated / unopened loot containers can roll pets.
-* Enable `debug-loot-rolls: true` to see chest roll attempts in the console.
-
----
-
-## 📁 Storage & Backups
-
-Better Pets Paper stores player pet data persistently and includes backup handling for safer storage.
-
-Main storage path:
-
-```text
-plugins/BetterPets/pets.yml
-```
-
-Alpaca inventories are also saved there using Paper's item byte serialization.
-
----
-
-## 🧪 Development Status
-
-This project is actively developed. Features may change, commands may be adjusted, and config values may be expanded in future versions.
-
-| Area                   | Status         |
-| ---------------------- | -------------- |
-| Paper Plugin Rewrite   | ✅ Implemented  |
-| Pet GUI                | ✅ Implemented  |
-| Pet Catalogue          | ✅ Implemented  |
-| Alpaca Storage         | ✅ Implemented  |
-| Dragon Flight          | ✅ Implemented  |
-| Chest Loot Integration | ✅ Implemented  |
-| Phoenix Revive         | ✅ Implemented  |
-| Documentation          | 🚧 In Progress |
-
----
-
-## 📜 Credits
-
-This project is a Paper plugin rewrite inspired by the original **Better Pets** datapack.
-
-Original project:
-
-🔗 [Better Pets on Modrinth](https://modrinth.com/datapack/betterpets)
-
-All rights to the original project, name, concepts, assets, and related content belong to their respective rights holders.
-
----
-
-## ⚠️ Disclaimer
-
-This project is **not an official update**, **not an official continuation**, and **not directly affiliated with the original Better Pets project**, unless explicitly stated otherwise.
-
-This repository does **not claim ownership of the original project**.
-
-Better Pets Paper is intended as a plugin-based rewrite for Paper servers, created to provide a server-friendly implementation with its own plugin logic.
-
-If the original author or rights holder wants specific content removed, changed, or credited differently, please contact the repository owner.
-
----
-
-## ❤️ Thank You
-
-Thanks to the original Better Pets project for the idea and inspiration.
-
-This rewrite was made with respect for the original concept and with the goal of making a plugin-based version for Paper servers.
+This project is a Paper plugin rewrite inspired by the original Better Pets datapack. All rights to the original project, name, concepts, assets, and related content belong to their respective rights holders.

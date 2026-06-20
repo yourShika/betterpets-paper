@@ -1,10 +1,18 @@
 name: BetterPets
-version: '1.2.1'
+version: '1.2.2'
 main: de.kamil.betterpets.BetterPetsPlugin
 description: Better Pets converted fully to Paper plugin form.
 api-version: '26.1.2'
-softdepend:
-  - LuckPerms
+dependencies:
+  server:
+    LuckPerms:
+      load: BEFORE
+      required: false
+      join-classpath: false
+    BetterModel:
+      load: BEFORE
+      required: false
+      join-classpath: true
 authors:
   - Vanderflys
   - Kamil Bura

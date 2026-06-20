@@ -15,12 +15,20 @@ follow-teleport-distance: 24.0
 follow-teleport-duration-ticks: 8
 debug-logging: true
 debug-loot-rolls: false
+# External modules (e.g. BetterModel) are experimental. While this is false the
+# /pets modules command is blocked and no external module can be activated.
+experimental-modules: false
+model-movement-mode: "flying"
+model-ground-offset: 0.05
+model-nametag-height: 2.6
+model-facing-yaw-offset-degrees: 0.0
 discovery-broadcasts:
   common: true
   rare: true
   epic: true
   legendary: true
   extraordinary: true
+model-overrides: {}
 messages:
   only-players: "Only players can use /pets."
   no-permission: "You do not have permission to use /pets."
@@ -41,3 +49,4 @@ messages:
   info-opened: "Opening pet catalogue."
   alpaca-storage-not-empty: "Empty the Alpaca storage before switching, despawning, or converting this pet."
   no-pet-storage: "Pet items cannot be stored inside pet storage."
+  modules-experimental: "External modules are experimental and disabled. Set experimental-modules: true in config.yml to use /pets modules."
