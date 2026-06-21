@@ -4,8 +4,10 @@ import de.kamil.betterpets.model.PetModelService;
 import de.kamil.betterpets.modules.BetterModelModule;
 import de.kamil.betterpets.modules.Module;
 import de.kamil.betterpets.modules.ModuleManager;
+import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
 import io.papermc.paper.command.brigadier.BasicCommand;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
+import io.papermc.paper.event.player.PlayerTradeEvent;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -21,13 +23,16 @@ import org.bukkit.block.DoubleChest;
 import org.bukkit.block.TileState;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
+import org.bukkit.entity.WanderingTrader;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
@@ -38,8 +43,8 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
-import com.destroystokyo.paper.event.player.PlayerPickupExperienceEvent;
 import org.bukkit.event.player.PlayerExpChangeEvent;
+import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -52,6 +57,7 @@ import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.MerchantRecipe;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.loot.LootTable;
 import org.bukkit.persistence.PersistentDataType;
@@ -110,6 +116,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private BukkitTask saveTask;
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
     private final Map<UUID, Long> lastOrbPickupTick = new HashMap<>();
+    private final Map<UUID, Long> brushCooldowns = new HashMap<>();
+    private static final String[] DROP_SOURCES = {"chest", "fishing", "wandering-trader", "brushing"};
+    private static final int[] DROP_SLOTS = {10, 12, 14, 16};
     private final Map<String, UUID> pendingLootOpeners = new HashMap<>();
 
     @Override
@@ -217,6 +226,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handleXpClick(event, xpHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof ModulesMenuHolder modulesHolder) {
                 handleModulesClick(event, modulesHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof DropMenuHolder dropHolder) {
+                handleDropClick(event, dropHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof AlpacaStorageHolder alpacaHolder) {
                 handleAlpacaStorageClick(event, alpacaHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder) {
@@ -317,6 +328,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             || event.getView().getTopInventory().getHolder() instanceof NotifyMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof XpMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof ModulesMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof DropMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof PetDetailMenuHolder) {
             event.setCancelled(true);
@@ -398,7 +410,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onLootGenerate(final LootGenerateEvent event) {
-        if (event.isPlugin()) {
+        if (event.isPlugin() || !petSourceEnabled("chest")) {
             return;
         }
         final LootTable lootTable = event.getLootTable();
@@ -906,18 +918,251 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private void broadcastPetDiscovery(final Player player, final PetDefinition definition) {
+        announcePet(player, definition, "found", "");
+    }
+
+    private void announcePet(final Player player, final PetDefinition definition, final String action, final String suffix) {
         if (!discoveryBroadcastEnabled(definition.rarity())) {
             return;
         }
         Bukkit.broadcast(Component.text("[BetterPets] ", NamedTextColor.GOLD)
             .append(Component.text(player.getName(), NamedTextColor.AQUA))
-            .append(Component.text(" found a ", NamedTextColor.GRAY))
+            .append(Component.text(" " + action + " a ", NamedTextColor.GRAY))
             .append(Component.text(definition.rarity() + " Pet", definition.rarityColor()))
             .append(Component.text(": ", NamedTextColor.GRAY))
             .append(Component.text(definition.name(), definition.rarityColor()))
-            .append(Component.text("!", NamedTextColor.GRAY)));
+            .append(Component.text(suffix.isEmpty() ? "!" : " " + suffix + "!", NamedTextColor.GRAY)));
 
         playDiscoverySound(definition.rarity());
+    }
+
+    private boolean petSourceEnabled(final String source) {
+        return getConfig().getBoolean("pet-sources." + source + ".enabled", true);
+    }
+
+    private void setPetSourceEnabled(final String source, final boolean enabled) {
+        getConfig().set("pet-sources." + source + ".enabled", enabled);
+        saveConfig();
+    }
+
+    private double petSourceChance(final String source) {
+        if (source.equals("chest")) {
+            return Math.max(0.0, Math.min(100.0, getConfig().getDouble("chest-pet-chance-percent", 2.5)));
+        }
+        final double fallback = switch (source) {
+            case "fishing" -> 1.0;
+            case "wandering-trader" -> 25.0;
+            case "brushing" -> 1.5;
+            default -> 1.0;
+        };
+        return Math.max(0.0, Math.min(100.0, getConfig().getDouble("pet-sources." + source + ".chance-percent", fallback)));
+    }
+
+    private void setPetSourceChance(final String source, final double chance) {
+        final double clamped = Math.max(0.0, Math.min(100.0, chance));
+        if (source.equals("chest")) {
+            getConfig().set("chest-pet-chance-percent", clamped);
+        } else {
+            getConfig().set("pet-sources." + source + ".chance-percent", clamped);
+        }
+        saveConfig();
+    }
+
+    private PetDefinition rollSourcePet() {
+        final double totalWeight = totalSpawnChanceWeight();
+        if (totalWeight <= 0.0) {
+            return null;
+        }
+        return randomPetBySpawnChance(ThreadLocalRandom.current(), totalWeight);
+    }
+
+    @EventHandler
+    public void onPlayerFish(final PlayerFishEvent event) {
+        if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH || !petSourceEnabled("fishing")) {
+            return;
+        }
+        if (!(event.getCaught() instanceof Item caught)) {
+            return;
+        }
+        final double chance = petSourceChance("fishing");
+        if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
+            return;
+        }
+        final PetDefinition definition = rollSourcePet();
+        if (definition == null) {
+            return;
+        }
+        caught.setItemStack(itemFactory.discoveryItem(definition));
+        announcePet(event.getPlayer(), definition, "fished out", "");
+    }
+
+    @EventHandler
+    public void onBrushSuspicious(final PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND || event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+            return;
+        }
+        final Block block = event.getClickedBlock();
+        if (block == null) {
+            return;
+        }
+        final Material blockType = block.getType();
+        if (blockType != Material.SUSPICIOUS_SAND && blockType != Material.SUSPICIOUS_GRAVEL) {
+            return;
+        }
+        if (event.getItem() == null || event.getItem().getType() != Material.BRUSH || !petSourceEnabled("brushing")) {
+            return;
+        }
+        final Player player = event.getPlayer();
+        final long now = System.currentTimeMillis();
+        if (now < brushCooldowns.getOrDefault(player.getUniqueId(), 0L)) {
+            return;
+        }
+        brushCooldowns.put(player.getUniqueId(), now + 1500L);
+        final double chance = petSourceChance("brushing");
+        if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
+            return;
+        }
+        final PetDefinition definition = rollSourcePet();
+        if (definition == null) {
+            return;
+        }
+        block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 1.0, 0.5), itemFactory.discoveryItem(definition));
+        announcePet(player, definition, "brushed out", "");
+    }
+
+    @EventHandler
+    public void onTraderSpawn(final CreatureSpawnEvent event) {
+        if (!(event.getEntity() instanceof WanderingTrader trader) || !petSourceEnabled("wandering-trader")) {
+            return;
+        }
+        final double chance = petSourceChance("wandering-trader");
+        if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
+            return;
+        }
+        final PetDefinition definition = rollSourcePet();
+        if (definition == null) {
+            return;
+        }
+        final MerchantRecipe recipe = new MerchantRecipe(itemFactory.discoveryItem(definition), 1);
+        recipe.setIngredients(traderPrice(definition.rarity()));
+        // Append after vanilla sets its own recipes, so our one-time deal is not overwritten.
+        Bukkit.getScheduler().runTaskLater(this, () -> {
+            if (!trader.isValid()) {
+                return;
+            }
+            final List<MerchantRecipe> recipes = new ArrayList<>(trader.getRecipes());
+            recipes.add(recipe);
+            trader.setRecipes(recipes);
+            debug("Wandering Trader offered a one-time " + definition.name() + " deal.");
+        }, 1L);
+    }
+
+    @EventHandler
+    public void onPlayerTrade(final PlayerTradeEvent event) {
+        final ItemStack result = event.getTrade().getResult();
+        itemFactory.petId(result)
+            .flatMap(definitions::get)
+            .ifPresent(definition -> announcePet(event.getPlayer(), definition, "bought", "from a Wandering Trader"));
+    }
+
+    private List<ItemStack> traderPrice(final String rarity) {
+        return switch (rarity.toLowerCase(Locale.ROOT)) {
+            case "rare" -> List.of(new ItemStack(Material.EMERALD, 24), new ItemStack(Material.GOLD_INGOT, 6));
+            case "epic" -> List.of(new ItemStack(Material.EMERALD, 32), new ItemStack(Material.DIAMOND, 6));
+            case "legendary" -> List.of(new ItemStack(Material.EMERALD, 48), new ItemStack(Material.DIAMOND, 16));
+            case "extraordinary" -> List.of(new ItemStack(Material.EMERALD, 64), new ItemStack(Material.NETHERITE_INGOT, 1));
+            default -> List.of(new ItemStack(Material.EMERALD, 16), new ItemStack(Material.IRON_INGOT, 8));
+        };
+    }
+
+    void openDropMenu(final Player player) {
+        if (!has(player, CHANCES_PERMISSION)) {
+            player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        final DropMenuHolder holder = new DropMenuHolder(player.getUniqueId());
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Component.text("Better Pets Sources", NamedTextColor.GOLD));
+        holder.setInventory(inventory);
+        renderDropMenu(inventory);
+        player.openInventory(inventory);
+    }
+
+    private void renderDropMenu(final Inventory inventory) {
+        inventory.clear();
+        for (int i = 0; i < DROP_SOURCES.length; i++) {
+            final String source = DROP_SOURCES[i];
+            final boolean enabled = petSourceEnabled(source);
+            final List<Component> lore = new ArrayList<>();
+            lore.add(Component.text(enabled ? "Enabled" : "Disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED));
+            lore.add(Component.text("Chance: " + formatPercent(petSourceChance(source)) + "%", NamedTextColor.GRAY));
+            lore.add(Component.empty());
+            lore.add(Component.text("Left-click: toggle on/off", NamedTextColor.YELLOW));
+            lore.add(Component.text("Right-click: +0.5%", NamedTextColor.GREEN));
+            lore.add(Component.text("Shift + right-click: -0.5%", NamedTextColor.RED));
+            inventory.setItem(DROP_SLOTS[i], itemFactory.control(
+                dropMaterial(source),
+                Component.text(dropName(source), enabled ? NamedTextColor.GREEN : NamedTextColor.RED),
+                lore
+            ));
+        }
+        inventory.setItem(22, itemFactory.control(
+            Material.BARRIER,
+            Component.text("Close", NamedTextColor.RED),
+            List.of(Component.text("Changes save instantly.", NamedTextColor.GRAY))
+        ));
+    }
+
+    private void handleDropClick(final InventoryClickEvent event, final DropMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player) || !player.getUniqueId().equals(holder.owner())) {
+            return;
+        }
+        if (!has(player, CHANCES_PERMISSION)) {
+            player.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        final int rawSlot = event.getRawSlot();
+        if (rawSlot == 22) {
+            player.closeInventory();
+            return;
+        }
+        int index = -1;
+        for (int i = 0; i < DROP_SLOTS.length; i++) {
+            if (DROP_SLOTS[i] == rawSlot) {
+                index = i;
+                break;
+            }
+        }
+        if (index < 0) {
+            return;
+        }
+        final String source = DROP_SOURCES[index];
+        if (event.isRightClick()) {
+            setPetSourceChance(source, petSourceChance(source) + (event.isShiftClick() ? -0.5 : 0.5));
+        } else {
+            setPetSourceEnabled(source, !petSourceEnabled(source));
+        }
+        renderDropMenu(event.getView().getTopInventory());
+    }
+
+    private String dropName(final String source) {
+        return switch (source) {
+            case "chest" -> "Chests";
+            case "fishing" -> "Fishing";
+            case "wandering-trader" -> "Wandering Trader";
+            case "brushing" -> "Brushing (Suspicious Sand/Gravel)";
+            default -> source;
+        };
+    }
+
+    private Material dropMaterial(final String source) {
+        return switch (source) {
+            case "chest" -> Material.CHEST;
+            case "fishing" -> Material.FISHING_ROD;
+            case "wandering-trader" -> Material.EMERALD;
+            case "brushing" -> Material.BRUSH;
+            default -> Material.PAPER;
+        };
     }
 
     private void playDiscoverySound(final String rarity) {
@@ -1724,6 +1969,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (has(sender, CHANCES_PERMISSION)) {
             sender.sendMessage(Component.text("/pets chances - spawn chance GUI", NamedTextColor.YELLOW));
             sender.sendMessage(Component.text("/pets notify - discovery broadcast GUI", NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("/pets drop - choose pet sources (chest/fishing/trader/brushing)", NamedTextColor.YELLOW));
         }
         if (has(sender, GIVE_PERMISSION)) {
             sender.sendMessage(Component.text("/pets give <pet|all> [level] [player] - give test pet items", NamedTextColor.YELLOW));
@@ -2151,6 +2397,28 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    private static final class DropMenuHolder implements InventoryHolder {
+        private final UUID owner;
+        private Inventory inventory;
+
+        private DropMenuHolder(final UUID owner) {
+            this.owner = owner;
+        }
+
+        private UUID owner() {
+            return owner;
+        }
+
+        private void setInventory(final Inventory inventory) {
+            this.inventory = inventory;
+        }
+
+        @Override
+        public Inventory getInventory() {
+            return inventory;
+        }
+    }
+
     private static final class ModulesMenuHolder implements InventoryHolder {
         private final UUID owner;
         private Inventory inventory;
@@ -2253,6 +2521,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 }
                 return;
             }
+            if (args.length > 0 && args[0].equalsIgnoreCase("drop")) {
+                if (sender instanceof Player player) {
+                    plugin.openDropMenu(player);
+                } else {
+                    sender.sendMessage(plugin.message("messages.only-players"));
+                }
+                return;
+            }
             if (args.length > 0 && args[0].equalsIgnoreCase("modules")) {
                 if (sender instanceof Player player) {
                     plugin.openModulesMenu(player);
@@ -2295,6 +2571,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 if (plugin.has(stack.getSender(), CHANCES_PERMISSION)) {
                     suggestions.add("chances");
                     suggestions.add("notify");
+                    suggestions.add("drop");
                 }
                 if (plugin.has(stack.getSender(), ADMIN_PERMISSION)) {
                     if (plugin.experimentalModulesEnabled()) {

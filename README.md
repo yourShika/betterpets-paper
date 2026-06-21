@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.2.4-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.2.5-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,17 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.2.5
+
+* 🎣 **New pet sources!** Pets can now also be obtained from **fishing**, **Wandering Traders**, and **brushing** suspicious sand/gravel — on top of the existing chest loot.
+* 🧰 **`/pets drop` GUI:** toggle each source on/off and tune its chance, just like chest spawn chances. (Permission: `betterpets.chances`.)
+* 🐟 **Fishing:** a small chance (lower than chests) to fish out a pet, with a `Player fished out a … Pet!` broadcast.
+* 🧳 **Wandering Trader:** a spawning trader can carry a **one-time deal** to buy a pet; the price scales with rarity and uses emeralds **plus** other valuables (gold, diamonds, netherite). Buying it broadcasts `Player bought a … Pet from a Wandering Trader!`.
+* 🪥 **Brushing:** a small chance to brush a pet out of suspicious sand/gravel, with a `Player brushed out a … Pet!` broadcast.
+* ⚙️ Every source has its own configurable chance and on/off toggle, just like chests.
 
 ---
 
@@ -76,6 +87,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 | `/pets info`                             | Opens the pet catalogue                  |
 | `/pets chances`                          | Opens spawn chance settings              |
 | `/pets notify`                           | Opens discovery broadcast settings       |
+| `/pets drop`                             | Choose pet sources (chest/fishing/...)   |
 | `/pets modules`                          | Opens optional module settings           |
 | `/pets reload`                           | Reloads config, modules, models, pets    |
 | `/pets give <pet\|all> [level] [player]` | Gives test pet items                     |
@@ -258,8 +270,24 @@ Pet rolls happen when Minecraft generates container loot for unopened generated 
 
 ---
 
+## 🐾 Pet Sources
+
+Pets can drop from four sources, each toggleable and tunable in `/pets drop` (or `config.yml` under `pet-sources`):
+
+| Source | How | Default chance |
+| --- | --- | --- |
+| **Chests** | Generated container loot (chests, double chests, barrels, custom structures) | `chest-pet-chance-percent` (2.5%) |
+| **Fishing** | Fish one out (replaces the catch) | 1.0% |
+| **Wandering Trader** | A spawned trader carries a one-time pet deal priced by rarity | 25% per trader |
+| **Brushing** | Brush one out of suspicious sand/gravel | 1.5% |
+
+Each find shows a broadcast (e.g. `Player fished out a Rare Pet: Axolotl!`), gated by the same per-rarity toggles as `/pets notify`.
+
+---
+
 ## 🗒️ Previous Releases
 
+* **v1.2.4** — Pets look at the player again (facing fix), `/pets update`, double-chest discovery broadcasts.
 * **v1.2.3** — Mending-proof XP, lighter saving, `/pets version`, animation-driven model movement, ground-height caching.
 * **v1.2.2** — Optional module system (experimental) + BetterModel module; particles stop when the pet is hidden.
 * **v1.2.1** — Owner-only glow reveal (through walls) for Bat / Red Parrot / Warden.

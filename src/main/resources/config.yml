@@ -21,6 +21,21 @@ experimental-modules: false
 model-ground-offset: 0.05
 model-nametag-height: 2.6
 model-facing-yaw-offset-degrees: 0.0
+# Where pets can be obtained. Toggle and tune each source in /pets drop.
+# Chests keep using chest-pet-chance-percent above; the others use their own chance here.
+pet-sources:
+  chest:
+    enabled: true
+  fishing:
+    enabled: true
+    chance-percent: 1.0
+  wandering-trader:
+    enabled: true
+    chance-percent: 25.0
+  brushing:
+    enabled: true
+    chance-percent: 1.5
+
 discovery-broadcasts:
   common: true
   rare: true
