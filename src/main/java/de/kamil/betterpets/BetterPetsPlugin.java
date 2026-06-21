@@ -38,6 +38,7 @@ import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.entity.EntityTargetLivingEntityEvent;
 import org.bukkit.event.inventory.ClickType;
@@ -115,6 +116,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private PetModelService modelService;
     private ModuleManager moduleManager;
     private NamespacedKey generatedChestKey;
+    private NamespacedKey announceOnPickupKey;
     private BukkitTask saveTask;
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
     private final Map<UUID, Long> lastOrbPickupTick = new HashMap<>();
@@ -139,6 +141,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         itemFactory = new PetItemFactory(this);
         generatedChestKey = new NamespacedKey(this, "pet_loot_generated");
+        announceOnPickupKey = new NamespacedKey(this, "announce_on_pickup");
         storage = new PetStorage(this);
         storage.load();
         recalculateAllPetExp();
@@ -1064,7 +1067,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null) {
             return;
         }
-        block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 1.0, 0.5), itemFactory.discoveryItem(definition));
+        // Replace the item buried in the block so the pet is brushed out of the block naturally,
+        // instead of suddenly spawning above it.
+        if (block.getState() instanceof org.bukkit.block.BrushableBlock brushable) {
+            brushable.setLootTable(null);
+            brushable.setItem(itemFactory.discoveryItem(definition));
+            brushable.update(true);
+        } else {
+            block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 1.0, 0.5), itemFactory.discoveryItem(definition));
+        }
         announcePet(player, definition, "brushed out", "");
     }
 
@@ -1135,14 +1146,52 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null) {
             return;
         }
-        final List<ItemStack> loot = new ArrayList<>(event.getDispensedLoot());
-        loot.add(itemFactory.discoveryItem(definition));
-        event.setDispensedLoot(loot);
+        final String suffix = source.equals("vault") ? "in a Vault" : "in a Trial Spawner";
+        final ItemStack petItem = itemFactory.discoveryItem(definition);
         final Player player = event.getPlayer();
         if (player != null) {
-            announcePet(player, definition, "found", source.equals("vault") ? "in a Vault" : "in a Trial Spawner");
+            announcePet(player, definition, "found", suffix);
+        } else {
+            // Trial spawners dispense their reward without a triggering player, so there is nobody to
+            // credit yet. Mark the pet item so the broadcast fires when a player picks it up.
+            markAnnounceOnPickup(petItem, suffix);
         }
+        final List<ItemStack> loot = new ArrayList<>(event.getDispensedLoot());
+        loot.add(petItem);
+        event.setDispensedLoot(loot);
         debug("Injected " + definition.name() + " into " + source + " loot.");
+    }
+
+    private void markAnnounceOnPickup(final ItemStack item, final String suffix) {
+        final ItemMeta meta = item.getItemMeta();
+        if (meta == null) {
+            return;
+        }
+        meta.getPersistentDataContainer().set(announceOnPickupKey, PersistentDataType.STRING, suffix);
+        item.setItemMeta(meta);
+    }
+
+    @EventHandler
+    public void onPetItemPickup(final EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player player)) {
+            return;
+        }
+        final ItemStack stack = event.getItem().getItemStack();
+        if (stack == null || !stack.hasItemMeta()) {
+            return;
+        }
+        final ItemMeta meta = stack.getItemMeta();
+        final String suffix = meta.getPersistentDataContainer().get(announceOnPickupKey, PersistentDataType.STRING);
+        if (suffix == null) {
+            return;
+        }
+        // Strip the marker so the broadcast fires exactly once and the pet item stays clean.
+        meta.getPersistentDataContainer().remove(announceOnPickupKey);
+        stack.setItemMeta(meta);
+        event.getItem().setItemStack(stack);
+        itemFactory.petId(stack)
+            .flatMap(definitions::get)
+            .ifPresent(definition -> announcePet(player, definition, "found", suffix));
     }
 
     private boolean isOminousBlock(final Block block) {

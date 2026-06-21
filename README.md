@@ -26,6 +26,8 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 * 🌀 **Ominous bonus:** when the Vault/Trial Spawner is **ominous** (any Ominous Bottle / Bad Omen level 1-5), a configurable `ominous-bonus-percent` is added on top of the base chance, so harder runs reward pets more often.
 * 📢 Broadcasts: `Player found a … Pet in a Vault!` / `… in a Trial Spawner!`.
 * ⚙️ Both new sources are fully configurable in `/pets drop` and `config.yml`, like every other source.
+* 🪥 **Fix:** brushing now **replaces the item inside** the suspicious sand/gravel, so the pet is brushed out of the block naturally instead of popping in above it.
+* 📢 **Fix:** Trial Spawner pets now broadcast — since the dispense has no triggering player, the find message fires when the pet is **picked up**.
 
 ---
 
