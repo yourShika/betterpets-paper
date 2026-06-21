@@ -33,6 +33,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
+import org.bukkit.event.block.BlockDispenseLootEvent;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -118,8 +119,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
     private final Map<UUID, Long> lastOrbPickupTick = new HashMap<>();
     private final Map<UUID, Long> brushCooldowns = new HashMap<>();
-    private static final String[] DROP_SOURCES = {"chest", "fishing", "wandering-trader", "brushing"};
-    private static final int[] DROP_SLOTS = {10, 12, 14, 16};
+    private static final String[] DROP_SOURCES = {"chest", "fishing", "wandering-trader", "brushing", "vault", "trial-spawner"};
+    private static final int[] DROP_SLOTS = {10, 11, 12, 14, 15, 16};
     private final Map<String, UUID> pendingLootOpeners = new HashMap<>();
 
     @Override
@@ -975,9 +976,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "fishing" -> 1.0;
             case "wandering-trader" -> 25.0;
             case "brushing" -> 1.5;
+            case "vault" -> 2.0;
+            case "trial-spawner" -> 1.5;
             default -> 1.0;
         };
         return Math.max(0.0, Math.min(100.0, getConfig().getDouble("pet-sources." + source + ".chance-percent", fallback)));
+    }
+
+    private boolean sourceHasOminousBonus(final String source) {
+        return source.equals("vault") || source.equals("trial-spawner");
+    }
+
+    private double petSourceOminousBonus(final String source) {
+        final double fallback = switch (source) {
+            case "vault" -> 3.0;
+            case "trial-spawner" -> 2.5;
+            default -> 0.0;
+        };
+        return Math.max(0.0, Math.min(100.0, getConfig().getDouble("pet-sources." + source + ".ominous-bonus-percent", fallback)));
     }
 
     private void setPetSourceChance(final String source, final double chance) {
@@ -1087,6 +1103,59 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             .ifPresent(definition -> announcePet(event.getPlayer(), definition, "bought", "from a Wandering Trader"));
     }
 
+    @EventHandler
+    public void onBlockDispenseLoot(final BlockDispenseLootEvent event) {
+        final Material type = event.getBlock().getType();
+        final String source;
+        if (type == Material.VAULT) {
+            source = "vault";
+        } else if (type == Material.TRIAL_SPAWNER) {
+            source = "trial-spawner";
+        } else {
+            return;
+        }
+        if (!petSourceEnabled(source)) {
+            return;
+        }
+        final boolean ominous = isOminousBlock(event.getBlock());
+        // Minecraft only exposes "ominous: yes/no" on the block, so every Ominous Bottle / Bad Omen
+        // level (1-5) counts as ominous and adds the configurable ominous bonus to the base chance.
+        double chance = petSourceChance(source);
+        if (ominous) {
+            chance += petSourceOminousBonus(source);
+        }
+        chance = Math.max(0.0, Math.min(100.0, chance));
+        if (getConfig().getBoolean("debug-loot-rolls", false)) {
+            debug(source + " loot dispense (ominous=" + ominous + ") with chance " + formatPercent(chance) + "%.");
+        }
+        if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
+            return;
+        }
+        final PetDefinition definition = rollSourcePet();
+        if (definition == null) {
+            return;
+        }
+        final List<ItemStack> loot = new ArrayList<>(event.getDispensedLoot());
+        loot.add(itemFactory.discoveryItem(definition));
+        event.setDispensedLoot(loot);
+        final Player player = event.getPlayer();
+        if (player != null) {
+            announcePet(player, definition, "found", source.equals("vault") ? "in a Vault" : "in a Trial Spawner");
+        }
+        debug("Injected " + definition.name() + " into " + source + " loot.");
+    }
+
+    private boolean isOminousBlock(final Block block) {
+        final org.bukkit.block.data.BlockData data = block.getBlockData();
+        if (data instanceof org.bukkit.block.data.type.Vault vault) {
+            return vault.isOminous();
+        }
+        if (data instanceof org.bukkit.block.data.type.TrialSpawner trialSpawner) {
+            return trialSpawner.isOminous();
+        }
+        return false;
+    }
+
     private List<ItemStack> traderPrice(final String rarity) {
         return switch (rarity.toLowerCase(Locale.ROOT)) {
             case "rare" -> List.of(new ItemStack(Material.EMERALD, 24), new ItemStack(Material.GOLD_INGOT, 6));
@@ -1117,6 +1186,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final List<Component> lore = new ArrayList<>();
             lore.add(Component.text(enabled ? "Enabled" : "Disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED));
             lore.add(Component.text("Chance: " + formatPercent(petSourceChance(source)) + "%", NamedTextColor.GRAY));
+            if (sourceHasOminousBonus(source)) {
+                lore.add(Component.text("Ominous bonus: +" + formatPercent(petSourceOminousBonus(source)) + "%", NamedTextColor.DARK_PURPLE));
+            }
             lore.add(Component.empty());
             lore.add(Component.text("Left-click: toggle on/off", NamedTextColor.YELLOW));
             lore.add(Component.text("Right-click: +0.5%", NamedTextColor.GREEN));
@@ -1173,6 +1245,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "fishing" -> "Fishing";
             case "wandering-trader" -> "Wandering Trader";
             case "brushing" -> "Brushing (Suspicious Sand/Gravel)";
+            case "vault" -> "Vaults";
+            case "trial-spawner" -> "Trial Spawners";
             default -> source;
         };
     }
@@ -1183,6 +1257,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "fishing" -> Material.FISHING_ROD;
             case "wandering-trader" -> Material.EMERALD;
             case "brushing" -> Material.BRUSH;
+            case "vault" -> Material.VAULT;
+            case "trial-spawner" -> Material.TRIAL_SPAWNER;
             default -> Material.PAPER;
         };
     }
@@ -1991,7 +2067,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (has(sender, CHANCES_PERMISSION)) {
             sender.sendMessage(Component.text("/pets chances - spawn chance GUI", NamedTextColor.YELLOW));
             sender.sendMessage(Component.text("/pets notify - discovery broadcast GUI", NamedTextColor.YELLOW));
-            sender.sendMessage(Component.text("/pets drop - choose pet sources (chest/fishing/trader/brushing)", NamedTextColor.YELLOW));
+            sender.sendMessage(Component.text("/pets drop - choose pet sources (chest/fishing/trader/brushing/vault/trial spawner)", NamedTextColor.YELLOW));
         }
         if (has(sender, GIVE_PERMISSION)) {
             sender.sendMessage(Component.text("/pets give <pet|all> [level] [player] - give test pet items", NamedTextColor.YELLOW));

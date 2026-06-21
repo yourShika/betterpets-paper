@@ -35,6 +35,16 @@ pet-sources:
   brushing:
     enabled: true
     chance-percent: 1.5
+  # Vaults and Trial Spawners (vanilla and data pack ones). ominous-bonus-percent is added on top of
+  # chance-percent when the block is ominous (any Ominous Bottle / Bad Omen level counts as ominous).
+  vault:
+    enabled: true
+    chance-percent: 2.0
+    ominous-bonus-percent: 3.0
+  trial-spawner:
+    enabled: true
+    chance-percent: 1.5
+    ominous-bonus-percent: 2.5
 
 discovery-broadcasts:
   common: true

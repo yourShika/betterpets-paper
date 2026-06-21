@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.2.5-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.2.6-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,15 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.2.6
+
+* 🗝️ **Vault & Trial Spawner sources:** pets can now also drop from **Vaults** and **Trial Spawners** — both vanilla and data-pack ones — added straight into their dispensed loot.
+* 🌀 **Ominous bonus:** when the Vault/Trial Spawner is **ominous** (any Ominous Bottle / Bad Omen level 1-5), a configurable `ominous-bonus-percent` is added on top of the base chance, so harder runs reward pets more often.
+* 📢 Broadcasts: `Player found a … Pet in a Vault!` / `… in a Trial Spawner!`.
+* ⚙️ Both new sources are fully configurable in `/pets drop` and `config.yml`, like every other source.
 
 ---
 
