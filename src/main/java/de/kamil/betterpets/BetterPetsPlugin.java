@@ -18,6 +18,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
+import org.bukkit.block.Chest;
 import org.bukkit.block.Container;
 import org.bukkit.block.DoubleChest;
 import org.bukkit.block.TileState;
@@ -434,11 +435,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final NamespacedKey key = lootTable.getKey();
         final Player opener = resolveOpener(lootHolder, container);
 
-        if (container.getPersistentDataContainer().has(generatedChestKey, PersistentDataType.BYTE)) {
+        // Dedupe across BOTH halves of a double chest: each half can generate its loot table
+        // separately, so without this a double chest could hand out two pets.
+        final List<TileState> dedupeStates = dedupeStatesFor(container);
+        if (dedupeStates.stream().anyMatch(state -> state.getPersistentDataContainer().has(generatedChestKey, PersistentDataType.BYTE))) {
             return;
         }
-        container.getPersistentDataContainer().set(generatedChestKey, PersistentDataType.BYTE, (byte) 1);
-        container.update();
+        for (final TileState state : dedupeStates) {
+            state.getPersistentDataContainer().set(generatedChestKey, PersistentDataType.BYTE, (byte) 1);
+            state.update();
+        }
 
         final boolean alreadyHasPet = event.getLoot().stream().anyMatch(item -> itemFactory.petId(item).isPresent());
         if (alreadyHasPet) {
@@ -902,6 +908,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private Player openerFor(final BlockState blockState) {
         final UUID playerId = pendingLootOpeners.remove(blockKey(blockState));
         return playerId == null ? null : Bukkit.getPlayer(playerId);
+    }
+
+    private List<TileState> dedupeStatesFor(final Container container) {
+        if (container instanceof Chest chest && chest.getInventory().getHolder() instanceof DoubleChest doubleChest) {
+            final List<TileState> states = new ArrayList<>();
+            if (doubleChest.getLeftSide() instanceof TileState left) {
+                states.add(left);
+            }
+            if (doubleChest.getRightSide() instanceof TileState right) {
+                states.add(right);
+            }
+            if (!states.isEmpty()) {
+                return states;
+            }
+        }
+        return List.of(container);
     }
 
     private String blockKey(final BlockState blockState) {

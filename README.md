@@ -28,6 +28,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 * 🧳 **Wandering Trader:** a spawning trader can carry a **one-time deal** to buy a pet; the price scales with rarity and uses emeralds **plus** other valuables (gold, diamonds, netherite). Buying it broadcasts `Player bought a … Pet from a Wandering Trader!`.
 * 🪥 **Brushing:** a small chance to brush a pet out of suspicious sand/gravel, with a `Player brushed out a … Pet!` broadcast.
 * ⚙️ Every source has its own configurable chance and on/off toggle, just like chests.
+* 🧰 **Fix:** a **double chest** can no longer hand out **two** pets — both halves now share a single roll.
 
 ---
 
