@@ -13,6 +13,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
@@ -437,7 +438,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final NamespacedKey key = lootTable.getKey();
-        final Player opener = resolveOpener(lootHolder, container);
+        final Player opener = resolveLootOpener(event, lootHolder, container);
 
         // Dedupe across BOTH halves of a double chest: each half can generate its loot table
         // separately, so without this a double chest could hand out two pets.
@@ -891,6 +892,43 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             pendingLootOpeners.clear();
         }
         pendingLootOpeners.put(blockKey(block.getState()), event.getPlayer().getUniqueId());
+    }
+
+    private Player resolveLootOpener(final LootGenerateEvent event, final InventoryHolder lootHolder, final Container container) {
+        // 1) The entity the server attributes the loot to (often the player for container loot).
+        if (event.getEntity() instanceof Player direct) {
+            return direct;
+        }
+        // 2) The player we recorded right-clicking this container (or either half of a double chest).
+        final Player tracked = resolveOpener(lootHolder, container);
+        if (tracked != null) {
+            return tracked;
+        }
+        // 3) Fallback for structure chests (incl. data pack ones) where neither of the above is set:
+        //    the nearest player, since opening a container requires being close to it.
+        Location location = null;
+        if (event.getLootContext() != null && event.getLootContext().getLocation() != null) {
+            location = event.getLootContext().getLocation();
+        } else if (container.getLocation().getWorld() != null) {
+            location = container.getLocation().add(0.5, 0.5, 0.5);
+        }
+        return location == null ? null : nearestPlayer(location, 10.0);
+    }
+
+    private Player nearestPlayer(final Location location, final double radius) {
+        if (location.getWorld() == null) {
+            return null;
+        }
+        Player nearest = null;
+        double bestDistanceSquared = radius * radius;
+        for (final Player player : location.getWorld().getPlayers()) {
+            final double distanceSquared = player.getLocation().distanceSquared(location);
+            if (distanceSquared <= bestDistanceSquared) {
+                bestDistanceSquared = distanceSquared;
+                nearest = player;
+            }
+        }
+        return nearest;
     }
 
     private Player resolveOpener(final InventoryHolder lootHolder, final Container container) {
