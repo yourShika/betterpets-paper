@@ -1,42 +1,93 @@
+# ============================================================================
+#  Better Pets Paper - configuration
+#  Every option is documented. Missing options are repaired automatically on
+#  start (your existing values are kept).
+# ============================================================================
+
+# Cooldown (in ticks, 20 = 1 second) between opening the /pets menu.
 open-cooldown-ticks: 20
+# Maximum number of pets a single player can own.
 max-pets-per-player: 45
+# Base chance (percent) for a generated chest to contain a pet.
 chest-pet-chance-percent: 2.5
+# Global pet XP multiplier. Higher = pets level faster. Range 0.1 - 5.0.
 pet-xp-multiplier: 1.0
+# Dragon mount flight tuning (only used while riding a dragon pet).
 dragon-flight-speed: 1.5
 dragon-flight-lift: 0.55
+# How often (ticks) all pet data is auto-saved. Minimum 1200 (60s).
 save-interval-ticks: 6000
+# How often (ticks) the active pet follows/updates. Lower = smoother, more CPU.
 follow-update-ticks: 3
+# How often (ticks) periodic pet abilities are applied.
 ability-update-ticks: 100
+# Follow behaviour of the active pet relative to the player.
 follow-distance: 2.4
 follow-height: 1.2
 follow-side-offset: 0.75
 follow-turn-speed-degrees: 6.0
+# If the pet is further than this (blocks) from the player it teleports to catch up.
 follow-teleport-distance: 24.0
+# Interpolation duration (ticks) used when the pet display teleports.
 follow-teleport-duration-ticks: 8
+# Log extra info to the console (pet spawns, booster drops, etc.).
 debug-logging: true
+# Log each chest/vault/trial-spawner loot roll attempt (very verbose).
 debug-loot-rolls: false
+
 # External modules (e.g. BetterModel) are experimental. While this is false the
 # /pets modules command is blocked and no external module can be activated.
 experimental-modules: false
+
+# ---------------------------------------------------------------------------
+#  Storage
+# ---------------------------------------------------------------------------
+storage:
+  # Storage backend. "yaml" is the stable default. "sqlite" is planned/opt-in
+  # and experimental; until it ships, selecting it keeps using the YAML store.
+  type: yaml
+  backup:
+    # Master switch for automatic backups.
+    enabled: true
+    # Keep one dated copy of pets.yml per day in plugins/BetterPets/backups.
+    daily: true
+    # How many daily backups to keep before the oldest are pruned.
+    keep-days: 14
+
+# ---------------------------------------------------------------------------
+#  3D model rendering (only used when the BetterModel module is enabled)
+# ---------------------------------------------------------------------------
+# Vertical offset applied when a grounded model is snapped to the ground.
 model-ground-offset: 0.05
+# Height (blocks) of the pet name hologram above the model.
 model-nametag-height: 2.6
+# Extra yaw (degrees) if a model was built facing a different direction.
 model-facing-yaw-offset-degrees: 0.0
-# Where pets can be obtained. Toggle and tune each source in /pets drop.
-# Chests keep using chest-pet-chance-percent above; the others use their own chance here.
+# Per-pet model name overrides (petNameOrId -> modelFileName without .bbmodel).
+model-overrides: {}
+
+# ---------------------------------------------------------------------------
+#  Pet sources - where pets (and XP boosters) can be obtained.
+#  Toggle and tune each one in /pets drop. Each has its own chance-percent.
+# ---------------------------------------------------------------------------
 pet-sources:
+  # Chests keep using chest-pet-chance-percent above.
   chest:
     enabled: true
+  # Chance to fish out a pet instead of the normal catch.
   fishing:
     enabled: true
     chance-percent: 1.0
+  # Chance a spawning Wandering Trader carries a one-time pet deal.
   wandering-trader:
     enabled: true
     chance-percent: 25.0
+  # Chance to brush a pet out of suspicious sand/gravel.
   brushing:
     enabled: true
     chance-percent: 1.5
-  # Vaults and Trial Spawners (vanilla and data pack ones). ominous-bonus-percent is added on top of
-  # chance-percent when the block is ominous (any Ominous Bottle / Bad Omen level counts as ominous).
+  # Vaults and Trial Spawners (vanilla and data pack). ominous-bonus-percent is
+  # added on top of chance-percent when the block is ominous (any level counts).
   vault:
     enabled: true
     chance-percent: 2.0
@@ -45,14 +96,25 @@ pet-sources:
     enabled: true
     chance-percent: 1.5
     ominous-bonus-percent: 2.5
+  # Chance a hostile mob drops a Pet XP Booster (x2-x5, 15/30/45/60 minutes).
+  xp-booster:
+    enabled: true
+    chance-percent: 1.5
 
+# ---------------------------------------------------------------------------
+#  Discovery broadcasts - which rarities announce a find in chat.
+# ---------------------------------------------------------------------------
 discovery-broadcasts:
   common: true
   rare: true
   epic: true
   legendary: true
   extraordinary: true
-model-overrides: {}
+
+# ---------------------------------------------------------------------------
+#  Messages - all player-facing text. %pet%, %player%, %level%, %chance% are
+#  replaced where applicable.
+# ---------------------------------------------------------------------------
 messages:
   only-players: "Only players can use /pets."
   no-permission: "You do not have permission to use /pets."
@@ -66,6 +128,7 @@ messages:
   no-active-pet: "You do not have an active pet."
   no-space: "Your inventory is full, so the item was dropped."
   usage-give: "Usage: /pets give <pet|all> [level] [player]"
+  usage-set-name: "Usage: /pets set name <name> (your pet must be summoned)."
   unknown-pet: "Unknown pet: %pet%"
   player-not-found: "Player not found: %player%"
   test-give: "Gave %pet% level %level% to %player%."

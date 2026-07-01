@@ -14,6 +14,7 @@ public final class OwnedPet {
     private int exp;
     private int nextLevelExp;
     private long lastTotemMillis;
+    private String customName;
     private ItemStack[] storageContents;
 
     public OwnedPet(final UUID uuid, final String definitionId, final int level, final int exp, final int nextLevelExp, final long lastTotemMillis) {
@@ -70,6 +71,19 @@ public final class OwnedPet {
 
     public void setLastTotemMillis(final long lastTotemMillis) {
         this.lastTotemMillis = Math.max(0L, lastTotemMillis);
+    }
+
+    /** The player-chosen display name, or null when the pet uses its default definition name. */
+    public String customName() {
+        return customName;
+    }
+
+    public boolean hasCustomName() {
+        return customName != null && !customName.isBlank();
+    }
+
+    public void setCustomName(final String customName) {
+        this.customName = customName == null || customName.isBlank() ? null : customName;
     }
 
     public ItemStack[] storageContents() {

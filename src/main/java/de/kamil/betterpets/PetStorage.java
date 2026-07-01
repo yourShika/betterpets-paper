@@ -37,6 +37,7 @@ public final class PetStorage {
             return;
         }
 
+        int skipped = 0;
         for (final String uuidText : root.getKeys(false)) {
             try {
                 final UUID playerId = UUID.fromString(uuidText);
@@ -47,6 +48,7 @@ public final class PetStorage {
 
                 final PlayerPetData data = new PlayerPetData();
                 data.setVisible(section.getBoolean("visible", true));
+                data.setBooster(section.getInt("booster-tier", 0), section.getLong("booster-remaining-millis", 0L));
                 final String activeText = section.getString("active");
                 if (activeText != null && !activeText.isBlank()) {
                     data.setActivePet(UUID.fromString(activeText));
@@ -55,25 +57,30 @@ public final class PetStorage {
                 final ConfigurationSection pets = section.getConfigurationSection("pets");
                 if (pets != null) {
                     for (final String petUuidText : pets.getKeys(false)) {
-                        final ConfigurationSection pet = pets.getConfigurationSection(petUuidText);
-                        if (pet == null) {
-                            continue;
+                        try {
+                            final ConfigurationSection pet = pets.getConfigurationSection(petUuidText);
+                            if (pet == null) {
+                                continue;
+                            }
+                            final String definition = pet.getString("id", "");
+                            if (definition.isBlank()) {
+                                continue;
+                            }
+                            final OwnedPet owned = new OwnedPet(
+                                UUID.fromString(petUuidText),
+                                definition,
+                                pet.getInt("level", 1),
+                                pet.getInt("exp", 0),
+                                pet.getInt("next-exp", 16),
+                                pet.getLong("last-totem", 0L),
+                                storageContents(pet)
+                            );
+                            owned.setCustomName(pet.getString("name", null));
+                            data.pets().add(owned);
+                        } catch (final RuntimeException petException) {
+                            // One broken pet must not drop the whole player's data.
+                            plugin.getLogger().warning("Skipping corrupted pet " + petUuidText + " for " + uuidText + ": " + petException.getMessage());
                         }
-
-                        final String definition = pet.getString("id", "");
-                        if (definition.isBlank()) {
-                            continue;
-                        }
-
-                        data.pets().add(new OwnedPet(
-                            UUID.fromString(petUuidText),
-                            definition,
-                            pet.getInt("level", 1),
-                            pet.getInt("exp", 0),
-                            pet.getInt("next-exp", 16),
-                            pet.getLong("last-totem", 0L),
-                            storageContents(pet)
-                        ));
                     }
                 }
 
@@ -81,9 +88,13 @@ public final class PetStorage {
                     data.setActivePet(null);
                 }
                 players.put(playerId, data);
-            } catch (final IllegalArgumentException exception) {
-                plugin.getLogger().warning("Skipping invalid Better Pets storage entry: " + uuidText);
+            } catch (final RuntimeException exception) {
+                skipped++;
+                plugin.getLogger().warning("Skipping corrupted Better Pets entry " + uuidText + ": " + exception.getMessage());
             }
+        }
+        if (skipped > 0) {
+            plugin.getLogger().warning("Skipped " + skipped + " corrupted player entr(ies) while loading pet data.");
         }
     }
 
@@ -115,6 +126,8 @@ public final class PetStorage {
             final PlayerPetData data = entry.getValue();
             config.set(base + ".visible", data.visible());
             config.set(base + ".active", data.activePetId() == null ? null : data.activePetId().toString());
+            config.set(base + ".booster-tier", data.boosterTier());
+            config.set(base + ".booster-remaining-millis", data.boosterRemainingMillis());
 
             for (final OwnedPet pet : data.pets()) {
                 final String petPath = base + ".pets." + pet.uuid();
@@ -123,6 +136,7 @@ public final class PetStorage {
                 config.set(petPath + ".exp", pet.exp());
                 config.set(petPath + ".next-exp", pet.nextLevelExp());
                 config.set(petPath + ".last-totem", pet.lastTotemMillis());
+                config.set(petPath + ".name", pet.hasCustomName() ? pet.customName() : null);
                 config.set(petPath + ".storage-bytes", Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(serializableStorageContents(pet))));
                 config.set(petPath + ".storage", null);
             }
@@ -140,23 +154,88 @@ public final class PetStorage {
             } catch (final AtomicMoveNotSupportedException ignored) {
                 Files.move(tmp.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
+            dailyBackup();
         } catch (final IOException exception) {
             plugin.getLogger().severe("Could not save Better Pets data: " + exception.getMessage());
         }
     }
 
+    /**
+     * Keeps one dated copy of pets.yml per day under plugins/BetterPets/backups, pruning old ones.
+     * Controlled by storage.backup.enabled and storage.backup.daily in config.yml.
+     */
+    private void dailyBackup() {
+        if (!plugin.getConfig().getBoolean("storage.backup.enabled", true)
+            || !plugin.getConfig().getBoolean("storage.backup.daily", true)
+            || !file.exists()) {
+            return;
+        }
+        try {
+            final File backupDir = new File(plugin.getDataFolder(), "backups");
+            if (!backupDir.exists() && !backupDir.mkdirs()) {
+                return;
+            }
+            final File target = new File(backupDir, "pets-" + java.time.LocalDate.now() + ".yml");
+            if (target.exists()) {
+                return;
+            }
+            Files.copy(file.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            plugin.getLogger().info("Created daily Better Pets backup: " + target.getName());
+            pruneOldBackups(backupDir);
+        } catch (final IOException ignored) {
+            // A failed backup must never block saving.
+        }
+    }
+
+    private void pruneOldBackups(final File backupDir) {
+        final int keep = Math.max(1, plugin.getConfig().getInt("storage.backup.keep-days", 14));
+        final File[] backups = backupDir.listFiles((dir, name) -> name.startsWith("pets-") && name.endsWith(".yml"));
+        if (backups == null || backups.length <= keep) {
+            return;
+        }
+        java.util.Arrays.sort(backups, java.util.Comparator.comparing(File::getName));
+        for (int i = 0; i < backups.length - keep; i++) {
+            if (!backups[i].delete()) {
+                plugin.getLogger().warning("Could not delete old backup " + backups[i].getName());
+            }
+        }
+    }
+
     private YamlConfiguration loadConfiguration(final File source) {
         if (source.exists()) {
-            return YamlConfiguration.loadConfiguration(source);
+            try {
+                final YamlConfiguration config = new YamlConfiguration();
+                config.load(source);
+                return config;
+            } catch (final IOException | org.bukkit.configuration.InvalidConfigurationException exception) {
+                plugin.getLogger().severe("pets.yml is corrupted (" + exception.getMessage() + "); quarantining it and trying the backup.");
+                quarantine(source);
+            }
         }
 
         final File backup = new File(source.getParentFile(), source.getName() + ".bak");
         if (backup.exists()) {
-            plugin.getLogger().warning("pets.yml is missing, loading backup pets.yml.bak.");
-            return YamlConfiguration.loadConfiguration(backup);
+            try {
+                final YamlConfiguration config = new YamlConfiguration();
+                config.load(backup);
+                plugin.getLogger().warning("Loaded Better Pets data from backup pets.yml.bak.");
+                return config;
+            } catch (final IOException | org.bukkit.configuration.InvalidConfigurationException exception) {
+                plugin.getLogger().severe("Backup pets.yml.bak is also corrupted: " + exception.getMessage());
+            }
         }
 
         return new YamlConfiguration();
+    }
+
+    private void quarantine(final File source) {
+        try {
+            final File quarantined = new File(source.getParentFile(), source.getName() + ".corrupt-" + System.currentTimeMillis());
+            Files.copy(source.toPath(), quarantined.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            plugin.getLogger().severe("A copy of the corrupted data was kept as " + quarantined.getName() + " so nothing is lost.");
+        } catch (final IOException ignored) {
+            // best effort
+        }
     }
 
     private ItemStack[] storageContents(final ConfigurationSection pet) {

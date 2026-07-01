@@ -26,11 +26,51 @@ public final class PetItemFactory {
     private final NamespacedKey petIdKey;
     private final NamespacedKey petUuidKey;
     private final NamespacedKey petLevelKey;
+    private final NamespacedKey boosterTierKey;
+    private final NamespacedKey boosterMinutesKey;
 
     public PetItemFactory(final JavaPlugin plugin) {
         this.petIdKey = new NamespacedKey(plugin, "pet_id");
         this.petUuidKey = new NamespacedKey(plugin, "pet_uuid");
         this.petLevelKey = new NamespacedKey(plugin, "pet_level");
+        this.boosterTierKey = new NamespacedKey(plugin, "booster_tier");
+        this.boosterMinutesKey = new NamespacedKey(plugin, "booster_minutes");
+    }
+
+    public ItemStack boosterItem(final int tier, final int minutes) {
+        final ItemStack item = new ItemStack(Material.EXPERIENCE_BOTTLE);
+        final ItemMeta meta = item.getItemMeta();
+        meta.displayName(Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE)
+            .decoration(TextDecoration.ITALIC, false));
+        meta.lore(List.of(
+            Component.text("Levels your active pet " + tier + "x faster.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
+            Component.text("Duration: " + minutes + " minutes", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false),
+            Component.empty().decoration(TextDecoration.ITALIC, false),
+            Component.text("Right-click to activate.", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false),
+            Component.text("Only affects pet leveling, not your own XP.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)
+        ));
+        meta.getPersistentDataContainer().set(boosterTierKey, PersistentDataType.INTEGER, tier);
+        meta.getPersistentDataContainer().set(boosterMinutesKey, PersistentDataType.INTEGER, minutes);
+        meta.setEnchantmentGlintOverride(true);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /** Booster tier of a booster item (2..5), or 0 if the item is not a booster. */
+    public int boosterTier(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return 0;
+        }
+        final Integer tier = item.getItemMeta().getPersistentDataContainer().get(boosterTierKey, PersistentDataType.INTEGER);
+        return tier == null ? 0 : tier;
+    }
+
+    public int boosterMinutes(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return 0;
+        }
+        final Integer minutes = item.getItemMeta().getPersistentDataContainer().get(boosterMinutesKey, PersistentDataType.INTEGER);
+        return minutes == null ? 0 : minutes;
     }
 
     public ItemStack discoveryItem(final PetDefinition definition) {
@@ -185,7 +225,8 @@ public final class PetItemFactory {
     }
 
     private Component title(final PetDefinition definition, final OwnedPet pet) {
-        return Component.text("[Lvl " + (pet == null ? 1 : pet.level()) + "] " + definition.name(), definition.rarityColor())
+        final String name = pet != null && pet.hasCustomName() ? pet.customName() : definition.name();
+        return Component.text("[Lvl " + (pet == null ? 1 : pet.level()) + "] " + name, definition.rarityColor())
             .decoration(TextDecoration.ITALIC, false);
     }
 

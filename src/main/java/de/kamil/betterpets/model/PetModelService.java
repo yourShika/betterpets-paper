@@ -76,11 +76,42 @@ public final class PetModelService {
         }
         if (apiReloaded) {
             plugin.getLogger().info("BetterModel reloaded through API.");
+            validateModels();
             return true;
         }
         plugin.getLogger().warning("BetterModel API reload failed; falling back to console command 'bettermodel reload'.");
         Bukkit.dispatchCommand(Bukkit.getConsoleSender(), "bettermodel reload");
+        // Validate a tick later so BetterModel has time to process the console reload.
+        Bukkit.getScheduler().runTaskLater(plugin, this::validateModels, 40L);
         return false;
+    }
+
+    /**
+     * Warns about local .bbmodel files that BetterModel did not actually load (e.g. invalid models or
+     * ones missing the required animations), so the reason for a head fallback is visible in the console.
+     */
+    private void validateModels() {
+        if (bridge == null) {
+            return;
+        }
+        for (final Map.Entry<String, Set<String>> entry : modelAnimations.entrySet()) {
+            final String name = entry.getKey();
+            try {
+                if (!bridge.modelExists(name)) {
+                    plugin.getLogger().warning("Model '" + name + "' was synced to BetterModel but is not loaded. "
+                        + "Pets using it will fall back to heads. Check that " + name + ".bbmodel is a valid Blockbench model.");
+                    continue;
+                }
+            } catch (final RuntimeException | LinkageError exception) {
+                plugin.getLogger().warning("Could not validate model '" + name + "': " + exception.getMessage());
+                continue;
+            }
+            final Set<String> anims = entry.getValue();
+            if (!anims.contains("idle") && !anims.contains("walking") && !anims.contains("flying")) {
+                plugin.getLogger().warning("Model '" + name + "' has no idle/walking/flying animation; "
+                    + "it will render but stay static.");
+            }
+        }
     }
 
     public Optional<String> modelName(final PetDefinition definition) {

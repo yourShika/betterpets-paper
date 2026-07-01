@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.2.7-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.3.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,18 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.3.0
+
+* ⚡ **Pet XP Boosters!** Hostile mobs can rarely drop a **Pet XP Booster** (x2-x5) that lasts **15/30/45/60 minutes**. Right-click to activate; it speeds up **pet leveling only** (never your own XP), does **not stack**, and its timer **only counts down while you are online**. Boosters are stackable as items but a second one won't add more effect. Drop chance is configurable in `/pets drop` and `config.yml`. The main menu shows your booster status (for admins, next to the XP Multiplier).
+* ✏️ **Rename pets:** `/pets set name <name>` renames your summoned pet (keeps all level/XP/abilities), `/pets restore name` restores the default. The custom name shows on the hologram — for head pets **and** BetterModel pets.
+* 📖 **Catalogue:** now shows each pet's **rarity** and **default drop weight**, plus clearer level-milestone rewards.
+* 🛟 **Safer data:** corrupted `pets.yml` is quarantined (never silently wiped), one broken pet no longer drops a whole player's data, and there are **daily backups** (`storage.backup`, kept for `keep-days`).
+* 🗄️ **Storage settings + SQLite seam:** new `storage` config (`type: yaml` default, plus backup options). `sqlite` is a documented opt-in for a later build; selecting it now safely stays on YAML.
+* 🧰 **Config:** every option is now **commented**, and missing options are **repaired automatically** on start (your values are kept).
+* 🧱 **BetterModel:** model **validation warnings** (flags synced `.bbmodel` files BetterModel didn't load, or models without animations) and clearer head-fallback reasons.
 
 ---
 

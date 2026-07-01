@@ -107,7 +107,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         Map.entry("messages.info-opened", "Opening pet catalogue."),
         Map.entry("messages.alpaca-storage-not-empty", "Empty the Alpaca storage before switching, despawning, or converting this pet."),
         Map.entry("messages.no-pet-storage", "Pet items cannot be stored inside pet storage."),
-        Map.entry("messages.modules-experimental", "External modules are experimental and disabled. Set experimental-modules: true in config.yml to use /pets modules.")
+        Map.entry("messages.modules-experimental", "External modules are experimental and disabled. Set experimental-modules: true in config.yml to use /pets modules."),
+        Map.entry("messages.usage-set-name", "Usage: /pets set name <name> (your pet must be summoned).")
     );
 
     private PetDefinitions definitions;
@@ -122,16 +123,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
     private final Map<UUID, Long> lastOrbPickupTick = new HashMap<>();
     private final Map<UUID, Long> brushCooldowns = new HashMap<>();
-    private static final String[] DROP_SOURCES = {"chest", "fishing", "wandering-trader", "brushing", "vault", "trial-spawner"};
-    private static final int[] DROP_SLOTS = {10, 11, 12, 14, 15, 16};
+    private static final String[] DROP_SOURCES = {"chest", "fishing", "wandering-trader", "brushing", "vault", "trial-spawner", "xp-booster"};
+    private static final int[] BOOSTER_DURATIONS = {15, 30, 45, 60};
+    private static final int[] DROP_SLOTS = {10, 11, 12, 13, 14, 15, 16};
     private final Map<String, UUID> pendingLootOpeners = new HashMap<>();
 
     @Override
     public void onEnable() {
         getLogger().info("Starting Better Pets as a pure Paper plugin.");
         saveDefaultConfig();
+        repairConfig();
         getConfig().options().copyDefaults(true);
         saveConfig();
+        announceStorageMode();
 
         definitions = PetDefinitions.load(this);
         getLogger().info("Loaded " + definitions.all().size() + " pet definitions.");
@@ -177,7 +181,30 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             saveOpenAlpacaStorages();
             storage.save();
         }, saveInterval, saveInterval);
+        // Count down active Pet XP boosters once per second (only for online players).
+        Bukkit.getScheduler().runTaskTimer(this, this::tickBoosters, 20L, 20L);
         getLogger().info("Better Pets enabled. Auto-save interval: " + saveInterval + " ticks.");
+    }
+
+    private void tickBoosters() {
+        final long now = System.currentTimeMillis();
+        for (final Player player : Bukkit.getOnlinePlayers()) {
+            final PlayerPetData data = storage.data(player.getUniqueId());
+            if (!data.hasActiveBooster()) {
+                data.setBoosterTickReference(now);
+                continue;
+            }
+            final long reference = data.boosterTickReference();
+            final long delta = reference <= 0L ? 0L : Math.max(0L, now - reference);
+            data.setBoosterTickReference(now);
+            final long remaining = data.boosterRemainingMillis() - delta;
+            if (remaining <= 0L) {
+                data.clearBooster();
+                player.sendMessage(Component.text("Your Pet XP Booster has expired.", NamedTextColor.GRAY));
+            } else {
+                data.setBooster(data.boosterTier(), remaining);
+            }
+        }
     }
 
     @Override
@@ -197,6 +224,38 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             saveOpenAlpacaStorages();
             storage.save();
             getLogger().info("Pet storage saved.");
+        }
+    }
+
+    /** Adds any config options that are missing from an older config.yml, keeping the user's values. */
+    private void repairConfig() {
+        final java.io.InputStream defaultStream = getResource("config.yml");
+        if (defaultStream == null) {
+            return;
+        }
+        final org.bukkit.configuration.file.YamlConfiguration defaults =
+            org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
+                new java.io.InputStreamReader(defaultStream, java.nio.charset.StandardCharsets.UTF_8));
+        int added = 0;
+        for (final String key : defaults.getKeys(true)) {
+            if (defaults.isConfigurationSection(key) || getConfig().contains(key)) {
+                continue;
+            }
+            getConfig().set(key, defaults.get(key));
+            added++;
+        }
+        if (added > 0) {
+            saveConfig();
+            getLogger().info("Repaired " + added + " missing config option(s) from defaults.");
+        }
+    }
+
+    private void announceStorageMode() {
+        final String type = getConfig().getString("storage.type", "yaml");
+        if (type != null && type.equalsIgnoreCase("sqlite")) {
+            // The SQLite backend is a planned opt-in; until it ships, data stays in the safe YAML store.
+            getLogger().warning("storage.type is 'sqlite', but the SQLite backend is not available yet in this build. "
+                + "Using the YAML store (with backups) instead. Your data is safe.");
         }
     }
 
@@ -370,6 +429,12 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         rememberLootOpener(event);
 
         final ItemStack item = event.getItem();
+        if (itemFactory.boosterTier(item) > 0) {
+            event.setCancelled(true);
+            consumeBooster(event.getPlayer(), item);
+            return;
+        }
+
         final Optional<String> petId = itemFactory.petId(item);
         if (petId.isEmpty() || itemFactory.petUuid(item).isPresent()) {
             return;
@@ -377,6 +442,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         event.setCancelled(true);
         addPetFromItem(event.getPlayer(), item, petId.get());
+    }
+
+    private void consumeBooster(final Player player, final ItemStack item) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        if (data.hasActiveBooster()) {
+            player.sendMessage(Component.text("You already have a Pet XP Booster active (x" + data.boosterTier()
+                + ", " + formatDuration(data.boosterRemainingMillis()) + " left). Boosters do not stack.", NamedTextColor.RED));
+            return;
+        }
+        final int tier = itemFactory.boosterTier(item);
+        final int minutes = Math.max(1, Math.min(60, itemFactory.boosterMinutes(item)));
+        data.setBooster(tier, minutes * 60_000L);
+        data.setBoosterTickReference(System.currentTimeMillis());
+        consumeOne(player, item);
+        storage.save();
+        player.sendMessage(Component.text("Pet XP Booster x" + tier + " activated for " + minutes
+            + " minutes! It speeds up pet leveling only (not your own XP). The timer only runs while you are online.", NamedTextColor.LIGHT_PURPLE));
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.3F);
     }
 
     @EventHandler
@@ -481,6 +564,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerJoin(final PlayerJoinEvent event) {
         activePets.prepareJoiningPlayer(event.getPlayer());
+        // Reset the booster tick reference so time spent offline is never counted against the booster.
+        storage.data(event.getPlayer().getUniqueId()).setBoosterTickReference(System.currentTimeMillis());
         Bukkit.getScheduler().runTaskLater(this, () -> activePets.spawnSavedActivePet(event.getPlayer()), 20L);
     }
 
@@ -525,7 +610,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.activePet(player).ifPresent(pet -> {
             // XP is persisted by the periodic autosave and on quit/disable, so this hot path no longer
             // writes the whole storage file on every single XP gain.
-            final boolean leveled = pet.addExp(amount, petXpMultiplier());
+            // An active Pet XP Booster multiplies only the pet's gained XP (never the player's own XP).
+            final PlayerPetData boosterData = storage.data(player.getUniqueId());
+            final int effectiveAmount = boosterData.hasActiveBooster() ? amount * boosterData.boosterTier() : amount;
+            final boolean leveled = pet.addExp(effectiveAmount, petXpMultiplier());
             if (leveled) {
                 activePets.refreshDisplay(player);
                 definitions.get(pet.definitionId()).ifPresent(definition ->
@@ -556,7 +644,39 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final Player killer = event.getEntity().getKiller();
         if (killer != null) {
             activePets.applyKillAbility(killer, event.getEntity());
+            maybeDropBooster(killer, event.getEntity());
         }
+    }
+
+    private void maybeDropBooster(final Player killer, final LivingEntity dead) {
+        if (!petSourceEnabled("xp-booster") || !activePets.isHostile(dead)) {
+            return;
+        }
+        final double chance = petSourceChance("xp-booster");
+        if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
+            return;
+        }
+        final int tier = randomBoosterTier();
+        final int minutes = BOOSTER_DURATIONS[ThreadLocalRandom.current().nextInt(BOOSTER_DURATIONS.length)];
+        dead.getWorld().dropItemNaturally(dead.getLocation(), itemFactory.boosterItem(tier, minutes));
+        if (getConfig().getBoolean("debug-logging", true)) {
+            debug(killer.getName() + " earned a Pet XP Booster x" + tier + " (" + minutes + "m) from a " + dead.getType() + ".");
+        }
+    }
+
+    private int randomBoosterTier() {
+        // Higher tiers are rarer.
+        final double roll = ThreadLocalRandom.current().nextDouble();
+        if (roll < 0.50) {
+            return 2;
+        }
+        if (roll < 0.80) {
+            return 3;
+        }
+        if (roll < 0.95) {
+            return 4;
+        }
+        return 5;
     }
 
     @EventHandler
@@ -680,13 +800,23 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 Component.text("Spawn Chances", NamedTextColor.YELLOW),
                 List.of(Component.text("Adjust chest spawn weights.", NamedTextColor.GRAY))
             ));
+            // Admins keep the XP Multiplier here, with the booster status shown right below it.
+            final List<Component> xpLore = new ArrayList<>();
+            xpLore.add(Component.text("Current: " + formatDecimal(petXpMultiplier()) + "x", NamedTextColor.GRAY));
+            xpLore.add(Component.text("0.1x to 5.0x.", NamedTextColor.DARK_GRAY));
+            xpLore.add(Component.empty());
+            xpLore.addAll(boosterStatusLines(data));
             inventory.setItem(48, itemFactory.control(
                 Material.EXPERIENCE_BOTTLE,
                 Component.text("XP Multiplier", NamedTextColor.AQUA),
-                List.of(
-                    Component.text("Current: " + formatDecimal(petXpMultiplier()) + "x", NamedTextColor.GRAY),
-                    Component.text("0.1x to 5.0x.", NamedTextColor.DARK_GRAY)
-                )
+                xpLore
+            ));
+        } else {
+            // Everyone else gets a dedicated Pet XP Booster status item in the same spot.
+            inventory.setItem(48, itemFactory.control(
+                Material.EXPERIENCE_BOTTLE,
+                Component.text("Pet XP Booster", NamedTextColor.LIGHT_PURPLE),
+                boosterStatusLines(data)
             ));
         }
         inventory.setItem(50, itemFactory.control(
@@ -714,6 +844,17 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             Component.text("Close", NamedTextColor.RED),
             List.of(Component.text("Close the menu.", NamedTextColor.GRAY))
         ));
+    }
+
+    private List<Component> boosterStatusLines(final PlayerPetData data) {
+        if (data.hasActiveBooster()) {
+            return List.of(
+                Component.text("Active booster: x" + data.boosterTier(), NamedTextColor.LIGHT_PURPLE),
+                Component.text("Time left: " + formatDuration(data.boosterRemainingMillis()), NamedTextColor.AQUA),
+                Component.text("Only speeds up pet leveling; counts down while online.", NamedTextColor.DARK_GRAY)
+            );
+        }
+        return List.of(Component.text("No active Pet XP Booster.", NamedTextColor.GRAY));
     }
 
     private ItemStack petMenuItem(final PetDefinition definition, final OwnedPet pet, final boolean active) {
@@ -1019,6 +1160,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "brushing" -> 1.5;
             case "vault" -> 2.0;
             case "trial-spawner" -> 1.5;
+            case "xp-booster" -> 1.5;
             default -> 1.0;
         };
         return Math.max(0.0, Math.min(100.0, getConfig().getDouble("pet-sources." + source + ".chance-percent", fallback)));
@@ -1334,6 +1476,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "brushing" -> "Brushing (Suspicious Sand/Gravel)";
             case "vault" -> "Vaults";
             case "trial-spawner" -> "Trial Spawners";
+            case "xp-booster" -> "Pet XP Boosters (mob drops)";
             default -> source;
         };
     }
@@ -1346,6 +1489,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "brushing" -> Material.BRUSH;
             case "vault" -> Material.VAULT;
             case "trial-spawner" -> Material.TRIAL_SPAWNER;
+            case "xp-booster" -> Material.EXPERIENCE_BOTTLE;
             default -> Material.PAPER;
         };
     }
@@ -2145,8 +2289,41 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    void handleSetName(final Player player, final String name) {
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null) {
+            player.sendMessage(message("messages.no-active-pet"));
+            return;
+        }
+        final String clean = name.trim();
+        if (clean.isEmpty() || clean.length() > 32) {
+            player.sendMessage(Component.text("The pet name must be between 1 and 32 characters.", NamedTextColor.RED));
+            return;
+        }
+        // Only the display name changes; level, XP, abilities, and Alpaca storage are untouched.
+        pet.setCustomName(clean);
+        activePets.refreshDisplay(player);
+        storage.save();
+        player.sendMessage(Component.text("Renamed your pet to '" + clean + "'.", NamedTextColor.GREEN));
+    }
+
+    void handleRestoreName(final Player player) {
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null) {
+            player.sendMessage(message("messages.no-active-pet"));
+            return;
+        }
+        pet.setCustomName(null);
+        activePets.refreshDisplay(player);
+        storage.save();
+        definitions.get(pet.definitionId()).ifPresent(definition ->
+            player.sendMessage(Component.text("Restored the default name (" + definition.name() + ").", NamedTextColor.GREEN)));
+    }
+
     private void sendHelp(final CommandSender sender) {
         sender.sendMessage(Component.text("/pets - open your pet menu", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text("/pets set name <name> - rename your active pet", NamedTextColor.YELLOW));
+        sender.sendMessage(Component.text("/pets restore name - restore your active pet's default name", NamedTextColor.YELLOW));
         sender.sendMessage(Component.text("/pets version - show version, modules, and update check", NamedTextColor.AQUA));
         if (has(sender, INFO_PERMISSION)) {
             sender.sendMessage(Component.text("/pets info - pet catalogue", NamedTextColor.YELLOW));
@@ -2169,6 +2346,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private List<Component> catalogueLore(final PetDefinition definition) {
         final List<Component> lore = new ArrayList<>();
         lore.add(Component.text(abilitySummary(definition.id()), NamedTextColor.GRAY));
+        lore.add(Component.empty());
+        lore.add(Component.text("Rarity: ", NamedTextColor.GRAY)
+            .append(Component.text(definition.rarity(), definition.rarityColor())));
+        lore.add(Component.text("Default drop weight: " + formatPercent(spawnChance(definition)) + "%", NamedTextColor.AQUA));
         lore.add(Component.empty());
         lore.add(Component.text("Click to view level milestones.", NamedTextColor.YELLOW));
         return lore;
@@ -2738,6 +2919,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 return;
             }
 
+            if (args.length >= 1 && args[0].equalsIgnoreCase("set") && args.length >= 2 && args[1].equalsIgnoreCase("name")) {
+                if (args.length < 3) {
+                    player.sendMessage(plugin.message("messages.usage-set-name"));
+                    return;
+                }
+                plugin.handleSetName(player, String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
+                return;
+            }
+            if (args.length >= 2 && args[0].equalsIgnoreCase("restore") && args[1].equalsIgnoreCase("name")) {
+                plugin.handleRestoreName(player);
+                return;
+            }
+
             plugin.openPetsMenu(player);
         }
 
@@ -2747,6 +2941,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 final List<String> suggestions = new ArrayList<>();
                 suggestions.add("help");
                 suggestions.add("version");
+                suggestions.add("set");
+                suggestions.add("restore");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {
                     suggestions.add("give");
                 }
@@ -2766,6 +2962,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                     suggestions.add("update");
                 }
                 return suggestions;
+            }
+            if (args.length == 2 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("restore"))) {
+                return List.of("name");
             }
             if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
                 final List<String> suggestions = new java.util.ArrayList<>();

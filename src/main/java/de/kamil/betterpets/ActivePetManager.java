@@ -1014,7 +1014,8 @@ public final class ActivePetManager {
     }
 
     private Component petNickname(final PetDefinition definition, final OwnedPet pet) {
-        return Component.text("[Lvl " + pet.level() + "] " + definition.name(), definition.rarityColor())
+        final String name = pet.hasCustomName() ? pet.customName() : definition.name();
+        return Component.text("[Lvl " + pet.level() + "] " + name, definition.rarityColor())
             .decoration(TextDecoration.ITALIC, false);
     }
 

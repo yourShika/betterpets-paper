@@ -9,6 +9,11 @@ public final class PlayerPetData {
     private final List<OwnedPet> pets = new ArrayList<>();
     private UUID activePet;
     private boolean visible = true;
+    // Pet XP booster: tier (0 = none, else 2..5) and remaining time. Remaining time only counts down
+    // while the player is online; boosterTickReference is a transient marker for that (not persisted).
+    private int boosterTier;
+    private long boosterRemainingMillis;
+    private transient long boosterTickReference;
 
     public List<OwnedPet> pets() {
         return pets;
@@ -50,5 +55,35 @@ public final class PlayerPetData {
             activePet = null;
         }
         return pets.removeIf(pet -> pet.uuid().equals(uuid));
+    }
+
+    public boolean hasActiveBooster() {
+        return boosterTier > 1 && boosterRemainingMillis > 0L;
+    }
+
+    public int boosterTier() {
+        return boosterTier;
+    }
+
+    public long boosterRemainingMillis() {
+        return boosterRemainingMillis;
+    }
+
+    public void setBooster(final int tier, final long remainingMillis) {
+        this.boosterTier = Math.max(0, tier);
+        this.boosterRemainingMillis = Math.max(0L, remainingMillis);
+    }
+
+    public void clearBooster() {
+        this.boosterTier = 0;
+        this.boosterRemainingMillis = 0L;
+    }
+
+    public long boosterTickReference() {
+        return boosterTickReference;
+    }
+
+    public void setBoosterTickReference(final long boosterTickReference) {
+        this.boosterTickReference = boosterTickReference;
     }
 }
