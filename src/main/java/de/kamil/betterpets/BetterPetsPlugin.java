@@ -47,6 +47,7 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.inventory.PrepareAnvilEvent;
 import org.bukkit.event.player.PlayerExpChangeEvent;
 import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerInputEvent;
@@ -100,9 +101,12 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         Map.entry("messages.no-active-pet", "You do not have an active pet."),
         Map.entry("messages.no-space", "Your inventory is full, so the item was dropped."),
         Map.entry("messages.usage-give", "Usage: /pets give <pet|all> [level] [player]"),
+        Map.entry("messages.usage-xpboost", "Usage: /pets xpboost give <x2-x5> <time> [player]"),
         Map.entry("messages.unknown-pet", "Unknown pet: %pet%"),
         Map.entry("messages.player-not-found", "Player not found: %player%"),
         Map.entry("messages.test-give", "Gave %pet% level %level% to %player%."),
+        Map.entry("messages.booster-give", "Gave Pet XP Booster %tier% for %time% to %player%."),
+        Map.entry("messages.protected-anvil", "Better Pets items cannot be renamed in an anvil."),
         Map.entry("messages.chances-saved", "Spawn chance for %pet% is now %chance%%."),
         Map.entry("messages.info-opened", "Opening pet catalogue."),
         Map.entry("messages.alpaca-storage-not-empty", "Empty the Alpaca storage before switching, despawning, or converting this pet."),
@@ -419,6 +423,46 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     @EventHandler
+    public void onProtectedItemAnvilPrepare(final PrepareAnvilEvent event) {
+        if (isProtectedBetterPetsItem(event.getInventory().getItem(0))
+            || isProtectedBetterPetsItem(event.getInventory().getItem(1))
+            || isProtectedBetterPetsItem(event.getResult())) {
+            event.setResult(null);
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onProtectedItemAnvilClick(final InventoryClickEvent event) {
+        if (event.getView().getTopInventory().getType() != InventoryType.ANVIL) {
+            return;
+        }
+        final Inventory top = event.getView().getTopInventory();
+        final int rawSlot = event.getRawSlot();
+        boolean protectedMove = rawSlot >= 0 && rawSlot < top.getSize()
+            && (isProtectedBetterPetsItem(event.getCursor()) || isProtectedBetterPetsItem(event.getCurrentItem()));
+        protectedMove |= event.isShiftClick() && isProtectedBetterPetsItem(event.getCurrentItem());
+        protectedMove |= event.getClick() == ClickType.NUMBER_KEY && event.getHotbarButton() >= 0
+            && event.getWhoClicked() instanceof Player hotbarPlayer
+            && isProtectedBetterPetsItem(hotbarPlayer.getInventory().getItem(event.getHotbarButton()));
+        protectedMove |= event.getClick() == ClickType.SWAP_OFFHAND
+            && event.getWhoClicked() instanceof Player offhandPlayer
+            && isProtectedBetterPetsItem(offhandPlayer.getInventory().getItemInOffHand());
+        if (!protectedMove) {
+            return;
+        }
+
+        event.setCancelled(true);
+        if (event.getWhoClicked() instanceof Player player) {
+            player.sendMessage(message("messages.protected-anvil"));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.8F, 0.7F);
+        }
+    }
+
+    private boolean isProtectedBetterPetsItem(final ItemStack item) {
+        return itemFactory.petId(item).isPresent() || itemFactory.boosterTier(item) > 0;
+    }
+
+    @EventHandler
     public void onPlayerInteract(final PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND) {
             return;
@@ -449,10 +493,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (data.hasActiveBooster()) {
             player.sendMessage(Component.text("You already have a Pet XP Booster active (x" + data.boosterTier()
                 + ", " + formatDuration(data.boosterRemainingMillis()) + " left). Boosters do not stack.", NamedTextColor.RED));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.8F, 0.8F);
             return;
         }
         final int tier = itemFactory.boosterTier(item);
-        final int minutes = Math.max(1, Math.min(60, itemFactory.boosterMinutes(item)));
+        if (tier < 2 || tier > 5) {
+            return;
+        }
+        final int minutes = Math.max(1, Math.min(maxBoosterMinutes(), itemFactory.boosterMinutes(item)));
         data.setBooster(tier, minutes * 60_000L);
         data.setBoosterTickReference(System.currentTimeMillis());
         consumeOne(player, item);
@@ -460,6 +508,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         player.sendMessage(Component.text("Pet XP Booster x" + tier + " activated for " + minutes
             + " minutes! It speeds up pet leveling only (not your own XP). The timer only runs while you are online.", NamedTextColor.LIGHT_PURPLE));
         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.3F);
+        if (getConfig().getBoolean("xp-booster.broadcast-activations", true)) {
+            broadcastBoosterActivation(player, tier, minutes);
+        }
     }
 
     @EventHandler
@@ -659,9 +710,42 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final int tier = randomBoosterTier();
         final int minutes = BOOSTER_DURATIONS[ThreadLocalRandom.current().nextInt(BOOSTER_DURATIONS.length)];
         dead.getWorld().dropItemNaturally(dead.getLocation(), itemFactory.boosterItem(tier, minutes));
+        broadcastBoosterDrop(killer, dead, tier, minutes);
         if (getConfig().getBoolean("debug-logging", true)) {
             debug(killer.getName() + " earned a Pet XP Booster x" + tier + " (" + minutes + "m) from a " + dead.getType() + ".");
         }
+    }
+
+    private void broadcastBoosterDrop(final Player player, final LivingEntity source, final int tier, final int minutes) {
+        if (!getConfig().getBoolean("xp-booster.broadcast-drops", true)) {
+            return;
+        }
+        Bukkit.broadcast(Component.text("[BetterPets] ", NamedTextColor.GOLD)
+            .append(Component.text(player.getName(), NamedTextColor.AQUA))
+            .append(Component.text(" dropped a ", NamedTextColor.GRAY))
+            .append(Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE))
+            .append(Component.text(" (" + formatBoosterMinutes(minutes) + ")", NamedTextColor.AQUA))
+            .append(Component.text(" from " + friendlyEntityName(source) + "!", NamedTextColor.GRAY)));
+        playBoosterSound(1.35F);
+    }
+
+    private void broadcastBoosterActivation(final Player player, final int tier, final int minutes) {
+        Bukkit.broadcast(Component.text("[BetterPets] ", NamedTextColor.GOLD)
+            .append(Component.text(player.getName(), NamedTextColor.AQUA))
+            .append(Component.text(" activated ", NamedTextColor.GRAY))
+            .append(Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE))
+            .append(Component.text(" for " + formatBoosterMinutes(minutes) + ".", NamedTextColor.AQUA)));
+        playBoosterSound(1.6F);
+    }
+
+    private void playBoosterSound(final float pitch) {
+        for (final Player online : Bukkit.getOnlinePlayers()) {
+            online.playSound(online.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8F, pitch);
+        }
+    }
+
+    private String friendlyEntityName(final LivingEntity entity) {
+        return entity.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
     }
 
     private int randomBoosterTier() {
@@ -1012,6 +1096,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         final int level = itemFactory.petLevel(item);
         final OwnedPet pet = OwnedPet.create(petId, level);
+        itemFactory.petCustomName(item).ifPresent(pet::setCustomName);
         pet.recalculateNextLevelExp(petXpMultiplier());
         data.pets().add(pet);
         consumeOne(player, item);
@@ -1556,9 +1641,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         data.removePet(pet.uuid());
         activePets.despawn(player, false);
-        giveOrDrop(player, itemFactory.discoveryItem(definition, pet.level()));
+        giveOrDrop(player, itemFactory.discoveryItem(definition, pet));
         storage.save();
         player.sendMessage(message("messages.converted").replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name())));
+        player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.7F, 1.3F);
         renderMenu(player, inventory);
     }
 
@@ -1649,12 +1735,119 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         debug(sender.getName() + " gave test pet item " + definition.id() + " level " + giftLevel + " to " + target.getName() + ".");
     }
 
+    private void handleXpBoostCommand(final CommandSender sender, final String[] args) {
+        if (!has(sender, GIVE_PERMISSION)) {
+            sender.sendMessage(message("messages.no-permission"));
+            return;
+        }
+        if (args.length < 4 || !args[1].equalsIgnoreCase("give")) {
+            sender.sendMessage(message("messages.usage-xpboost"));
+            return;
+        }
+
+        final Optional<Integer> parsedTier = parseBoosterTier(args[2]);
+        final Optional<Integer> parsedMinutes = parseDurationMinutes(args[3]);
+        if (parsedTier.isEmpty() || parsedMinutes.isEmpty()) {
+            sender.sendMessage(message("messages.usage-xpboost"));
+            return;
+        }
+
+        final int maxMinutes = maxBoosterMinutes();
+        final int minutes = parsedMinutes.get();
+        if (minutes > maxMinutes) {
+            sender.sendMessage(Component.text("Booster time is capped at " + formatBoosterMinutes(maxMinutes) + ".", NamedTextColor.RED));
+            return;
+        }
+
+        final Player target;
+        if (args.length >= 5) {
+            target = Bukkit.getPlayerExact(args[4]);
+            if (target == null) {
+                sender.sendMessage(message("messages.player-not-found").replaceText(builder -> builder.matchLiteral("%player%").replacement(args[4])));
+                return;
+            }
+        } else if (sender instanceof Player player) {
+            target = player;
+        } else {
+            sender.sendMessage(message("messages.usage-xpboost"));
+            return;
+        }
+
+        final int tier = parsedTier.get();
+        giveOrDrop(target, itemFactory.boosterItem(tier, minutes));
+        sender.sendMessage(message("messages.booster-give")
+            .replaceText(builder -> builder.matchLiteral("%tier%").replacement("x" + tier))
+            .replaceText(builder -> builder.matchLiteral("%time%").replacement(formatBoosterMinutes(minutes)))
+            .replaceText(builder -> builder.matchLiteral("%player%").replacement(target.getName())));
+        if (!sender.equals(target)) {
+            target.sendMessage(Component.text("You received a Pet XP Booster x" + tier + " for " + formatBoosterMinutes(minutes) + ".", NamedTextColor.LIGHT_PURPLE));
+        }
+        target.playSound(target.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.8F, 1.4F);
+        debug(sender.getName() + " gave Pet XP Booster x" + tier + " (" + formatBoosterMinutes(minutes) + ") to " + target.getName() + ".");
+    }
+
     private Optional<Integer> parseLevel(final String value) {
         try {
             return Optional.of(Math.max(1, Math.min(100, Integer.parseInt(value))));
         } catch (final NumberFormatException ignored) {
             return Optional.empty();
         }
+    }
+
+    private Optional<Integer> parseBoosterTier(final String value) {
+        final String normalized = value.toLowerCase(Locale.ROOT).replace("x", "").trim();
+        try {
+            final int tier = Integer.parseInt(normalized);
+            if (tier >= 2 && tier <= 5) {
+                return Optional.of(tier);
+            }
+        } catch (final NumberFormatException ignored) {
+        }
+        return Optional.empty();
+    }
+
+    private Optional<Integer> parseDurationMinutes(final String value) {
+        final String normalized = value.toLowerCase(Locale.ROOT).replace(" ", "");
+        if (normalized.isBlank()) {
+            return Optional.empty();
+        }
+        if (normalized.matches("\\d+")) {
+            try {
+                return Optional.of(Math.max(1, Integer.parseInt(normalized)));
+            } catch (final NumberFormatException ignored) {
+                return Optional.empty();
+            }
+        }
+
+        final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(\\d+)([smhd])").matcher(normalized);
+        int consumed = 0;
+        long totalSeconds = 0L;
+        while (matcher.find()) {
+            if (matcher.start() != consumed) {
+                return Optional.empty();
+            }
+            consumed = matcher.end();
+            final long amount;
+            try {
+                amount = Long.parseLong(matcher.group(1));
+            } catch (final NumberFormatException ignored) {
+                return Optional.empty();
+            }
+            totalSeconds += switch (matcher.group(2)) {
+                case "s" -> amount;
+                case "m" -> amount * 60L;
+                case "h" -> amount * 3600L;
+                case "d" -> amount * 86400L;
+                default -> 0L;
+            };
+            if (totalSeconds > 10080L * 60L) {
+                return Optional.empty();
+            }
+        }
+        if (consumed != normalized.length() || totalSeconds <= 0L) {
+            return Optional.empty();
+        }
+        return Optional.of((int) Math.max(1L, (totalSeconds + 59L) / 60L));
     }
 
     private boolean has(final CommandSender sender, final String permission) {
@@ -2321,26 +2514,37 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private void sendHelp(final CommandSender sender) {
-        sender.sendMessage(Component.text("/pets - open your pet menu", NamedTextColor.GOLD));
-        sender.sendMessage(Component.text("/pets set name <name> - rename your active pet", NamedTextColor.YELLOW));
-        sender.sendMessage(Component.text("/pets restore name - restore your active pet's default name", NamedTextColor.YELLOW));
-        sender.sendMessage(Component.text("/pets version - show version, modules, and update check", NamedTextColor.AQUA));
+        sender.sendMessage(Component.empty());
+        sender.sendMessage(Component.text("Better Pets Commands", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+        helpLine(sender, "/pets", "Open your pet menu", NamedTextColor.GOLD);
+        helpLine(sender, "/pets set name <name>", "Rename your active pet", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets restore name", "Restore the default pet name", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets version", "Show version, modules, and update check", NamedTextColor.AQUA);
         if (has(sender, INFO_PERMISSION)) {
-            sender.sendMessage(Component.text("/pets info - pet catalogue", NamedTextColor.YELLOW));
+            helpLine(sender, "/pets info", "Open the pet catalogue", NamedTextColor.YELLOW);
         }
         if (has(sender, CHANCES_PERMISSION)) {
-            sender.sendMessage(Component.text("/pets chances - spawn chance GUI", NamedTextColor.YELLOW));
-            sender.sendMessage(Component.text("/pets notify - discovery broadcast GUI", NamedTextColor.YELLOW));
-            sender.sendMessage(Component.text("/pets drop - choose pet sources (chest/fishing/trader/brushing/vault/trial spawner)", NamedTextColor.YELLOW));
+            helpLine(sender, "/pets chances", "Spawn chance GUI", NamedTextColor.YELLOW);
+            helpLine(sender, "/pets notify", "Discovery broadcast GUI", NamedTextColor.YELLOW);
+            helpLine(sender, "/pets drop", "Pet source and booster drop GUI", NamedTextColor.YELLOW);
         }
         if (has(sender, GIVE_PERMISSION)) {
-            sender.sendMessage(Component.text("/pets give <pet|all> [level] [player] - give test pet items", NamedTextColor.YELLOW));
+            helpLine(sender, "/pets give <pet|all> [level] [player]", "Give test pet items", NamedTextColor.YELLOW);
+            helpLine(sender, "/pets xpboost give <x2-x5> <time> [player]", "Give Pet XP Boosters", NamedTextColor.LIGHT_PURPLE);
         }
         if (has(sender, ADMIN_PERMISSION)) {
-            sender.sendMessage(Component.text("/pets modules - optional modules GUI", NamedTextColor.AQUA));
-            sender.sendMessage(Component.text("/pets reload - reload config, modules, and models", NamedTextColor.AQUA));
-            sender.sendMessage(Component.text("/pets update - download the latest version (restart to apply)", NamedTextColor.AQUA));
+            helpLine(sender, "/pets modules", "Optional modules GUI", NamedTextColor.AQUA);
+            helpLine(sender, "/pets reload", "Reload config, modules, and models", NamedTextColor.AQUA);
+            helpLine(sender, "/pets update", "Download latest release jar", NamedTextColor.AQUA);
         }
+        sender.sendMessage(Component.empty());
+    }
+
+    private void helpLine(final CommandSender sender, final String command, final String description, final NamedTextColor commandColor) {
+        sender.sendMessage(Component.text("  ", NamedTextColor.DARK_GRAY)
+            .append(Component.text(command, commandColor))
+            .append(Component.text("  -  ", NamedTextColor.DARK_GRAY))
+            .append(Component.text(description, NamedTextColor.GRAY)));
     }
 
     private List<Component> catalogueLore(final PetDefinition definition) {
@@ -2612,6 +2816,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return seconds + "s";
     }
 
+    private String formatBoosterMinutes(final int minutes) {
+        final int safeMinutes = Math.max(1, minutes);
+        if (safeMinutes >= 1440 && safeMinutes % 1440 == 0) {
+            return (safeMinutes / 1440) + "d";
+        }
+        if (safeMinutes >= 60 && safeMinutes % 60 == 0) {
+            return (safeMinutes / 60) + "h";
+        }
+        if (safeMinutes >= 60) {
+            return (safeMinutes / 60) + "h " + (safeMinutes % 60) + "m";
+        }
+        return safeMinutes + "m";
+    }
+
+    private int maxBoosterMinutes() {
+        return Math.max(1, Math.min(10080, getConfig().getInt("xp-booster.max-minutes", 1440)));
+    }
+
     private Component message(final String path) {
         return Component.text(messageText(path), NamedTextColor.GRAY);
     }
@@ -2871,6 +3093,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 plugin.handleGiveCommand(sender, args);
                 return;
             }
+            if (args.length > 0 && args[0].equalsIgnoreCase("xpboost")) {
+                plugin.handleXpBoostCommand(sender, args);
+                return;
+            }
             if (args.length > 0 && args[0].equalsIgnoreCase("chances")) {
                 if (sender instanceof Player player) {
                     plugin.openChanceMenu(player);
@@ -2945,6 +3171,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 suggestions.add("restore");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {
                     suggestions.add("give");
+                    suggestions.add("xpboost");
                 }
                 if (plugin.has(stack.getSender(), INFO_PERMISSION)) {
                     suggestions.add("info");
@@ -2972,12 +3199,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 suggestions.addAll(plugin.definitions.ordered().stream().map(PetDefinition::id).toList());
                 return suggestions;
             }
+            if (args.length == 2 && args[0].equalsIgnoreCase("xpboost")) {
+                return List.of("give");
+            }
             if (args.length == 3 && args[0].equalsIgnoreCase("give")) {
                 final List<String> suggestions = new ArrayList<>(List.of("1", "10", "50", "100"));
                 suggestions.addAll(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList());
                 return suggestions;
             }
+            if (args.length == 3 && args[0].equalsIgnoreCase("xpboost") && args[1].equalsIgnoreCase("give")) {
+                return List.of("x2", "x3", "x4", "x5");
+            }
             if (args.length == 4 && args[0].equalsIgnoreCase("give")) {
+                return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
+            }
+            if (args.length == 4 && args[0].equalsIgnoreCase("xpboost") && args[1].equalsIgnoreCase("give")) {
+                return List.of("15m", "30m", "1h", "2h", "1d");
+            }
+            if (args.length == 5 && args[0].equalsIgnoreCase("xpboost") && args[1].equalsIgnoreCase("give")) {
                 return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
             }
             return List.of();

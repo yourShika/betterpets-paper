@@ -12,6 +12,11 @@ max-pets-per-player: 45
 chest-pet-chance-percent: 2.5
 # Global pet XP multiplier. Higher = pets level faster. Range 0.1 - 5.0.
 pet-xp-multiplier: 1.0
+# Pet XP Booster settings. max-minutes caps admin-created boosters and consumption.
+xp-booster:
+  max-minutes: 1440
+  broadcast-drops: true
+  broadcast-activations: true
 # Dragon mount flight tuning (only used while riding a dragon pet).
 dragon-flight-speed: 1.5
 dragon-flight-lift: 0.55
@@ -128,10 +133,13 @@ messages:
   no-active-pet: "You do not have an active pet."
   no-space: "Your inventory is full, so the item was dropped."
   usage-give: "Usage: /pets give <pet|all> [level] [player]"
+  usage-xpboost: "Usage: /pets xpboost give <x2-x5> <time> [player]"
   usage-set-name: "Usage: /pets set name <name> (your pet must be summoned)."
   unknown-pet: "Unknown pet: %pet%"
   player-not-found: "Player not found: %player%"
   test-give: "Gave %pet% level %level% to %player%."
+  booster-give: "Gave Pet XP Booster %tier% for %time% to %player%."
+  protected-anvil: "Better Pets items cannot be renamed in an anvil."
   chances-saved: "Spawn chance for %pet% is now %chance%%."
   info-opened: "Opening pet catalogue."
   alpaca-storage-not-empty: "Empty the Alpaca storage before switching, despawning, or converting this pet."
