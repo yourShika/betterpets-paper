@@ -26,6 +26,7 @@ public final class PetItemFactory {
     private final NamespacedKey petIdKey;
     private final NamespacedKey petUuidKey;
     private final NamespacedKey petLevelKey;
+    private final NamespacedKey petNameKey;
     private final NamespacedKey boosterTierKey;
     private final NamespacedKey boosterMinutesKey;
 
@@ -33,6 +34,7 @@ public final class PetItemFactory {
         this.petIdKey = new NamespacedKey(plugin, "pet_id");
         this.petUuidKey = new NamespacedKey(plugin, "pet_uuid");
         this.petLevelKey = new NamespacedKey(plugin, "pet_level");
+        this.petNameKey = new NamespacedKey(plugin, "pet_name");
         this.boosterTierKey = new NamespacedKey(plugin, "booster_tier");
         this.boosterMinutesKey = new NamespacedKey(plugin, "booster_minutes");
     }
@@ -43,11 +45,13 @@ public final class PetItemFactory {
         meta.displayName(Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE)
             .decoration(TextDecoration.ITALIC, false));
         meta.lore(List.of(
-            Component.text("Levels your active pet " + tier + "x faster.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false),
-            Component.text("Duration: " + minutes + " minutes", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false),
+            Component.text("Booster", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false),
+            Component.text("Multiplier: ", NamedTextColor.GRAY).append(Component.text("x" + tier, NamedTextColor.LIGHT_PURPLE)).decoration(TextDecoration.ITALIC, false),
+            Component.text("Duration: ", NamedTextColor.GRAY).append(Component.text(formatMinutes(minutes), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false),
             Component.empty().decoration(TextDecoration.ITALIC, false),
+            Component.text("Use", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false),
             Component.text("Right-click to activate.", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false),
-            Component.text("Only affects pet leveling, not your own XP.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)
+            Component.text("Pet XP only. Boosters do not stack.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)
         ));
         meta.getPersistentDataContainer().set(boosterTierKey, PersistentDataType.INTEGER, tier);
         meta.getPersistentDataContainer().set(boosterMinutesKey, PersistentDataType.INTEGER, minutes);
@@ -79,6 +83,10 @@ public final class PetItemFactory {
 
     public ItemStack discoveryItem(final PetDefinition definition, final int level) {
         return petItem(definition, OwnedPet.create(definition.id(), level), false, true);
+    }
+
+    public ItemStack discoveryItem(final PetDefinition definition, final OwnedPet pet) {
+        return petItem(definition, pet, false, true);
     }
 
     public ItemStack menuItem(final PetDefinition definition, final OwnedPet pet, final boolean active) {
@@ -147,6 +155,14 @@ public final class PetItemFactory {
         return level == null ? 1 : Math.max(1, Math.min(100, level));
     }
 
+    public Optional<String> petCustomName(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return Optional.empty();
+        }
+        final String name = item.getItemMeta().getPersistentDataContainer().get(petNameKey, PersistentDataType.STRING);
+        return name == null || name.isBlank() ? Optional.empty() : Optional.of(name);
+    }
+
     public ItemStack control(final Material material, final Component name, final List<Component> lore) {
         final ItemStack item = new ItemStack(material);
         final ItemMeta meta = item.getItemMeta();
@@ -162,7 +178,7 @@ public final class PetItemFactory {
         meta.displayName(title(definition, pet));
 
         final List<Component> lore = new ArrayList<>();
-        lore.add(Component.text(definition.rarity() + " Pet", definition.rarityColor()).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
+        lore.add(Component.text("Rarity: ", NamedTextColor.GRAY).append(Component.text(definition.rarity(), definition.rarityColor())).decoration(TextDecoration.ITALIC, false));
         lore.add(Component.empty());
         lore.add(Component.text("Abilities", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
         definition.lore().stream()
@@ -175,11 +191,14 @@ public final class PetItemFactory {
 
         if (pet != null && !discovery) {
             lore.add(Component.empty());
+            lore.add(Component.text("Progress", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.text("Level: ", NamedTextColor.GRAY).append(Component.text(pet.level() + " / 100", NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.text("EXP: ", NamedTextColor.GRAY).append(Component.text(pet.level() >= 100 ? "MAXED" : pet.exp() + " / " + pet.nextLevelExp(), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
+            lore.add(Component.empty());
             lore.add(Component.text(active ? "Currently active" : "Click to summon", active ? NamedTextColor.GREEN : NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
         } else {
             lore.add(Component.empty());
+            lore.add(Component.text("Claim", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
             if (pet != null && pet.level() > 1) {
                 lore.add(Component.text("Starts at level ", NamedTextColor.GRAY).append(Component.text(pet.level(), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
             }
@@ -191,6 +210,9 @@ public final class PetItemFactory {
         if (pet != null) {
             if (discovery) {
                 meta.getPersistentDataContainer().set(petLevelKey, PersistentDataType.INTEGER, pet.level());
+                if (pet.hasCustomName()) {
+                    meta.getPersistentDataContainer().set(petNameKey, PersistentDataType.STRING, pet.customName());
+                }
             } else {
                 meta.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, pet.uuid().toString());
             }
@@ -238,6 +260,19 @@ public final class PetItemFactory {
             return String.format(Locale.ROOT, "%.2f", value);
         }
         return String.format(Locale.ROOT, "%.3f", value);
+    }
+
+    private static String formatMinutes(final int minutes) {
+        if (minutes >= 1440 && minutes % 1440 == 0) {
+            return (minutes / 1440) + "d";
+        }
+        if (minutes >= 60 && minutes % 60 == 0) {
+            return (minutes / 60) + "h";
+        }
+        if (minutes >= 60) {
+            return (minutes / 60) + "h " + (minutes % 60) + "m";
+        }
+        return Math.max(1, minutes) + "m";
     }
 
     private static NamedTextColor loreColor(final String line) {

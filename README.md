@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.3.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.3.2-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,22 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.3.2
+
+* 📢 **Fix: pre-generated chest broadcasts.** When a chest's loot was rolled **before** it was opened (e.g. at world/chunk generation), the pet was placed but the find message never fired. Now the pet is marked at loot time and the broadcast fires when a player **opens the container** (or picks the item up), crediting whoever opened it.
+
+---
+
+## What's New in v1.3.1
+
+* **`/pets xpboost give <x2-x5> <time> [player]`:** gives Pet XP Booster items with flexible times like `30m`, `1h`, `1h30m`, or `1d` (permission: `betterpets.give`).
+* **Custom pet names survive item conversion:** converting a renamed pet back into an item now stores and restores the name.
+* **Safer items:** Better Pets items and XP Boosters cannot be renamed through anvils.
+* **Booster broadcasts and sounds:** XP Booster drops and activations now announce which booster appeared/was used.
+* **Cleaner lore/help:** Booster and pet item lore plus `/pets help` now match the newer menu style.
 
 ---
 
@@ -121,6 +137,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 | `/pets modules`                          | Opens optional module settings           |
 | `/pets reload`                           | Reloads config, modules, models, pets    |
 | `/pets give <pet\|all> [level] [player]` | Gives test pet items                     |
+| `/pets xpboost give <x2-x5> <time> [player]` | Gives Pet XP Booster items          |
 
 ---
 
