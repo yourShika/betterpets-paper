@@ -8,9 +8,11 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.inventory.meta.components.EquippableComponent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -244,6 +246,14 @@ public final class PetItemFactory {
 
         final PersistentDataContainer data = meta.getPersistentDataContainer();
         data.set(petIdKey, PersistentDataType.STRING, definition.id());
+
+        // Pet heads must never be worn: player heads auto-equip to the helmet slot on right-click
+        // (1.21.2+ equippable component), which races the "claim pet" logic and can eat the item.
+        // Forcing the equip slot to the hand disables both the right-click auto-equip and manual
+        // placement into the helmet slot.
+        final EquippableComponent equippable = meta.getEquippable();
+        equippable.setSlot(EquipmentSlot.HAND);
+        meta.setEquippable(equippable);
     }
 
     private Component title(final PetDefinition definition, final OwnedPet pet) {

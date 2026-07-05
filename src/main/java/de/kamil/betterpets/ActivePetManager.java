@@ -930,10 +930,11 @@ public final class ActivePetManager {
     }
 
     /**
-     * Moves the mount by velocity from the rider's held inputs and look direction. Velocity (not a
-     * teleport) keeps the motion smooth and, because the entity still runs its collision step, the
-     * rider stops at walls instead of clipping into them. No input means zero velocity, so the pet
-     * simply hovers in place.
+     * Moves the mount from the rider's held inputs and look direction. Armor stands ignore
+     * {@link org.bukkit.entity.Entity#setVelocity} (especially with gravity off), so the mount is moved
+     * by a small teleport every tick instead. Because this runs every tick (not every follow interval)
+     * the motion stays smooth, and each step is checked against block collision first so the rider slides
+     * along walls instead of clipping into them. No input means the mount simply hovers in place.
      */
     private void driveRide(final Player player, final ActivePet active, final RideState ride) {
         final ArmorStand mount = ride.mount();
@@ -970,8 +971,42 @@ public final class ActivePetManager {
         if (ride.jump()) {
             move.setY(move.getY() + Math.max(0.1, plugin.getConfig().getDouble("flight-lift", 0.5)));
         }
-        mount.setRotation(eye.getYaw(), 0.0F);
-        mount.setVelocity(move);
+        final float yaw = eye.getYaw();
+        final Location base = mount.getLocation();
+        if (move.lengthSquared() < 1.0e-6) {
+            // Hovering: keep the mount in place but still face the player's heading.
+            mount.setRotation(yaw, 0.0F);
+            return;
+        }
+        // Try the full step, then slide along walls (horizontal-only, then vertical-only) so a blocked
+        // direction never stops the whole movement and never teleports the rider into a solid block.
+        if (!tryMoveMount(mount, base, move.getX(), move.getY(), move.getZ(), yaw)
+            && !tryMoveMount(mount, base, move.getX(), 0.0, move.getZ(), yaw)
+            && !tryMoveMount(mount, base, 0.0, move.getY(), 0.0, yaw)) {
+            mount.setRotation(yaw, 0.0F);
+        }
+    }
+
+    private boolean tryMoveMount(final ArmorStand mount, final Location base, final double dx, final double dy, final double dz, final float yaw) {
+        if (dx == 0.0 && dy == 0.0 && dz == 0.0) {
+            return false;
+        }
+        final Location target = base.clone().add(dx, dy, dz);
+        target.setYaw(yaw);
+        target.setPitch(0.0F);
+        if (!isRideLocationSafe(target)) {
+            return false;
+        }
+        mount.teleport(target);
+        return true;
+    }
+
+    private boolean isRideLocationSafe(final Location location) {
+        final World world = location.getWorld();
+        if (world == null || location.getY() <= world.getMinHeight() + 1 || location.getY() >= world.getMaxHeight() - 1) {
+            return false;
+        }
+        return location.getBlock().isPassable() && location.clone().add(0, 1, 0).getBlock().isPassable();
     }
 
     private void repositionRidePet(final ActivePet active, final RideState ride) {

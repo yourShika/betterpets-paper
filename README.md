@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.4.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.4.1-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,13 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.4.1
+
+* 🐉 **Fix: flying pets now actually move.** In v1.4.0 you could mount your pet but it stayed put — armor-stand mounts ignore velocity. The mount is now moved every tick with block-collision checks, so flight works, stays smooth, and slides along walls instead of clipping into them.
+* 🎩 **Fix: pet items no longer vanish when placed on your head.** Player-head items auto-equip to the helmet slot on right-click (a 1.21.2+ behavior), which raced the "claim pet" logic and could eat the item. Pet items are now non-equippable, so right-clicking cleanly adds the pet to your list with no helmet flicker or item loss.
 
 ---
 
