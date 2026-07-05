@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.3.2-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.4.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,25 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.4.0
+
+* 🐉 **Flying pets reworked into real mounts.** You now **sit on your pet and steer it** like a proper flying mount. The mount is moved by **velocity every tick** instead of being teleported, so flight is **smooth**, has **no input lag**, and **collides with blocks** — no more clipping inside walls. **Look** to steer, **hold forward** to fly, **jump** to climb, **look down** to dive, **sneak** to dismount. Tunable via `flight-speed`, `flight-lift`, and `flight-pet-offset` in `config.yml`.
+* 🔥 **Phoenix can fly from level 50.** Ride your Phoenix (with a flame trail) just like the dragons — this also works for **existing** Phoenix pets, and the catalogue now lists the level-50 flight unlock.
+* 🐾 **10 new pets — each with a real custom head:**
+  * **Goblin** *(Epic)* — cheaper villager trades (Hero of the Village) and bonus emeralds from kills.
+  * **Bee** *(Rare)* — Regeneration near flowers or crops (Regen II at level 80).
+  * **Crab** *(Rare)* — more damage and armor near water.
+  * **Otter** *(Epic, rare)* — water breathing and faster swimming.
+  * **Crystal Golem** *(Epic)* — chance for extra ores and crystals when mining.
+  * **Pixie** *(Epic)* — grants random small buffs over time.
+  * **Moon Fox** *(Epic)* — Speed and Strength at night.
+  * **Lich** *(Legendary)* — steals life when you kill mobs.
+  * **Shadow Dragon** *(Extraordinary)* — dark AoE damage aura with shadow particles; rideable from level 50.
+  * **Ancient Elf** *(Extraordinary)* — shortens debuffs, caps them to 2s from level 50, and **nullifies all debuffs at level 100**.
+* 📖 **Paginated menus.** With 52 pets, the **catalogue** and **spawn-chances** menus now have Previous/Next page buttons so every pet stays reachable.
 
 ---
 
@@ -116,7 +135,8 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 * 💾 Persistent player pet storage with backups
 * 🦙 Owner-only Alpaca storage using Paper item byte serialization
 * 📦 Dynamic Alpaca storage size based on level
-* 🐉 Dragon mount flight unlocked from level 50
+* 🐉 Rideable, steerable flying mounts (dragons, Phoenix, Shadow Dragon) from level 50
+* 🐾 52 pets across five rarities, each with its own ability
 * 🏛️ Chest loot integration for vanilla **and** custom structure containers
 * 🧩 Optional 3D pet rendering through BetterModel, with a clean head fallback
 
@@ -159,8 +179,13 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 max-pets-per-player: 45
 chest-pet-chance-percent: 2.5
 pet-xp-multiplier: 1.0
-dragon-flight-speed: 1.5
-dragon-flight-lift: 0.55
+
+# Pet flight (dragons, Phoenix, Shadow Dragon at level 50+). You sit on and steer
+# the pet like a real mount; it is moved by velocity so it stays smooth and
+# collides with blocks.
+flight-speed: 0.6        # forward/horizontal speed (blocks per tick)
+flight-lift: 0.5         # extra upward speed while holding jump
+flight-pet-offset: -0.4  # how far below the seat the pet body floats
 debug-loot-rolls: false
 
 # External modules (BetterModel) are experimental and disabled by default.
@@ -334,6 +359,12 @@ Each find shows a broadcast (e.g. `Player fished out a Rare Pet: Axolotl!`), gat
 
 ## 🗒️ Previous Releases
 
+* **v1.3.2** — Fix: pre-generated chest broadcasts now fire when the container is opened.
+* **v1.3.1** — `/pets xpboost give`, custom names survive conversion, anvil-safe items, booster broadcasts.
+* **v1.3.0** — Pet XP Boosters, pet renaming, richer catalogue, safer data + daily backups, storage settings.
+* **v1.2.7** — Reliable chest broadcasts in custom/data-pack structures.
+* **v1.2.6** — Vault & Trial Spawner pet sources with ominous bonus.
+* **v1.2.5** — Fishing, Wandering Trader, and brushing pet sources + `/pets drop` GUI.
 * **v1.2.4** — Pets look at the player again (facing fix), `/pets update`, double-chest discovery broadcasts.
 * **v1.2.3** — Mending-proof XP, lighter saving, `/pets version`, animation-driven model movement, ground-height caching.
 * **v1.2.2** — Optional module system (experimental) + BetterModel module; particles stop when the pet is hidden.

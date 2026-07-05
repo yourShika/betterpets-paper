@@ -7,6 +7,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.EntityEffect;
+import org.bukkit.GameMode;
 import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -39,6 +40,7 @@ import org.bukkit.potion.PotionEffectType;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
+import java.util.Collection;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -153,6 +155,38 @@ public final class ActivePetManager {
         Material.SOUL_SOIL
     );
 
+    private static final Set<Material> CRYSTAL_GOLEM_ORES = EnumSet.of(
+        Material.COAL_ORE,
+        Material.DEEPSLATE_COAL_ORE,
+        Material.IRON_ORE,
+        Material.DEEPSLATE_IRON_ORE,
+        Material.COPPER_ORE,
+        Material.DEEPSLATE_COPPER_ORE,
+        Material.GOLD_ORE,
+        Material.DEEPSLATE_GOLD_ORE,
+        Material.NETHER_GOLD_ORE,
+        Material.REDSTONE_ORE,
+        Material.DEEPSLATE_REDSTONE_ORE,
+        Material.LAPIS_ORE,
+        Material.DEEPSLATE_LAPIS_ORE,
+        Material.DIAMOND_ORE,
+        Material.DEEPSLATE_DIAMOND_ORE,
+        Material.EMERALD_ORE,
+        Material.DEEPSLATE_EMERALD_ORE,
+        Material.NETHER_QUARTZ_ORE,
+        Material.ANCIENT_DEBRIS,
+        Material.AMETHYST_CLUSTER
+    );
+
+    private static final List<PotionEffectType> PIXIE_BUFFS = List.of(
+        PotionEffectType.SPEED,
+        PotionEffectType.JUMP_BOOST,
+        PotionEffectType.REGENERATION,
+        PotionEffectType.HASTE,
+        PotionEffectType.RESISTANCE,
+        PotionEffectType.LUCK
+    );
+
     private static final List<PotionEffectType> NEGATIVE_EFFECTS = List.of(
         PotionEffectType.POISON,
         PotionEffectType.WITHER,
@@ -181,6 +215,7 @@ public final class ActivePetManager {
     private final Map<UUID, Set<UUID>> revealedMobs = new HashMap<>();
     private final GlowController glow;
     private BukkitTask task;
+    private BukkitTask rideTask;
     private long tick;
 
     public ActivePetManager(final JavaPlugin plugin, final PetDefinitions definitions, final PetStorage storage, final PetItemFactory itemFactory, final PetModelService modelService) {
@@ -198,6 +233,8 @@ public final class ActivePetManager {
         final int removed = cleanupStaleDisplays();
         final int interval = Math.max(1, plugin.getConfig().getInt("follow-update-ticks", 3));
         task = Bukkit.getScheduler().runTaskTimer(plugin, this::tick, interval, interval);
+        // Flight is driven every tick (not every follow interval) so steering stays lag-free.
+        rideTask = Bukkit.getScheduler().runTaskTimer(plugin, this::rideTick, 1L, 1L);
         Bukkit.getScheduler().runTaskLater(plugin, () -> Bukkit.getOnlinePlayers().forEach(this::spawnSavedActivePet), 20L);
         plugin.getLogger().info("Active pet manager started. Removed " + removed + " stale display(s). Follow interval: " + interval + " ticks.");
     }
@@ -206,6 +243,10 @@ public final class ActivePetManager {
         if (task != null) {
             task.cancel();
             task = null;
+        }
+        if (rideTask != null) {
+            rideTask.cancel();
+            rideTask = null;
         }
         Bukkit.getOnlinePlayers().forEach(player -> stopRide(player, false));
         activePets.values().forEach(active -> {
@@ -533,40 +574,58 @@ public final class ActivePetManager {
         if (active == null) {
             return false;
         }
-        if (!isDragon(active.pet().definitionId())) {
+        if (!isFlyablePet(active.pet().definitionId())) {
             return true;
         }
         if (active.pet().level() < 50) {
-            player.sendMessage(Component.text("This dragon can be flown from level 50.", net.kyori.adventure.text.format.NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("This pet can be flown from level 50.", net.kyori.adventure.text.format.NamedTextColor.YELLOW));
             return true;
         }
         if (rides.containsKey(player.getUniqueId())) {
             stopRide(player, true);
             return true;
         }
-        final ArmorStand mount = player.getWorld().spawn(active.display().getLocation(), ArmorStand.class, entity -> {
+        startRide(player, active);
+        return true;
+    }
+
+    /**
+     * Seats the player on their pet and lets them steer it like a real flying mount. An invisible
+     * armor stand carries the player (so they sit on the pet), and it is moved every tick by velocity
+     * (see {@link #driveRide}) rather than teleported. Velocity keeps the movement smooth and, crucially,
+     * still collides with blocks, so the rider can no longer clip inside them. Steer by looking where you
+     * want to go and holding forward; jump to climb, look down to dive, sneak to dismount.
+     */
+    private void startRide(final Player player, final ActivePet active) {
+        if (player.getGameMode() == GameMode.SPECTATOR) {
+            return;
+        }
+        if (player.isInsideVehicle()) {
+            player.leaveVehicle();
+        }
+        final Location spawnAt = active.display().getLocation().clone();
+        final ArmorStand mount = player.getWorld().spawn(spawnAt, ArmorStand.class, entity -> {
             entity.setVisible(false);
             entity.setGravity(false);
             entity.setInvulnerable(true);
             entity.setCollidable(false);
             entity.setSmall(true);
+            entity.setBasePlate(false);
             entity.setPersistent(false);
             entity.addScoreboardTag("BetterPets.Ride");
             entity.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, player.getUniqueId().toString());
             entity.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, active.pet().uuid().toString());
         });
-        if (player.isInsideVehicle()) {
-            player.leaveVehicle();
-        }
         if (!mount.addPassenger(player)) {
             mount.remove();
-            player.sendMessage(Component.text("Dragon flight could not start here.", net.kyori.adventure.text.format.NamedTextColor.RED));
-            return true;
+            player.sendMessage(Component.text("Flight could not start here.", net.kyori.adventure.text.format.NamedTextColor.RED));
+            return;
         }
         rides.put(player.getUniqueId(), new RideState(mount));
-        player.sendMessage(Component.text("Dragon flight enabled. Sneak to dismount.", net.kyori.adventure.text.format.NamedTextColor.GOLD));
-        plugin.getLogger().info("[Debug] " + player.getName() + " started dragon flight with " + active.pet().definitionId() + ".");
-        return true;
+        // Teleport the pet body tightly (1-tick interpolation) so it tracks the mount without lag.
+        active.display().setTeleportDuration(1);
+        player.sendMessage(Component.text("Flight enabled. Look to steer, forward to fly, jump to climb, sneak to dismount.", net.kyori.adventure.text.format.NamedTextColor.GOLD));
+        plugin.getLogger().info("[Debug] " + player.getName() + " started flight with " + active.pet().definitionId() + ".");
     }
 
     public Optional<OwnedPet> clickedActivePet(final Player player, final Entity clicked) {
@@ -586,10 +645,11 @@ public final class ActivePetManager {
         if (state == null) {
             return;
         }
-        state.input(input);
         if (input.isSneak()) {
             stopRide(player, true);
+            return;
         }
+        state.input(input);
     }
 
     public boolean stopRideIfSneaking(final Player player) {
@@ -609,8 +669,15 @@ public final class ActivePetManager {
             player.leaveVehicle();
         }
         state.mount().remove();
+        // The player was carried; keep them from taking fall damage on the way down.
+        player.setFallDistance(0.0F);
+        player.addPotionEffect(new PotionEffect(PotionEffectType.SLOW_FALLING, 100, 0, true, false, true));
+        final ActivePet active = activePets.get(player.getUniqueId());
+        if (active != null && !active.display().isDead()) {
+            active.display().setTeleportDuration(Math.max(1, plugin.getConfig().getInt("follow-teleport-duration-ticks", 8)));
+        }
         if (notify) {
-            player.sendMessage(Component.text("Dragon flight disabled.", net.kyori.adventure.text.format.NamedTextColor.GRAY));
+            player.sendMessage(Component.text("Flight disabled.", net.kyori.adventure.text.format.NamedTextColor.GRAY));
         }
     }
 
@@ -620,6 +687,10 @@ public final class ActivePetManager {
 
     private boolean isDragon(final String id) {
         return id.equals("blue_dragon") || id.equals("red_dragon") || id.equals("ender_dragon");
+    }
+
+    private boolean isFlyablePet(final String id) {
+        return isDragon(id) || id.equals("phoenix") || id.equals("shadow_dragon");
     }
 
     public boolean isUndead(final Entity entity) {
@@ -732,8 +803,30 @@ public final class ActivePetManager {
             return;
         }
 
-        if (pet.definitionId().equals("ghast") && player.getWorld().getEnvironment() == World.Environment.NETHER) {
-            player.giveExp(10);
+        switch (pet.definitionId()) {
+            case "ghast" -> {
+                if (player.getWorld().getEnvironment() == World.Environment.NETHER) {
+                    player.giveExp(10);
+                }
+            }
+            case "lich" -> {
+                final AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
+                final double max = maxHealth == null ? 20.0 : maxHealth.getValue();
+                final double heal = 2.0 + (abilityTier(pet.level()) * 0.2);
+                player.setHealth(Math.max(0.0, Math.min(max, player.getHealth() + heal)));
+                player.getWorld().spawnParticle(Particle.HEART, player.getLocation().add(0, 1.0, 0), 3, 0.3, 0.3, 0.3, 0.0);
+            }
+            case "goblin" -> {
+                if (isHostile(killed)) {
+                    final double chance = Math.min(0.75, 0.25 + (abilityTier(pet.level()) * 0.025));
+                    if (ThreadLocalRandom.current().nextDouble() < chance) {
+                        final int amount = 1 + ThreadLocalRandom.current().nextInt(Math.max(1, (abilityTier(pet.level()) / 5) + 1));
+                        killed.getWorld().dropItemNaturally(killed.getLocation(), new ItemStack(Material.EMERALD, amount));
+                    }
+                }
+            }
+            default -> {
+            }
         }
     }
 
@@ -759,10 +852,10 @@ public final class ActivePetManager {
             }
 
             final RideState ride = rides.get(player.getUniqueId());
-            if (ride != null) {
-                updateRide(player, active, ride);
+            if (ride == null) {
+                // While riding, the per-tick rideTick() keeps the pet pinned to the mount instead.
+                follow(player, active);
             }
-            follow(player, active);
             final boolean petVisible = data.visible();
             if (petVisible && ride != null && tick % 4L == 0L) {
                 spawnDragonTrail(player, pet);
@@ -781,6 +874,9 @@ public final class ActivePetManager {
             if (pet.definitionId().equals("allay") && tick % 10L == 0L) {
                 collectAllayItems(player, Math.min(12.0, 4.0 + (abilityTier(pet.level()) * 0.4)));
             }
+            if (pet.definitionId().equals("ancient_elf")) {
+                cleanseDebuffs(player, pet.level());
+            }
             if (tick % abilityInterval == 0L) {
                 applyPassive(player, pet);
                 applyPeriodicAbilities(player, pet);
@@ -793,15 +889,14 @@ public final class ActivePetManager {
         final PlayerPetData data = storage.data(player.getUniqueId());
         display.setViewRange(data.visible() ? 32.0F : 0.0F);
 
-        final RideState ride = rides.get(player.getUniqueId());
-        final Location target = ride == null ? followLocation(player, active, tick) : rideLocation(player, ride, tick);
+        final Location target = followLocation(player, active, tick);
         final double teleportDistance = Math.max(4.0, plugin.getConfig().getDouble("follow-teleport-distance", 24.0));
         if (!display.getWorld().equals(player.getWorld()) || display.getLocation().distanceSquared(target) > teleportDistance * teleportDistance) {
             active.followYaw(player.getLocation().getYaw());
             teleportActive(active, target);
             return;
         }
-        if (ride != null || display.getLocation().distanceSquared(target) > 0.10) {
+        if (display.getLocation().distanceSquared(target) > 0.10) {
             teleportActive(active, target);
         }
     }
@@ -812,84 +907,84 @@ public final class ActivePetManager {
         active.teleportNametag(modelNametagLocation(target));
     }
 
-    private void updateRide(final Player player, final ActivePet active, final RideState ride) {
-        if (ride.mount().isDead() || !ride.mount().getPassengers().contains(player)) {
-            stopRide(player, false);
+    /** Runs every tick: drives each rider's mount and keeps the pet body pinned to it. */
+    private void rideTick() {
+        if (rides.isEmpty()) {
             return;
         }
-        if (!ride.mount().getWorld().equals(player.getWorld())) {
-            ride.mount().teleport(player.getLocation());
-        }
-
-        Vector forward = player.getLocation().getDirection().clone();
-        if (forward.lengthSquared() < 0.01) {
-            forward = new Vector(0, 0, 1);
-        }
-        forward.normalize();
-        Vector flatForward = player.getLocation().getDirection().clone();
-        flatForward.setY(0);
-        if (flatForward.lengthSquared() < 0.01) {
-            flatForward = new Vector(0, 0, 1);
-        }
-        flatForward.normalize();
-        final Vector right = new Vector(-flatForward.getZ(), 0, flatForward.getX()).normalize();
-        final Vector motion = new Vector();
-        if (ride.forward()) {
-            motion.add(forward);
-        }
-        if (ride.backward()) {
-            motion.subtract(forward);
-        }
-        if (ride.right()) {
-            motion.add(right);
-        }
-        if (ride.left()) {
-            motion.subtract(right);
-        }
-        if (motion.lengthSquared() > 0.01) {
-            motion.normalize().multiply(Math.max(0.1, plugin.getConfig().getDouble("dragon-flight-speed", 1.5)));
-        }
-        if (ride.jump()) {
-            motion.setY(Math.max(motion.getY(), Math.max(0.28, plugin.getConfig().getDouble("dragon-flight-lift", 0.55))));
-        } else if (motion.lengthSquared() <= 0.01) {
-            motion.setY(Math.sin(tick / 12.0) * 0.01);
-        }
-
-        final Location target = ride.mount().getLocation().clone().add(motion);
-        target.setDirection(player.getLocation().getDirection());
-        if (isRideLocationSafe(target)) {
-            ride.mount().teleport(target);
-        } else {
-            final Location verticalOnly = ride.mount().getLocation().clone().add(0, motion.getY(), 0);
-            verticalOnly.setDirection(player.getLocation().getDirection());
-            if (isRideLocationSafe(verticalOnly)) {
-                ride.mount().teleport(verticalOnly);
+        for (final Map.Entry<UUID, RideState> entry : new java.util.ArrayList<>(rides.entrySet())) {
+            final Player player = Bukkit.getPlayer(entry.getKey());
+            if (player == null || !player.isOnline()) {
+                continue;
+            }
+            final ActivePet active = activePets.get(entry.getKey());
+            if (active == null) {
+                stopRide(player, false);
+                continue;
+            }
+            driveRide(player, active, entry.getValue());
+            if (rides.containsKey(entry.getKey())) {
+                repositionRidePet(active, entry.getValue());
             }
         }
     }
 
-    private boolean isRideLocationSafe(final Location location) {
-        if (location.getY() <= location.getWorld().getMinHeight() + 1 || location.getY() >= location.getWorld().getMaxHeight() - 1) {
-            return false;
+    /**
+     * Moves the mount by velocity from the rider's held inputs and look direction. Velocity (not a
+     * teleport) keeps the motion smooth and, because the entity still runs its collision step, the
+     * rider stops at walls instead of clipping into them. No input means zero velocity, so the pet
+     * simply hovers in place.
+     */
+    private void driveRide(final Player player, final ActivePet active, final RideState ride) {
+        final ArmorStand mount = ride.mount();
+        if (mount.isDead() || !mount.getPassengers().contains(player)
+            || player.getGameMode() == GameMode.SPECTATOR || !mount.getWorld().equals(player.getWorld())) {
+            stopRide(player, false);
+            return;
         }
-        return location.getBlock().isPassable() && location.clone().add(0, 1, 0).getBlock().isPassable();
+        final Location eye = player.getLocation();
+        final Vector look = eye.getDirection();
+        final Vector move = new Vector();
+        if (ride.forward()) {
+            move.add(look);
+        }
+        if (ride.backward()) {
+            move.subtract(look);
+        }
+        Vector flat = new Vector(look.getX(), 0, look.getZ());
+        if (flat.lengthSquared() < 1.0e-4) {
+            flat = new Vector(0, 0, 1);
+        }
+        flat.normalize();
+        final Vector right = new Vector(-flat.getZ(), 0, flat.getX());
+        if (ride.right()) {
+            move.add(right);
+        }
+        if (ride.left()) {
+            move.subtract(right);
+        }
+        final double speed = Math.max(0.05, plugin.getConfig().getDouble("flight-speed", 0.6));
+        if (move.lengthSquared() > 1.0e-4) {
+            move.normalize().multiply(speed);
+        }
+        if (ride.jump()) {
+            move.setY(move.getY() + Math.max(0.1, plugin.getConfig().getDouble("flight-lift", 0.5)));
+        }
+        mount.setRotation(eye.getYaw(), 0.0F);
+        mount.setVelocity(move);
     }
 
-    private Location rideLocation(final Player player, final RideState ride, final long tick) {
-        final Location base = ride.mount().getLocation().clone();
-        Vector direction = base.getDirection().clone();
-        if (direction.lengthSquared() < 0.01) {
-            direction = player.getLocation().getDirection().clone();
+    private void repositionRidePet(final ActivePet active, final RideState ride) {
+        final ArmorStand mount = ride.mount();
+        if (mount.isDead() || active.display().isDead()) {
+            return;
         }
-        direction.setY(0);
-        if (direction.lengthSquared() < 0.01) {
-            direction = new Vector(0, 0, 1);
-        }
-        direction.normalize();
-        final double bob = Math.sin(tick / 6.0) * 0.08;
-        final Location target = base.add(0, -0.35 + bob, 0);
-        target.setDirection(player.getLocation().getDirection());
-        return target;
+        final Location target = mount.getLocation().clone().add(0, plugin.getConfig().getDouble("flight-pet-offset", -0.4), 0);
+        target.setYaw(mount.getYaw());
+        target.setPitch(0.0F);
+        active.display().teleport(target);
+        active.hitbox().teleport(target);
+        active.teleportNametag(modelNametagLocation(target));
     }
 
     private Location followLocation(final Player player, final ActivePet active, final long tick) {
@@ -1003,6 +1098,14 @@ public final class ActivePetManager {
                 case "ender_dragon" -> player.getWorld().spawnParticle(Particle.DRAGON_BREATH, location, 14, 0.55, 0.35, 0.55, 0.01, 1.0F);
                 case "blue_dragon" -> player.getWorld().spawnParticle(Particle.ENCHANT, location, 22, 0.65, 0.45, 0.65, 0.0);
                 case "red_dragon" -> player.getWorld().spawnParticle(Particle.FLAME, location, 14, 0.45, 0.3, 0.45, 0.01);
+                case "phoenix" -> {
+                    player.getWorld().spawnParticle(Particle.FLAME, location, 16, 0.5, 0.35, 0.5, 0.01);
+                    player.getWorld().spawnParticle(Particle.LAVA, location, 2, 0.4, 0.2, 0.4, 0.0);
+                }
+                case "shadow_dragon" -> {
+                    player.getWorld().spawnParticle(Particle.SMOKE, location, 18, 0.6, 0.4, 0.6, 0.01);
+                    player.getWorld().spawnParticle(Particle.WITCH, location, 10, 0.5, 0.35, 0.5, 0.0);
+                }
                 default -> {
                 }
             }
@@ -1028,7 +1131,34 @@ public final class ActivePetManager {
                     applyPetBuff(player, PotionEffectType.REGENERATION, player.getWorld().hasStorm() && pet.level() >= 80 ? 1 : 0);
                 }
             }
+            case "bee" -> {
+                if (nearFlowersOrCrops(player)) {
+                    applyPetBuff(player, PotionEffectType.REGENERATION, pet.level() >= 80 ? 1 : 0);
+                }
+            }
             case "chicken" -> applyPetBuff(player, PotionEffectType.SLOW_FALLING, 1);
+            case "pixie" -> {
+                final PotionEffectType buff = PIXIE_BUFFS.get(ThreadLocalRandom.current().nextInt(PIXIE_BUFFS.size()));
+                applyPetBuff(player, buff, 0);
+            }
+            case "shadow_dragon" -> {
+                final int lvl = pet.level();
+                final double radius = lvl >= 100 ? 8.0 : lvl >= 50 ? 6.0 : 4.0;
+                final double damage = 1.0 + (abilityTier(lvl) * 0.2);
+                boolean hit = false;
+                for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
+                    if (entity instanceof LivingEntity living && !living.equals(player) && isHostile(living)) {
+                        living.damage(damage, player);
+                        final Location at = living.getLocation().add(0, 1.0, 0);
+                        living.getWorld().spawnParticle(Particle.SMOKE, at, 12, 0.3, 0.4, 0.3, 0.01);
+                        living.getWorld().spawnParticle(Particle.WITCH, at, 6, 0.3, 0.4, 0.3, 0.0);
+                        hit = true;
+                    }
+                }
+                if (hit) {
+                    player.getWorld().playSound(player.getLocation(), Sound.ENTITY_WITHER_SHOOT, 0.4F, 1.4F);
+                }
+            }
             case "duck" -> {
                 if (isAirborne(player)) {
                     applyPetBuff(player, PotionEffectType.SLOW_FALLING, 0);
@@ -1140,6 +1270,28 @@ public final class ActivePetManager {
         });
     }
 
+    public void handleOreBonus(final Player player, final Block block) {
+        final OwnedPet pet = activePet(player).orElse(null);
+        if (pet == null || !pet.definitionId().equals("crystal_golem") || !CRYSTAL_GOLEM_ORES.contains(block.getType())) {
+            return;
+        }
+        final double chance = Math.min(0.6, 0.15 + (abilityTier(pet.level()) * 0.02));
+        if (ThreadLocalRandom.current().nextDouble() >= chance) {
+            return;
+        }
+        final ItemStack tool = player.getInventory().getItemInMainHand();
+        final Collection<ItemStack> drops = block.getDrops(tool, player);
+        if (drops.isEmpty()) {
+            return;
+        }
+        final Location center = block.getLocation().add(0.5, 0.5, 0.5);
+        for (final ItemStack drop : drops) {
+            block.getWorld().dropItemNaturally(center, drop.clone());
+        }
+        block.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, center, 10, 0.3, 0.3, 0.3, 0.0);
+        block.getWorld().playSound(center, Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.6F, 1.4F);
+    }
+
     private void collectAllayItems(final Player player, final double radius) {
         final UUID ownerId = player.getUniqueId();
         for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
@@ -1187,6 +1339,25 @@ public final class ActivePetManager {
                 }
             }
             case "cat" -> setTarget(player, Attribute.FALL_DAMAGE_MULTIPLIER, Math.max(0.0, 1.0 - (tier * 0.05)));
+            case "crab" -> {
+                if (isWetOrNearWater(player)) {
+                    setTarget(player, Attribute.ATTACK_DAMAGE, 2.0 + (tier * 0.2));
+                    setTarget(player, Attribute.ARMOR, tier * 0.3);
+                }
+            }
+            case "goblin" -> applyPetBuff(player, PotionEffectType.HERO_OF_THE_VILLAGE, Math.min(4, 1 + (tier / 5)));
+            case "moon_fox" -> {
+                if (isNight(player)) {
+                    setTarget(player, Attribute.MOVEMENT_SPEED, 0.1 + (tier * 0.003));
+                    applyPetBuff(player, PotionEffectType.STRENGTH, 0);
+                }
+            }
+            case "otter" -> {
+                setTarget(player, Attribute.WATER_MOVEMENT_EFFICIENCY, tier * 0.05);
+                setTarget(player, Attribute.OXYGEN_BONUS, tier * 0.5);
+                applyPetBuff(player, PotionEffectType.WATER_BREATHING, 0);
+                applyPetBuff(player, PotionEffectType.DOLPHINS_GRACE, 1);
+            }
             case "dolphin" -> {
                 applyPetBuff(player, PotionEffectType.DOLPHINS_GRACE, 1);
                 setTarget(player, Attribute.WATER_MOVEMENT_EFFICIENCY, tier * 0.05);
@@ -1507,6 +1678,63 @@ public final class ActivePetManager {
             }
         }
         return false;
+    }
+
+    private boolean isNight(final Player player) {
+        final long time = player.getWorld().getTime();
+        return time >= 13000L && time <= 23000L;
+    }
+
+    private boolean nearFlowersOrCrops(final Player player) {
+        final Location location = player.getLocation();
+        for (int x = -2; x <= 2; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -2; z <= 2; z++) {
+                    if (isFlowerOrCrop(location.clone().add(x, y, z).getBlock().getType())) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    private boolean isFlowerOrCrop(final Material material) {
+        if (org.bukkit.Tag.FLOWERS.isTagged(material)
+            || org.bukkit.Tag.CROPS.isTagged(material)
+            || org.bukkit.Tag.SAPLINGS.isTagged(material)) {
+            return true;
+        }
+        return switch (material) {
+            case FARMLAND, PUMPKIN, MELON, SWEET_BERRY_BUSH, SUGAR_CANE, PINK_PETALS,
+                 SPORE_BLOSSOM, FLOWERING_AZALEA, FLOWERING_AZALEA_LEAVES, BEE_NEST, BEEHIVE -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * The Ancient Elf's warding: shortens debuff durations early, strongly caps them past level 50, and
+     * removes them outright at level 100. Runs every follow tick so protection feels near-instant.
+     */
+    private void cleanseDebuffs(final Player player, final int level) {
+        for (final PotionEffectType negative : NEGATIVE_EFFECTS) {
+            final PotionEffect effect = player.getPotionEffect(negative);
+            if (effect == null || effect.getDuration() == PotionEffect.INFINITE_DURATION) {
+                continue;
+            }
+            if (level >= 100) {
+                player.removePotionEffect(negative);
+                continue;
+            }
+            final int cap = level >= 50 ? 40 : (int) (effect.getDuration() * 0.6);
+            if (cap < effect.getDuration()) {
+                player.removePotionEffect(negative);
+                if (cap > 0) {
+                    player.addPotionEffect(new PotionEffect(negative, cap, effect.getAmplifier(),
+                        effect.isAmbient(), effect.hasParticles(), effect.hasIcon()));
+                }
+            }
+        }
     }
 
     private boolean isHoldingTool(final Player player, final String suffix) {

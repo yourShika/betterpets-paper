@@ -17,9 +17,17 @@ xp-booster:
   max-minutes: 1440
   broadcast-drops: true
   broadcast-activations: true
-# Dragon mount flight tuning (only used while riding a dragon pet).
-dragon-flight-speed: 1.5
-dragon-flight-lift: 0.55
+# Pet flight tuning (used while riding a dragon, Phoenix, or Shadow Dragon pet at
+# level 50+). You sit on the pet and steer it like a real mount: look where you
+# want to go and hold forward, jump to climb, look down to dive, sneak to
+# dismount. The mount is moved by velocity every tick, so it stays smooth and
+# collides with blocks instead of clipping through them.
+#   flight-speed:      horizontal/forward flight speed in blocks per tick.
+#   flight-lift:       extra upward speed while holding jump.
+#   flight-pet-offset: how far below the seat the pet body floats.
+flight-speed: 0.6
+flight-lift: 0.5
+flight-pet-offset: -0.4
 # How often (ticks) all pet data is auto-saved. Minimum 1200 (60s).
 save-interval-ticks: 6000
 # How often (ticks) the active pet follows/updates. Lower = smoother, more CPU.

@@ -821,6 +821,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(final BlockBreakEvent event) {
         activePets.handleMoleBreak(event.getPlayer(), event.getBlock());
+        activePets.handleOreBonus(event.getPlayer(), event.getBlock());
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -991,7 +992,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 lore.add(Component.text("Revive cooldown: " + formatDuration(remaining), NamedTextColor.GRAY));
             }
         }
-        if (isDragonPet(definition.id()) && pet.level() >= 50) {
+        if (isFlyablePet(definition.id()) && pet.level() >= 50) {
             lore.add(Component.text("Right-click the active pet to fly.", NamedTextColor.GOLD));
         }
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());
@@ -1892,6 +1893,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return id.equals("blue_dragon") || id.equals("red_dragon") || id.equals("ender_dragon");
     }
 
+    private boolean isFlyablePet(final String id) {
+        return isDragonPet(id) || id.equals("phoenix") || id.equals("shadow_dragon");
+    }
+
     private Player damagingPlayer(final Entity damager) {
         if (damager instanceof Player player) {
             return player;
@@ -1914,22 +1919,47 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final InfoMenuHolder holder = new InfoMenuHolder();
         final Inventory inventory = Bukkit.createInventory(holder, 54, Component.text("Better Pets Catalogue", NamedTextColor.GOLD));
         holder.setInventory(inventory);
+        renderInfoMenu(inventory, holder);
+        player.openInventory(inventory);
+    }
 
-        int slot = 0;
-        for (final PetDefinition definition : definitions.ordered()) {
-            inventory.setItem(slot++, itemFactory.infoItem(definition, catalogueLore(definition)));
+    private void renderInfoMenu(final Inventory inventory, final InfoMenuHolder holder) {
+        inventory.clear();
+        final List<PetDefinition> all = definitions.ordered();
+        final int pages = pageCount(all.size());
+        if (holder.page() >= pages) {
+            holder.setPage(Math.max(0, pages - 1));
+        }
+        final int start = holder.page() * PET_SLOT_LIMIT;
+        final int visible = Math.max(0, Math.min(PET_SLOT_LIMIT, all.size() - start));
+        for (int i = 0; i < visible; i++) {
+            final PetDefinition definition = all.get(start + i);
+            inventory.setItem(i, itemFactory.infoItem(definition, catalogueLore(definition)));
         }
         inventory.setItem(45, itemFactory.control(
             Material.ARROW,
             Component.text("Back", NamedTextColor.YELLOW),
             List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
         ));
+        if (holder.page() > 0) {
+            inventory.setItem(48, itemFactory.control(
+                Material.SPECTRAL_ARROW,
+                Component.text("Previous Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            ));
+        }
+        if (holder.page() + 1 < pages) {
+            inventory.setItem(50, itemFactory.control(
+                Material.SPECTRAL_ARROW,
+                Component.text("Next Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            ));
+        }
         inventory.setItem(49, itemFactory.control(
             Material.BARRIER,
             Component.text("Close", NamedTextColor.RED),
             List.of(Component.text("Close this catalogue.", NamedTextColor.GRAY))
         ));
-        player.openInventory(inventory);
     }
 
     private void handleInfoClick(final InventoryClickEvent event) {
@@ -1937,12 +1967,23 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        if (event.getRawSlot() == 45) {
+        final InfoMenuHolder holder = event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder infoHolder ? infoHolder : null;
+        final int slot = event.getRawSlot();
+        if (slot == 45) {
             openPetsMenu(player);
             return;
         }
-        if (event.getRawSlot() == 49) {
+        if (slot == 49) {
             player.closeInventory();
+            return;
+        }
+        if (holder != null && (slot == 48 || slot == 50)) {
+            final int pages = pageCount(definitions.ordered().size());
+            final int target = slot == 48 ? holder.page() - 1 : holder.page() + 1;
+            if (target >= 0 && target < pages) {
+                holder.setPage(target);
+                renderInfoMenu(event.getView().getTopInventory(), holder);
+            }
             return;
         }
         itemFactory.petId(event.getCurrentItem())
@@ -2010,21 +2051,42 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final ChanceMenuHolder holder = new ChanceMenuHolder(player.getUniqueId());
         final Inventory inventory = Bukkit.createInventory(holder, 54, Component.text("Better Pets Spawn Chances", NamedTextColor.YELLOW));
         holder.setInventory(inventory);
-        renderChanceMenu(inventory);
+        renderChanceMenu(inventory, holder);
         player.openInventory(inventory);
     }
 
-    private void renderChanceMenu(final Inventory inventory) {
+    private void renderChanceMenu(final Inventory inventory, final ChanceMenuHolder holder) {
         inventory.clear();
-        int slot = 0;
-        for (final PetDefinition definition : definitions.ordered()) {
-            inventory.setItem(slot++, itemFactory.chanceItem(definition, spawnChance(definition)));
+        final List<PetDefinition> all = definitions.ordered();
+        final int pages = pageCount(all.size());
+        if (holder.page() >= pages) {
+            holder.setPage(Math.max(0, pages - 1));
+        }
+        final int start = holder.page() * PET_SLOT_LIMIT;
+        final int visible = Math.max(0, Math.min(PET_SLOT_LIMIT, all.size() - start));
+        for (int i = 0; i < visible; i++) {
+            final PetDefinition definition = all.get(start + i);
+            inventory.setItem(i, itemFactory.chanceItem(definition, spawnChance(definition)));
         }
         inventory.setItem(45, itemFactory.control(
             Material.ARROW,
             Component.text("Back", NamedTextColor.YELLOW),
             List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
         ));
+        if (holder.page() > 0) {
+            inventory.setItem(46, itemFactory.control(
+                Material.SPECTRAL_ARROW,
+                Component.text("Previous Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            ));
+        }
+        if (holder.page() + 1 < pages) {
+            inventory.setItem(47, itemFactory.control(
+                Material.SPECTRAL_ARROW,
+                Component.text("Next Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            ));
+        }
         inventory.setItem(49, itemFactory.control(
             Material.BARRIER,
             Component.text("Close", NamedTextColor.RED),
@@ -2061,6 +2123,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             openNotifyMenu(player);
             return;
         }
+        if (event.getRawSlot() == 46 || event.getRawSlot() == 47) {
+            final int pages = pageCount(definitions.ordered().size());
+            final int target = event.getRawSlot() == 46 ? holder.page() - 1 : holder.page() + 1;
+            if (target >= 0 && target < pages) {
+                holder.setPage(target);
+                renderChanceMenu(event.getView().getTopInventory(), holder);
+            }
+            return;
+        }
 
         final Optional<String> petId = itemFactory.petId(event.getCurrentItem());
         if (petId.isEmpty()) {
@@ -2082,7 +2153,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         value = clampChance(value);
         setSpawnChance(definition, value);
-        renderChanceMenu(event.getView().getTopInventory());
+        renderChanceMenu(event.getView().getTopInventory(), holder);
         final String formattedChance = formatPercent(value);
         player.sendMessage(message("messages.chances-saved")
             .replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name()))
@@ -2634,6 +2705,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (id.equals("phoenix")) {
             if (level == 50) {
+                unlocks.add("Mount flight");
+                unlocks.add("Flame flight trail");
                 unlocks.add("Revive cooldown reduced to 18h");
             } else if (level == 100) {
                 unlocks.add("Revive cooldown reduced to 12h");
@@ -2641,6 +2714,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (id.equals("capybara") && level == 80) {
             unlocks.add("Rain regeneration improves to level II");
+        }
+        if (id.equals("bee") && level == 80) {
+            unlocks.add("Flower regeneration improves to level II");
+        }
+        if (id.equals("shadow_dragon") && level == 50) {
+            unlocks.add("Mount flight");
+            unlocks.add("Shadow flight trail");
+            unlocks.add("Aura radius grows to 6 blocks");
+        }
+        if (id.equals("shadow_dragon") && level == 100) {
+            unlocks.add("Aura radius grows to 8 blocks");
+        }
+        if (id.equals("ancient_elf")) {
+            if (level == 50) {
+                unlocks.add("Debuffs are capped to 2 seconds");
+            } else if (level == 100) {
+                unlocks.add("All debuffs are nullified");
+            }
         }
         return unlocks;
     }
@@ -2652,16 +2743,26 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "axolotl" -> "Increases oxygen bonus underwater.";
             case "bat" -> "Reveals nearby hostile mobs while underground.";
             case "beaver" -> "Faster chopping while holding an axe.";
+            case "bee" -> "Regeneration near flowers or crops.";
             case "blue_dragon" -> "More End damage, absorption shield, rideable at level 50.";
             case "capybara" -> "Regeneration near water, stronger during rain.";
             case "cat" -> "Reduces fall damage.";
             case "chicken" -> "Grants slow falling pulses.";
+            case "crab" -> "More damage and armor near water.";
+            case "crystal_golem" -> "Chance for extra ores and crystals when mining.";
             case "dog" -> "Chance to wither undead you hit.";
             case "dolphin" -> "Dolphin's Grace and faster water movement.";
             case "duck" -> "Faster swimming and brief slow falling when airborne.";
             case "elder_guardian" -> "Faster underwater mining.";
             case "ender_dragon" -> "More End damage, absorption shield, rideable at level 50.";
             case "ghast" -> "Explosion knockback resistance and Nether kill XP.";
+            case "goblin" -> "Cheaper villager trades and bonus emeralds from kills.";
+            case "lich" -> "Steals life when you kill mobs.";
+            case "moon_fox" -> "Speed and Strength at night.";
+            case "otter" -> "Water breathing and faster swimming.";
+            case "pixie" -> "Grants random small buffs over time.";
+            case "shadow_dragon" -> "Dark AoE damage aura, rideable at level 50.";
+            case "ancient_elf" -> "Shortens debuffs, then blocks and finally nullifies them.";
             case "hamster" -> "Higher step height.";
             case "hedgehog" -> "Reflects a small amount of melee damage.";
             case "herobrine" -> "More health, longer reach, thunder aura.";
@@ -2672,7 +2773,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "owl" -> "Night Vision and increased luck.";
             case "panda" -> "More attack knockback, bamboo biome hero effect.";
             case "penguin" -> "Speed in cold biomes and frosted ice trail.";
-            case "phoenix" -> "Fire Resistance, burns undead, revives you from death once off cooldown.";
+            case "phoenix" -> "Fire Resistance, burns undead, revives you from death, rideable at level 50.";
             case "platypus" -> "Poisons melee and ranged attackers while you are wet (water or rain).";
             case "polar_bear" -> "Extra armor in cold biomes.";
             case "pufferfish" -> "Wither aura against undead.";
@@ -2701,9 +2802,12 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "axolotl" -> "+" + formatDecimal(tier * 0.5) + " oxygen";
             case "bat" -> Math.min(24, 8 + tier) + " block underground reveal";
             case "beaver" -> "+" + formatDecimal(tier * 0.35) + " axe mining efficiency";
+            case "bee" -> level >= 80 ? "Regen II near flowers/crops" : "Regen I near flowers/crops";
             case "blue_dragon", "red_dragon" -> "+" + formatDecimal(tier * 0.3) + " damage in dimension";
             case "capybara" -> level >= 80 ? "Regen I near water, Regen II in rain" : "Regen I near water";
             case "cat" -> Math.round((1.0 - (tier * 0.05)) * 100) + "% fall damage";
+            case "crab" -> "+" + formatDecimal(2.0 + (tier * 0.2)) + " damage, +" + formatDecimal(tier * 0.3) + " armor near water";
+            case "crystal_golem" -> Math.round(Math.min(0.6, 0.15 + (tier * 0.02)) * 100) + "% extra ore/crystal drop";
             case "chicken" -> "Slow Falling pulse every " + Math.max(1, getConfig().getInt("ability-update-ticks", 100) / 20) + "s";
             case "dog" -> Math.min(100, level) + "% wither chance on undead hits";
             case "dolphin" -> "+" + Math.round(tier * 5.0) + "% water movement";
@@ -2711,6 +2815,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "elder_guardian" -> Math.round((0.2 + tier * 0.04) * 100) + "% underwater mining";
             case "ender_dragon" -> "+" + formatDecimal(tier * 0.35) + " End damage";
             case "ghast" -> Math.round(tier * 5.0) + "% explosion resistance";
+            case "goblin" -> "Hero " + Math.min(4, 1 + (tier / 5)) + ", up to " + (25 + tier) + "% coin drop chance";
+            case "lich" -> formatDecimal(2.0 + (tier * 0.2)) + " health stolen per kill";
+            case "moon_fox" -> "+" + formatDecimal(tier * 0.003) + " speed & Strength at night";
+            case "otter" -> "+" + Math.round(tier * 5.0) + "% water movement, water breathing";
+            case "pixie" -> "Random small buff, refreshes over time";
+            case "shadow_dragon" -> formatDecimal(1.0 + (tier * 0.2)) + " AoE damage, " + (level >= 100 ? 8 : level >= 50 ? 6 : 4) + " block radius";
+            case "ancient_elf" -> level >= 100 ? "Nullifies all debuffs" : level >= 50 ? "Debuffs capped to 2s" : "Debuff duration cut by 40%";
             case "hamster" -> formatDecimal(0.6 + tier * 0.045) + " step height";
             case "hedgehog" -> formatDecimal(Math.min(3.0, 0.4 + tier * 0.08)) + " reflected damage";
             case "herobrine" -> "+" + tier + " hearts/reach tier";
@@ -2919,7 +3030,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private static final class InfoMenuHolder implements InventoryHolder {
+        private int page;
         private Inventory inventory;
+
+        private int page() {
+            return page;
+        }
+
+        private void setPage(final int page) {
+            this.page = Math.max(0, page);
+        }
 
         private void setInventory(final Inventory inventory) {
             this.inventory = inventory;
@@ -2955,6 +3075,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private static final class ChanceMenuHolder implements InventoryHolder {
         private final UUID owner;
+        private int page;
         private Inventory inventory;
 
         private ChanceMenuHolder(final UUID owner) {
@@ -2963,6 +3084,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         private UUID owner() {
             return owner;
+        }
+
+        private int page() {
+            return page;
+        }
+
+        private void setPage(final int page) {
+            this.page = Math.max(0, page);
         }
 
         private void setInventory(final Inventory inventory) {
