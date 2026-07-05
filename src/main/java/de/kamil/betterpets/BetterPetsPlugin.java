@@ -124,6 +124,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private PetModelService modelService;
     private ModuleManager moduleManager;
     private NamespacedKey generatedChestKey;
+    private NamespacedKey containerOpenedKey;
     private NamespacedKey announceOnPickupKey;
     private BukkitTask saveTask;
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
@@ -152,6 +153,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         itemFactory = new PetItemFactory(this);
         generatedChestKey = new NamespacedKey(this, "pet_loot_generated");
+        containerOpenedKey = new NamespacedKey(this, "container_opened");
         announceOnPickupKey = new NamespacedKey(this, "announce_on_pickup");
         storage = new PetStorage(this);
         storage.load();
@@ -625,6 +627,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (!(event.getPlayer() instanceof Player player)) {
             return;
         }
+        // Remember that a player has opened this container, so the Penguin's Treasure Sense stops
+        // glowing it. This is the only reliable "opened" signal for worlds that pre-generate loot,
+        // where the loot table is already cleared and the container would otherwise look untouched.
+        markContainerOpened(event.getInventory());
         // Announce any pre-generated pet that was waiting in this container (marker set at loot time).
         final Inventory inventory = event.getInventory();
         final ItemStack[] contents = inventory.getContents();
@@ -644,6 +650,30 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             itemFactory.petId(stack)
                 .flatMap(definitions::get)
                 .ifPresent(definition -> announcePet(player, definition, "found", suffix));
+        }
+    }
+
+    private void markContainerOpened(final Inventory inventory) {
+        final InventoryHolder holder = inventory.getHolder();
+        if (holder instanceof DoubleChest doubleChest) {
+            markOpened(doubleChest.getLeftSide());
+            markOpened(doubleChest.getRightSide());
+        } else {
+            markOpened(holder);
+        }
+    }
+
+    private void markOpened(final Object holder) {
+        if (holder instanceof TileState tile) {
+            // Block containers only persist PDC changes once the captured state is written back.
+            if (tile.getPersistentDataContainer().has(containerOpenedKey, PersistentDataType.BYTE)) {
+                return;
+            }
+            tile.getPersistentDataContainer().set(containerOpenedKey, PersistentDataType.BYTE, (byte) 1);
+            tile.update();
+        } else if (holder instanceof org.bukkit.persistence.PersistentDataHolder entityHolder) {
+            // Chest / hopper minecarts and other entity-backed containers persist their PDC directly.
+            entityHolder.getPersistentDataContainer().set(containerOpenedKey, PersistentDataType.BYTE, (byte) 1);
         }
     }
 
@@ -2812,7 +2842,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "cursed_plushie" -> "Distraction dummy: hostile mobs sometimes lose interest in you.";
             case "owl" -> "Night Vision and increased luck.";
             case "panda" -> "More attack knockback, bamboo biome hero effect.";
-            case "penguin" -> "Speed in cold biomes, frosted ice trail, and marks nearby unlooted chests.";
+            case "penguin" -> "Speed in cold biomes, frosted ice trail, and makes nearby unopened containers glow.";
             case "phoenix" -> "Fire Resistance, burns undead, revives you from death, rideable at level 50.";
             case "platypus" -> "Poisons melee and ranged attackers while you are wet (water or rain).";
             case "polar_bear" -> "Extra armor in cold biomes.";
@@ -2871,7 +2901,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "cursed_plushie" -> Math.round(Math.min(0.75, 0.25 + (tier * 0.025)) * 100) + "% mob distraction chance";
             case "owl" -> "+" + (tier * 25) + " luck";
             case "panda" -> "+" + Math.round(tier * 5.0) + "% knockback";
-            case "penguin" -> "+" + formatDecimal(tier * 0.00375) + " cold speed, " + Math.round(Math.min(16.0, 6.0 + (tier * 0.4))) + " block chest sense";
+            case "penguin" -> "+" + formatDecimal(tier * 0.00375) + " cold speed, " + Math.round(Math.min(24.0, 8.0 + (tier * 0.5))) + " block container glow";
             case "phoenix" -> level >= 100 ? "12h revive cooldown" : level >= 50 ? "18h revive cooldown" : "24h revive cooldown";
             case "platypus" -> (80 + tier * 6) + " tick poison on attackers while wet";
             case "polar_bear" -> "+" + formatDecimal(tier * 0.25) + " armor in cold biomes";

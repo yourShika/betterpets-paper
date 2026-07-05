@@ -170,6 +170,8 @@ public final class ActivePetManager {
         Material.BARREL
     );
 
+    private static final String CHEST_GLOW_TAG = "BetterPets.ChestGlow";
+
     private static final List<PotionEffectType> PIXIE_BUFFS = List.of(
         PotionEffectType.SPEED,
         PotionEffectType.JUMP_BOOST,
@@ -200,11 +202,17 @@ public final class ActivePetManager {
     private final PetModelService modelService;
     private final NamespacedKey ownerKey;
     private final NamespacedKey petUuidKey;
+    private final NamespacedKey generatedChestKey;
+    private final NamespacedKey containerOpenedKey;
     private final Map<UUID, ActivePet> activePets = new HashMap<>();
     private final Map<UUID, RideState> rides = new HashMap<>();
     private final Map<UUID, Set<PotionEffectType>> petBuffs = new HashMap<>();
     private final Set<UUID> herobrineWeather = new HashSet<>();
     private final Map<UUID, Set<UUID>> revealedMobs = new HashMap<>();
+    // Penguin container reveal: block containers glow via owner-only Shulker proxies, chest minecarts
+    // (which are entities) glow via the shared per-viewer GlowController like revealed mobs.
+    private final Map<UUID, Map<Long, org.bukkit.entity.Shulker>> chestGlows = new HashMap<>();
+    private final Map<UUID, Set<UUID>> minecartGlows = new HashMap<>();
     private final Map<UUID, BossBar> shadowBars = new HashMap<>();
     private final Map<UUID, Long> shadowAoeReadyAt = new HashMap<>();
     private final GlowController glow;
@@ -220,6 +228,10 @@ public final class ActivePetManager {
         this.modelService = modelService;
         this.ownerKey = new NamespacedKey(plugin, "active_owner");
         this.petUuidKey = new NamespacedKey(plugin, "active_pet");
+        // Same keys BetterPetsPlugin uses on containers, so we can tell an unlooted container from one
+        // a player has already opened (pre-generated loot clears the loot table but sets no such flag).
+        this.generatedChestKey = new NamespacedKey(plugin, "pet_loot_generated");
+        this.containerOpenedKey = new NamespacedKey(plugin, "container_opened");
         this.glow = new GlowController(plugin);
     }
 
@@ -250,6 +262,7 @@ public final class ActivePetManager {
         });
         activePets.clear();
         Bukkit.getOnlinePlayers().forEach(this::clearReveal);
+        Bukkit.getOnlinePlayers().forEach(this::clearChestGlow);
         Bukkit.getOnlinePlayers().forEach(this::resetPlayerState);
         shadowBars.values().forEach(BossBar::removeAll);
         shadowBars.clear();
@@ -314,6 +327,7 @@ public final class ActivePetManager {
     public void despawn(final Player player, final boolean clearActive) {
         stopRide(player, false);
         clearReveal(player);
+        clearChestGlow(player);
         clearShadowBar(player);
         final ActivePet active = activePets.remove(player.getUniqueId());
         if (active != null) {
@@ -881,8 +895,12 @@ public final class ActivePetManager {
             if (pet.definitionId().equals("allay") && tick % 10L == 0L) {
                 collectAllayItems(player, Math.min(12.0, 4.0 + (abilityTier(pet.level()) * 0.4)));
             }
-            if (pet.definitionId().equals("penguin") && tick % 25L == 0L) {
-                markPenguinChests(player, pet);
+            if (pet.definitionId().equals("penguin")) {
+                if (tick % 20L == 0L) {
+                    updatePenguinChestGlow(player, pet);
+                }
+            } else if (chestGlows.containsKey(player.getUniqueId()) || minecartGlows.containsKey(player.getUniqueId())) {
+                clearChestGlow(player);
             }
             if (pet.definitionId().equals("shadow_dragon")) {
                 updateShadowBar(player, pet);
@@ -1512,16 +1530,24 @@ public final class ActivePetManager {
     }
 
     /**
-     * The Penguin's Treasure Sense: a client-side search helper. It highlights nearby unlooted structure
-     * containers (chests, trapped chests, barrels) with particles that ONLY the owner sees, so it never
-     * affects other players or the world. Reach grows with level. Only already-loaded chunks are scanned
-     * and containers are detected cheaply by material first, so it stays lightweight.
+     * The Penguin's Treasure Sense: makes every nearby container a player has never opened glow through
+     * walls, for the owner only. Block containers (chests, trapped chests, barrels) glow via an invisible
+     * glowing Shulker shown only to the owner; chest minecarts are entities and glow via the per-viewer
+     * GlowController like revealed mobs. A container counts as "unopened" while its loot table is still
+     * unrolled, or — for worlds that pre-generate loot at chunk generation, which clears the loot table
+     * and would otherwise look "opened" — while our loot marker is set but no player has opened it yet.
+     * Reach grows with level; only already-loaded chunks are scanned.
      */
-    private void markPenguinChests(final Player player, final OwnedPet pet) {
+    private void updatePenguinChestGlow(final Player player, final OwnedPet pet) {
         final World world = player.getWorld();
         final Location center = player.getLocation();
-        final double radius = Math.min(16.0, 6.0 + (abilityTier(pet.level()) * 0.4));
+        final double radius = Math.min(24.0, 8.0 + (abilityTier(pet.level()) * 0.5));
         final double radiusSq = radius * radius;
+
+        // Block containers: keep one owner-only glowing Shulker per unopened container in range.
+        final Set<Long> desiredBlocks = new HashSet<>();
+        final Map<Long, org.bukkit.entity.Shulker> playerGlows =
+            chestGlows.computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>());
         final int chunkRadius = (int) Math.ceil(radius / 16.0);
         final int baseX = center.getBlockX() >> 4;
         final int baseZ = center.getBlockZ() >> 4;
@@ -1532,19 +1558,134 @@ public final class ActivePetManager {
                 }
                 for (final BlockState state : world.getChunkAt(cx, cz)
                     .getTileEntities(block -> LOOT_CONTAINER_TYPES.contains(block.getType()), false)) {
-                    if (!(state instanceof org.bukkit.loot.Lootable lootable) || !lootable.hasLootTable()) {
+                    if (state.getLocation().distanceSquared(center) > radiusSq || !isUnopenedBlockContainer(state)) {
                         continue;
                     }
-                    final Location loc = state.getLocation();
-                    if (loc.distanceSquared(center) > radiusSq) {
-                        continue;
+                    final long key = blockKey(state);
+                    desiredBlocks.add(key);
+                    final org.bukkit.entity.Shulker existing = playerGlows.get(key);
+                    if (existing == null || existing.isDead()) {
+                        final org.bukkit.entity.Shulker spawned = spawnChestGlow(player, state);
+                        if (spawned != null) {
+                            playerGlows.put(key, spawned);
+                        }
                     }
-                    final Location marker = loc.add(0.5, 1.1, 0.5);
-                    player.spawnParticle(Particle.WAX_ON, marker, 6, 0.15, 0.25, 0.15, 0.0);
-                    player.spawnParticle(Particle.END_ROD, marker, 2, 0.05, 0.1, 0.05, 0.0);
                 }
             }
         }
+        playerGlows.entrySet().removeIf(entry -> {
+            if (!desiredBlocks.contains(entry.getKey())) {
+                if (entry.getValue() != null && !entry.getValue().isDead()) {
+                    entry.getValue().remove();
+                }
+                return true;
+            }
+            return false;
+        });
+        if (playerGlows.isEmpty()) {
+            chestGlows.remove(player.getUniqueId());
+        }
+
+        // Chest minecarts are entities, so glow them directly for the owner like revealed mobs.
+        final Set<UUID> desiredCarts = new HashSet<>();
+        for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
+            if (entity instanceof org.bukkit.entity.minecart.StorageMinecart cart && isUnopenedMinecart(cart)) {
+                desiredCarts.add(cart.getUniqueId());
+            }
+        }
+        reconcileMinecartGlow(player, desiredCarts);
+    }
+
+    private boolean isUnopenedBlockContainer(final BlockState state) {
+        if (state instanceof org.bukkit.persistence.PersistentDataHolder holder) {
+            final org.bukkit.persistence.PersistentDataContainer pdc = holder.getPersistentDataContainer();
+            if (pdc.has(containerOpenedKey, PersistentDataType.BYTE)) {
+                return false;
+            }
+            if (state instanceof org.bukkit.loot.Lootable lootable && lootable.hasLootTable()) {
+                return true;
+            }
+            return pdc.has(generatedChestKey, PersistentDataType.BYTE);
+        }
+        return state instanceof org.bukkit.loot.Lootable lootable && lootable.hasLootTable();
+    }
+
+    private boolean isUnopenedMinecart(final org.bukkit.entity.minecart.StorageMinecart cart) {
+        if (cart.getPersistentDataContainer().has(containerOpenedKey, PersistentDataType.BYTE)) {
+            return false;
+        }
+        return cart instanceof org.bukkit.loot.Lootable lootable && lootable.hasLootTable();
+    }
+
+    private org.bukkit.entity.Shulker spawnChestGlow(final Player player, final BlockState state) {
+        final Location loc = state.getLocation().add(0.5, 0.0, 0.5);
+        try {
+            final org.bukkit.entity.Shulker shulker = loc.getWorld().spawn(loc, org.bukkit.entity.Shulker.class, entity -> {
+                entity.setAI(false);
+                entity.setGravity(false);
+                entity.setInvulnerable(true);
+                entity.setSilent(true);
+                entity.setCollidable(false);
+                entity.setPersistent(false);
+                entity.setVisibleByDefault(false);
+                entity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, false, false, false));
+                entity.setGlowing(true);
+                entity.addScoreboardTag(CHEST_GLOW_TAG);
+            });
+            player.showEntity(plugin, shulker);
+            return shulker;
+        } catch (final RuntimeException | LinkageError error) {
+            return null;
+        }
+    }
+
+    private void reconcileMinecartGlow(final Player player, final Set<UUID> desired) {
+        if (!glow.isAvailable()) {
+            return;
+        }
+        final Set<UUID> current = minecartGlows.computeIfAbsent(player.getUniqueId(), ignored -> new HashSet<>());
+        for (final UUID id : Set.copyOf(current)) {
+            if (!desired.contains(id)) {
+                final Entity entity = Bukkit.getEntity(id);
+                if (entity != null) {
+                    glow.setGlow(player, entity, false);
+                }
+                current.remove(id);
+            }
+        }
+        for (final UUID id : desired) {
+            final Entity entity = Bukkit.getEntity(id);
+            if (entity != null && glow.setGlow(player, entity, true)) {
+                current.add(id);
+            }
+        }
+        if (current.isEmpty()) {
+            minecartGlows.remove(player.getUniqueId());
+        }
+    }
+
+    private void clearChestGlow(final Player player) {
+        final Map<Long, org.bukkit.entity.Shulker> glows = chestGlows.remove(player.getUniqueId());
+        if (glows != null) {
+            for (final org.bukkit.entity.Shulker shulker : glows.values()) {
+                if (shulker != null && !shulker.isDead()) {
+                    shulker.remove();
+                }
+            }
+        }
+        final Set<UUID> carts = minecartGlows.remove(player.getUniqueId());
+        if (carts != null && glow.isAvailable()) {
+            for (final UUID id : carts) {
+                final Entity entity = Bukkit.getEntity(id);
+                if (entity != null) {
+                    glow.setGlow(player, entity, false);
+                }
+            }
+        }
+    }
+
+    private static long blockKey(final BlockState state) {
+        return ((long) (state.getX() & 0x3FFFFFF) << 38) | ((long) (state.getZ() & 0x3FFFFFF) << 12) | (state.getY() & 0xFFFL);
     }
 
     private void applyPassive(final Player player, final OwnedPet pet) {
@@ -2038,6 +2179,11 @@ public final class ActivePetManager {
                 .toList();
             removed += staleMounts.size();
             staleMounts.forEach(Entity::remove);
+            final List<org.bukkit.entity.Shulker> staleGlows = world.getEntitiesByClass(org.bukkit.entity.Shulker.class).stream()
+                .filter(entity -> entity.getScoreboardTags().contains(CHEST_GLOW_TAG))
+                .toList();
+            removed += staleGlows.size();
+            staleGlows.forEach(Entity::remove);
         }
         return removed;
     }

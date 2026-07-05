@@ -166,8 +166,8 @@ pets:
       - "Speed in cold biomes and a"
       - "frosted-ice trail over water."
       - "Treasure Sense"
-      - "Marks nearby unlooted chests"
-      - "that only you can see."
+      - "Makes nearby unopened chests, barrels"
+      - "and chest minecarts glow, only for you."
       - "Legendary pet"
       - "Click to add to your pet list."
   phoenix:

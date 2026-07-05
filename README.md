@@ -24,6 +24,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 
 * ⚔️ **Shadow Dragon AoE is now on-hit.** The burst only fires **when you attack** and the cooldown is ready; after firing, the boss bar counts down and the next hit triggers it again (instead of pulsing on a timer). The bar now reads *"Shadow Dragon AOE ready — attack!"* when charged.
 * 👛 **Goblin steal notification.** When your Goblin snatches the emeralds back from a villager, you now get a clear **player-only chat message** (plus the action-bar flash), so you actually notice the free trade.
+* 🐧 **Penguin Treasure Sense is now a glow.** Instead of particle markers, nearby containers a player has **never opened** now **glow through walls, for you only** — chests, trapped chests, **barrels** and **chest minecarts**. It also catches worlds that **pre-generate loot** (where the container looks "opened" but nobody touched it): a container stops glowing only once a player actually opens it. Reach grows with level (up to 24 blocks).
 
 ---
 
