@@ -216,6 +216,9 @@ public final class ActivePetManager {
     private final Map<UUID, Set<UUID>> minecartGlows = new HashMap<>();
     private final Map<UUID, BossBar> shadowBars = new HashMap<>();
     private final Map<UUID, Long> shadowAoeReadyAt = new HashMap<>();
+    // Guards against infinite recursion: the AoE burst damages mobs as the player, which re-fires the
+    // damage event (and applyHitAbility) — without this, that would trigger the burst again forever.
+    private final Set<UUID> shadowAoeBursting = new HashSet<>();
     private final GlowController glow;
     private BukkitTask task;
     private BukkitTask rideTask;
@@ -1282,11 +1285,18 @@ public final class ActivePetManager {
     private void tryShadowAoeOnAttack(final Player player, final OwnedPet pet) {
         final UUID id = player.getUniqueId();
         final long now = System.currentTimeMillis();
-        if (now < shadowAoeReadyAt.getOrDefault(id, 0L)) {
+        // The burst itself deals damage as the player, which re-enters this method; skip while bursting.
+        if (shadowAoeBursting.contains(id) || now < shadowAoeReadyAt.getOrDefault(id, 0L)) {
             return;
         }
-        triggerShadowAoe(player, pet, storage.data(id).visible());
+        // Set the cooldown before firing so the re-entrant damage events see it as on cooldown too.
         shadowAoeReadyAt.put(id, now + shadowAoeCooldownMillis(pet.level()));
+        shadowAoeBursting.add(id);
+        try {
+            triggerShadowAoe(player, pet, storage.data(id).visible());
+        } finally {
+            shadowAoeBursting.remove(id);
+        }
     }
 
     private void triggerShadowAoe(final Player player, final OwnedPet pet, final boolean visible) {
