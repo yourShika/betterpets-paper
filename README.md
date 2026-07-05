@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.4.1-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.5.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -20,29 +20,29 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 
 ---
 
-## 🆕 What's New in v1.4.1
+## 🆕 What's New in v1.5.0
 
-* 🐉 **Fix: flying pets now actually move.** In v1.4.0 you could mount your pet but it stayed put — armor-stand mounts ignore velocity. The mount is now moved every tick with block-collision checks, so flight works, stays smooth, and slides along walls instead of clipping into them.
-* 🎩 **Fix: pet items no longer vanish when placed on your head.** Player-head items auto-equip to the helmet slot on right-click (a 1.21.2+ behavior), which raced the "claim pet" logic and could eat the item. Pet items are now non-equippable, so right-clicking cleanly adds the pet to your list with no helmet flicker or item loss.
+### 🎨 Rarity overhaul
+* **Epic is now pink** and the old **Extraordinary tier is renamed to Mythical** (dark purple). Every pet you already own updates automatically — rarity is read live from the pet list, nothing is stored per pet.
+* **Goblin promoted to Mythical.** All six former Extraordinary pets (Herobrine, Phoenix, Reaper, Ender Dragon, Shadow Dragon, Ancient Elf) plus the Goblin are now **Mythical**. (`extraordinary` still works as a config/legacy alias.)
 
----
+### ✨ Particle effects
+* **Every Epic-and-above pet now has a fitting ambient particle aura** while it is visible — Pixie fae sparkles, Lich souls, Goblin emerald glints, Phoenix embers, Warden sculk, and more. Dragons and the Unicorn keep their existing trail/glitter.
 
-## 🆕 What's New in v1.4.0
+### 🐾 Ability reworks
+* **Shadow Dragon** — its aura became a **cooldown AoE burst**: a ring of shadow particles briefly appears, nearby hostiles take damage, and a **boss bar** shows *"Cooldown to AOE Damage"*. The cooldown **shrinks as it levels** (~12s → 4s).
+* **Ender Dragon** — now deals **bonus damage in every dimension**, not just The End.
+* **Mole** — now saves durability on **any** block you break with an **axe, pickaxe or shovel** (was dirt/sand/gravel only).
+* **Goblin** — dropped the coin-on-kill perk; instead a small level-scaled chance that a **villager purchase refunds its emerald cost** (a free buy). Cheaper trades stay.
+* **Penguin** — new **Treasure Sense**: client-side markers only you can see on nearby **unlooted** structure chests/barrels, radius growing with level.
+* **Chicken** — keeps Slow Falling and now **lays eggs over time**, more often and more at once as it levels.
+* **Pixie** — grants **more simultaneous random buffs at higher amplifiers** as it levels.
+* **Pufferfish** — same undead wither aura, now **wider and stronger with level**.
+* **Koala** — same tree-rest heal, **Regeneration I → III** with level.
+* **Bee** — **fixed:** standing next to plain flowers (poppy, dandelion, …) now correctly grants Regeneration.
 
-* 🐉 **Flying pets reworked into real mounts.** You now **sit on your pet and steer it** like a proper flying mount. The mount is moved by **velocity every tick** instead of being teleported, so flight is **smooth**, has **no input lag**, and **collides with blocks** — no more clipping inside walls. **Look** to steer, **hold forward** to fly, **jump** to climb, **look down** to dive, **sneak** to dismount. Tunable via `flight-speed`, `flight-lift`, and `flight-pet-offset` in `config.yml`.
-* 🔥 **Phoenix can fly from level 50.** Ride your Phoenix (with a flame trail) just like the dragons — this also works for **existing** Phoenix pets, and the catalogue now lists the level-50 flight unlock.
-* 🐾 **10 new pets — each with a real custom head:**
-  * **Goblin** *(Epic)* — cheaper villager trades (Hero of the Village) and bonus emeralds from kills.
-  * **Bee** *(Rare)* — Regeneration near flowers or crops (Regen II at level 80).
-  * **Crab** *(Rare)* — more damage and armor near water.
-  * **Otter** *(Epic, rare)* — water breathing and faster swimming.
-  * **Crystal Golem** *(Epic)* — chance for extra ores and crystals when mining.
-  * **Pixie** *(Epic)* — grants random small buffs over time.
-  * **Moon Fox** *(Epic)* — Speed and Strength at night.
-  * **Lich** *(Legendary)* — steals life when you kill mobs.
-  * **Shadow Dragon** *(Extraordinary)* — dark AoE damage aura with shadow particles; rideable from level 50.
-  * **Ancient Elf** *(Extraordinary)* — shortens debuffs, caps them to 2s from level 50, and **nullifies all debuffs at level 100**.
-* 📖 **Paginated menus.** With 52 pets, the **catalogue** and **spawn-chances** menus now have Previous/Next page buttons so every pet stays reachable.
+### ⚡ Performance
+* Penguin's chest scan only checks **loaded chunks** via a cheap container filter; ambient particles and scans are throttled; the Shadow Dragon boss bar reuses the existing tick loop.
 
 ---
 
@@ -142,8 +142,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 * 💾 Persistent player pet storage with backups
 * 🦙 Owner-only Alpaca storage using Paper item byte serialization
 * 📦 Dynamic Alpaca storage size based on level
-* 🐉 Rideable, steerable flying mounts (dragons, Phoenix, Shadow Dragon) from level 50
-* 🐾 52 pets across five rarities, each with its own ability
+* 🐉 Dragon mount flight unlocked from level 50
 * 🏛️ Chest loot integration for vanilla **and** custom structure containers
 * 🧩 Optional 3D pet rendering through BetterModel, with a clean head fallback
 
@@ -186,13 +185,8 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 max-pets-per-player: 45
 chest-pet-chance-percent: 2.5
 pet-xp-multiplier: 1.0
-
-# Pet flight (dragons, Phoenix, Shadow Dragon at level 50+). You sit on and steer
-# the pet like a real mount; it is moved by velocity so it stays smooth and
-# collides with blocks.
-flight-speed: 0.6        # forward/horizontal speed (blocks per tick)
-flight-lift: 0.5         # extra upward speed while holding jump
-flight-pet-offset: -0.4  # how far below the seat the pet body floats
+dragon-flight-speed: 1.5
+dragon-flight-lift: 0.55
 debug-loot-rolls: false
 
 # External modules (BetterModel) are experimental and disabled by default.
@@ -208,7 +202,7 @@ discovery-broadcasts:
   rare: true
   epic: true
   legendary: true
-  extraordinary: true
+  mythical: true
 
 model-overrides: {}
 ```
@@ -366,12 +360,6 @@ Each find shows a broadcast (e.g. `Player fished out a Rare Pet: Axolotl!`), gat
 
 ## 🗒️ Previous Releases
 
-* **v1.3.2** — Fix: pre-generated chest broadcasts now fire when the container is opened.
-* **v1.3.1** — `/pets xpboost give`, custom names survive conversion, anvil-safe items, booster broadcasts.
-* **v1.3.0** — Pet XP Boosters, pet renaming, richer catalogue, safer data + daily backups, storage settings.
-* **v1.2.7** — Reliable chest broadcasts in custom/data-pack structures.
-* **v1.2.6** — Vault & Trial Spawner pet sources with ominous bonus.
-* **v1.2.5** — Fishing, Wandering Trader, and brushing pet sources + `/pets drop` GUI.
 * **v1.2.4** — Pets look at the player again (facing fix), `/pets update`, double-chest discovery broadcasts.
 * **v1.2.3** — Mending-proof XP, lighter saving, `/pets version`, animation-driven model movement, ground-height caching.
 * **v1.2.2** — Optional module system (experimental) + BetterModel module; particles stop when the pet is hidden.

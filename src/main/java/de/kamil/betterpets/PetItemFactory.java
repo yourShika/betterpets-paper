@@ -290,11 +290,11 @@ public final class PetItemFactory {
         if (lower.contains("legendary")) {
             return NamedTextColor.GOLD;
         }
-        if (lower.contains("extraordinary")) {
-            return NamedTextColor.DARK_RED;
+        if (lower.contains("mythical") || lower.contains("extraordinary")) {
+            return NamedTextColor.DARK_PURPLE;
         }
         if (lower.contains("epic")) {
-            return NamedTextColor.DARK_PURPLE;
+            return NamedTextColor.LIGHT_PURPLE;
         }
         if (lower.contains("rare")) {
             return NamedTextColor.BLUE;

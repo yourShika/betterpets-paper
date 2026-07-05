@@ -16,9 +16,10 @@ public record PetDefinition(
 ) {
     public NamedTextColor rarityColor() {
         return switch (rarity.toLowerCase(Locale.ROOT)) {
-            case "extraordinary" -> NamedTextColor.DARK_RED;
+            // "extraordinary" kept as an alias so any legacy data still resolves to the Mythical colour.
+            case "mythical", "extraordinary" -> NamedTextColor.DARK_PURPLE;
             case "legendary" -> NamedTextColor.GOLD;
-            case "epic" -> NamedTextColor.DARK_PURPLE;
+            case "epic" -> NamedTextColor.LIGHT_PURPLE;
             case "rare" -> NamedTextColor.BLUE;
             case "common" -> NamedTextColor.GREEN;
             default -> color;

@@ -122,7 +122,7 @@ discovery-broadcasts:
   rare: true
   epic: true
   legendary: true
-  extraordinary: true
+  mythical: true
 
 # ---------------------------------------------------------------------------
 #  Messages - all player-facing text. %pet%, %player%, %level%, %chance% are

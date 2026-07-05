@@ -54,7 +54,8 @@ pets:
     weight: 12
     lore:
       - "Feather Fall"
-      - "Grants steady Slow Falling pulses."
+      - "Grants steady Slow Falling pulses,"
+      - "and lays eggs more often as it levels."
       - "Common pet"
       - "Click to add to your pet list."
   dog:
@@ -119,7 +120,7 @@ pets:
   herobrine:
     name: "Herobrine"
     color: "dark_red"
-    rarity: "Extraordinary"
+    rarity: "Mythical"
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOGQwNzUwZWY5NDlkOGVjYjUzOWI2MDk4YTk2Y2Y0NmNlNDU3YjY1MjQ4MmQ0OWRlZWJjYWRkYmM0ODk3YjQzMyJ9fX0="
     weight: 1
     lore:
@@ -128,7 +129,7 @@ pets:
       - "God of the Overworld"
       - "Your presence summons an eerie"
       - "constant thunderstorm."
-      - "Extraordinary pet"
+      - "Mythical pet"
       - "Click to add to your pet list."
   owl:
     name: "Owl"
@@ -164,12 +165,15 @@ pets:
       - "Frost Walker"
       - "Speed in cold biomes and a"
       - "frosted-ice trail over water."
+      - "Treasure Sense"
+      - "Marks nearby unlooted chests"
+      - "that only you can see."
       - "Legendary pet"
       - "Click to add to your pet list."
   phoenix:
     name: "Phoenix"
     color: "dark_red"
-    rarity: "Extraordinary"
+    rarity: "Mythical"
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjNhYWY3YjFhNzc4OTQ5Njk2Y2I5OWQ0ZjA0YWQxYWE1MThjZWVlMjU2YzcyZTVlZDY1YmZhNWMyZDg4ZDllIn19fQ=="
     weight: 1
     lore:
@@ -181,7 +185,7 @@ pets:
       - "burns undead you strike."
       - "Wings of Flame"
       - "Fly on your Phoenix from level 50."
-      - "Extraordinary pet"
+      - "Mythical pet"
       - "Click to add to your pet list."
   pufferfish:
     name: "Pufferfish"
@@ -191,8 +195,8 @@ pets:
     weight: 8
     lore:
       - "Toxic Spines"
-      - "Withers nearby undead mobs"
-      - "in a small aura."
+      - "Withers nearby undead in an aura"
+      - "that grows wider and stronger with level."
       - "Rare pet"
       - "Click to add to your pet list."
   rabbit:
@@ -210,7 +214,7 @@ pets:
   reaper:
     name: "Reaper"
     color: "dark_red"
-    rarity: "Extraordinary"
+    rarity: "Mythical"
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTM5YjVkMmU2MjRjMTQ3ZWZlNDdiMTMwZTFjZGRiOGEzNzdjZGIzZTc3NDJiZDJjZjRkZGRmNjlhNjg5MjcyIn19fQ=="
     weight: 1
     lore:
@@ -220,7 +224,7 @@ pets:
       - "Harvest of Wrath"
       - "Faster attacks, plus strength and"
       - "healing on every hit."
-      - "Extraordinary pet"
+      - "Mythical pet"
       - "Click to add to your pet list."
   red_dragon:
     name: "Red Dragon"
@@ -392,7 +396,8 @@ pets:
     weight: 7
     lore:
       - "Tree Rest"
-      - "Recover faster when near leaves or logs."
+      - "Recover faster near leaves or logs,"
+      - "healing more as it levels."
       - "Rare pet"
       - "Click to add to your pet list."
   red_panda:
@@ -443,13 +448,14 @@ pets:
   ender_dragon:
     name: "Ender Dragon"
     color: "dark_red"
-    rarity: "Extraordinary"
+    rarity: "Mythical"
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZmZjZGFlNTg2YjUyNDAzYjkyYjE4NTdlZTQzMzFiYWM2MzZhZjA4YmFiOTJiYTU3NTBhNTRhODMzMzFhNjM1MyJ9fX0="
     weight: 1
     lore:
-      - "End Dominion"
-      - "End damage and flight from level 50."
-      - "Extraordinary pet"
+      - "All-Realm Dominion"
+      - "Deal more damage in every dimension,"
+      - "and fly from level 50."
+      - "Mythical pet"
       - "Click to add to your pet list."
   unicorn:
     name: "Unicorn"
@@ -470,8 +476,9 @@ pets:
     weight: 10
     lore:
       - "Tunneler"
-      - "Chance to dig dirt, sand and gravel"
-      - "without spending tool durability."
+      - "Chance to break any block without"
+      - "spending tool durability, with an"
+      - "axe, pickaxe or shovel."
       - "Common pet"
       - "Click to add to your pet list."
   allay:
@@ -501,14 +508,14 @@ pets:
   goblin:
     name: "Goblin"
     color: "dark_purple"
-    rarity: "Epic"
+    rarity: "Mythical"
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjc4ODk4N2RkODhlMzJkMzJkMzhkNjlhMzQ0NWYyNGNhMmY5YmVhMDgwZWY0MDkzODQ0ZDRlM2NiOTAxNWMwNCJ9fX0="
     weight: 5
     lore:
       - "Sly Trader"
-      - "Cheaper villager trades and a"
-      - "chance for extra coins from kills."
-      - "Epic pet"
+      - "Cheaper villager trades and a small"
+      - "chance to buy from villagers for free."
+      - "Mythical pet"
       - "Click to add to your pet list."
   bee:
     name: "Bee"
@@ -591,7 +598,7 @@ pets:
   shadow_dragon:
     name: "Shadow Dragon"
     color: "dark_red"
-    rarity: "Extraordinary"
+    rarity: "Mythical"
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNmJlMDk3YzQxZmM3MmZjMjM2NjFiNjRmNWM3YzZjODU3NjkzYmZkMzVjNGE1NTI3MjU1NjZkYzUxZDY2ODdhNSJ9fX0="
     weight: 1
     lore:
@@ -600,17 +607,17 @@ pets:
       - "with shadow particles."
       - "Nightwing"
       - "Fly on your dragon from level 50."
-      - "Extraordinary pet"
+      - "Mythical pet"
       - "Click to add to your pet list."
   ancient_elf:
     name: "Ancient Elf"
     color: "dark_red"
-    rarity: "Extraordinary"
+    rarity: "Mythical"
     texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNDczMjdhYzUyODNkZTEyOGVjM2UxNTI2OWEzOTJiZjNlMGNkN2Y5ODY4NmUxYTk5ODhlY2U4MDZkNTdiYiJ9fX0="
     weight: 1
     lore:
       - "Warding Grace"
       - "Shortens debuffs, then blocks them,"
       - "and nullifies all debuffs at level 100."
-      - "Extraordinary pet"
+      - "Mythical pet"
       - "Click to add to your pet list."

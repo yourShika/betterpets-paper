@@ -15,6 +15,7 @@ import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.Particle;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
@@ -1412,6 +1413,39 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         itemFactory.petId(result)
             .flatMap(definitions::get)
             .ifPresent(definition -> announcePet(event.getPlayer(), definition, "bought", "from a Wandering Trader"));
+        maybeGoblinTradeRefund(event);
+    }
+
+    /**
+     * If the buyer has an active Goblin, there is a very small chance it "steals back" the emeralds spent
+     * on the trade, refunding the exact emerald cost next tick so the purchase ends up free.
+     */
+    private void maybeGoblinTradeRefund(final PlayerTradeEvent event) {
+        if (event.isCancelled()) {
+            return;
+        }
+        final Player player = event.getPlayer();
+        if (!activePets.tryGoblinTradeSave(player)) {
+            return;
+        }
+        int emeralds = 0;
+        for (final ItemStack ingredient : event.getTrade().getIngredients()) {
+            if (ingredient != null && ingredient.getType() == Material.EMERALD) {
+                emeralds += ingredient.getAmount();
+            }
+        }
+        if (emeralds <= 0) {
+            return;
+        }
+        final int refund = emeralds;
+        // Deferred a tick so the refund lands after the trade has removed the emeralds from the inventory.
+        Bukkit.getScheduler().runTask(this, () -> {
+            player.getInventory().addItem(new ItemStack(Material.EMERALD, refund)).values()
+                .forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
+            player.spawnParticle(Particle.HAPPY_VILLAGER, player.getLocation().add(0, 1.0, 0), 8, 0.3, 0.4, 0.3, 0.0);
+            player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6F, 1.4F);
+            player.sendActionBar(Component.text("Your Goblin snatched back " + refund + " emerald" + (refund == 1 ? "" : "s") + "!", NamedTextColor.GREEN));
+        });
     }
 
     @EventHandler
@@ -1510,7 +1544,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "rare" -> List.of(new ItemStack(Material.EMERALD, 24), new ItemStack(Material.GOLD_INGOT, 6));
             case "epic" -> List.of(new ItemStack(Material.EMERALD, 32), new ItemStack(Material.DIAMOND, 6));
             case "legendary" -> List.of(new ItemStack(Material.EMERALD, 48), new ItemStack(Material.DIAMOND, 16));
-            case "extraordinary" -> List.of(new ItemStack(Material.EMERALD, 64), new ItemStack(Material.NETHERITE_INGOT, 1));
+            case "mythical", "extraordinary" -> List.of(new ItemStack(Material.EMERALD, 64), new ItemStack(Material.NETHERITE_INGOT, 1));
             default -> List.of(new ItemStack(Material.EMERALD, 16), new ItemStack(Material.IRON_INGOT, 8));
         };
     }
@@ -1630,7 +1664,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 sound = Sound.UI_TOAST_CHALLENGE_COMPLETE;
                 pitch = 1.0F;
             }
-            case "extraordinary" -> {
+            case "mythical", "extraordinary" -> {
                 sound = Sound.ENTITY_ENDER_DRAGON_GROWL;
                 pitch = 1.0F;
             }
@@ -1645,15 +1679,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private List<String> rarityOrder() {
-        return List.of("Common", "Rare", "Epic", "Legendary", "Extraordinary");
+        return List.of("Common", "Rare", "Epic", "Legendary", "Mythical");
     }
 
     private NamedTextColor rarityColor(final String rarity) {
         return switch (rarity.toLowerCase(Locale.ROOT)) {
             case "rare" -> NamedTextColor.BLUE;
-            case "epic" -> NamedTextColor.DARK_PURPLE;
+            case "epic" -> NamedTextColor.LIGHT_PURPLE;
             case "legendary" -> NamedTextColor.GOLD;
-            case "extraordinary" -> NamedTextColor.DARK_RED;
+            case "mythical", "extraordinary" -> NamedTextColor.DARK_PURPLE;
             default -> NamedTextColor.GREEN;
         };
     }
@@ -2747,36 +2781,36 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "blue_dragon" -> "More End damage, absorption shield, rideable at level 50.";
             case "capybara" -> "Regeneration near water, stronger during rain.";
             case "cat" -> "Reduces fall damage.";
-            case "chicken" -> "Grants slow falling pulses.";
+            case "chicken" -> "Grants slow falling pulses and lays eggs over time.";
             case "crab" -> "More damage and armor near water.";
             case "crystal_golem" -> "Chance for extra ores and crystals when mining.";
             case "dog" -> "Chance to wither undead you hit.";
             case "dolphin" -> "Dolphin's Grace and faster water movement.";
             case "duck" -> "Faster swimming and brief slow falling when airborne.";
             case "elder_guardian" -> "Faster underwater mining.";
-            case "ender_dragon" -> "More End damage, absorption shield, rideable at level 50.";
+            case "ender_dragon" -> "More damage in every dimension, absorption shield, rideable at level 50.";
             case "ghast" -> "Explosion knockback resistance and Nether kill XP.";
-            case "goblin" -> "Cheaper villager trades and bonus emeralds from kills.";
+            case "goblin" -> "Cheaper villager trades and a small chance to buy from villagers for free.";
             case "lich" -> "Steals life when you kill mobs.";
             case "moon_fox" -> "Speed and Strength at night.";
             case "otter" -> "Water breathing and faster swimming.";
             case "pixie" -> "Grants random small buffs over time.";
-            case "shadow_dragon" -> "Dark AoE damage aura, rideable at level 50.";
+            case "shadow_dragon" -> "Cooldown AoE burst shown on a boss bar, rideable at level 50.";
             case "ancient_elf" -> "Shortens debuffs, then blocks and finally nullifies them.";
             case "hamster" -> "Higher step height.";
             case "hedgehog" -> "Reflects a small amount of melee damage.";
             case "herobrine" -> "More health, longer reach, thunder aura.";
-            case "koala" -> "Regeneration when resting near trees.";
-            case "mole" -> "Chance to mine dirt, sand, and gravel without spending tool durability.";
+            case "koala" -> "Regeneration near trees, stronger as it levels.";
+            case "mole" -> "Chance to break any block without spending tool durability (axe, pickaxe, shovel).";
             case "allay" -> "Pulls in nearby dropped items straight to your inventory.";
             case "cursed_plushie" -> "Distraction dummy: hostile mobs sometimes lose interest in you.";
             case "owl" -> "Night Vision and increased luck.";
             case "panda" -> "More attack knockback, bamboo biome hero effect.";
-            case "penguin" -> "Speed in cold biomes and frosted ice trail.";
+            case "penguin" -> "Speed in cold biomes, frosted ice trail, and marks nearby unlooted chests.";
             case "phoenix" -> "Fire Resistance, burns undead, revives you from death, rideable at level 50.";
             case "platypus" -> "Poisons melee and ranged attackers while you are wet (water or rain).";
             case "polar_bear" -> "Extra armor in cold biomes.";
-            case "pufferfish" -> "Wither aura against undead.";
+            case "pufferfish" -> "Wither aura against undead that grows with level.";
             case "rabbit" -> "Higher jumps and safer falls.";
             case "reaper" -> "Attack speed, undead aura and harvest buffs.";
             case "red_dragon" -> "More Nether damage, absorption shield, rideable at level 50.";
@@ -2808,34 +2842,34 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "cat" -> Math.round((1.0 - (tier * 0.05)) * 100) + "% fall damage";
             case "crab" -> "+" + formatDecimal(2.0 + (tier * 0.2)) + " damage, +" + formatDecimal(tier * 0.3) + " armor near water";
             case "crystal_golem" -> Math.round(Math.min(0.6, 0.15 + (tier * 0.02)) * 100) + "% extra ore/crystal drop";
-            case "chicken" -> "Slow Falling pulse every " + Math.max(1, getConfig().getInt("ability-update-ticks", 100) / 20) + "s";
+            case "chicken" -> "Slow Falling; ~" + Math.round(Math.min(0.45, 0.08 + (tier * 0.018)) * 100) + "% egg chance per cycle";
             case "dog" -> Math.min(100, level) + "% wither chance on undead hits";
             case "dolphin" -> "+" + Math.round(tier * 5.0) + "% water movement";
             case "duck" -> "+" + Math.round(tier * 3.5) + "% water movement, short glide";
             case "elder_guardian" -> Math.round((0.2 + tier * 0.04) * 100) + "% underwater mining";
-            case "ender_dragon" -> "+" + formatDecimal(tier * 0.35) + " End damage";
+            case "ender_dragon" -> "+" + formatDecimal(tier * 0.35) + " damage in all dimensions";
             case "ghast" -> Math.round(tier * 5.0) + "% explosion resistance";
-            case "goblin" -> "Hero " + Math.min(4, 1 + (tier / 5)) + ", up to " + (25 + tier) + "% coin drop chance";
+            case "goblin" -> "Hero " + Math.min(4, 1 + (tier / 5)) + ", up to " + Math.round(Math.min(0.20, 0.03 + (tier * 0.009)) * 100) + "% free-trade chance";
             case "lich" -> formatDecimal(2.0 + (tier * 0.2)) + " health stolen per kill";
             case "moon_fox" -> "+" + formatDecimal(tier * 0.003) + " speed & Strength at night";
             case "otter" -> "+" + Math.round(tier * 5.0) + "% water movement, water breathing";
-            case "pixie" -> "Random small buff, refreshes over time";
-            case "shadow_dragon" -> formatDecimal(1.0 + (tier * 0.2)) + " AoE damage, " + (level >= 100 ? 8 : level >= 50 ? 6 : 4) + " block radius";
+            case "pixie" -> (level >= 80 ? 3 : level >= 40 ? 2 : 1) + " random buff" + (level >= 40 ? "s" : "") + (level >= 90 ? " III" : level >= 50 ? " II" : "");
+            case "shadow_dragon" -> formatDecimal(1.5 + (tier * 0.3)) + " AoE damage every " + (Math.max(4000L, 12000L - (level * 80L)) / 1000L) + "s, " + (level >= 100 ? 8 : level >= 50 ? 6 : 4) + " block radius";
             case "ancient_elf" -> level >= 100 ? "Nullifies all debuffs" : level >= 50 ? "Debuffs capped to 2s" : "Debuff duration cut by 40%";
             case "hamster" -> formatDecimal(0.6 + tier * 0.045) + " step height";
             case "hedgehog" -> formatDecimal(Math.min(3.0, 0.4 + tier * 0.08)) + " reflected damage";
             case "herobrine" -> "+" + tier + " hearts/reach tier";
-            case "koala" -> "Regen I near leaves/logs";
-            case "mole" -> Math.round(Math.min(0.6, 0.1 + (tier * 0.025)) * 100) + "% no-durability chance";
+            case "koala" -> (level >= 80 ? "Regen III" : level >= 40 ? "Regen II" : "Regen I") + " near leaves/logs";
+            case "mole" -> Math.round(Math.min(0.6, 0.15 + (tier * 0.025)) * 100) + "% no-durability chance on any block";
             case "allay" -> formatDecimal(Math.min(12.0, 4.0 + (tier * 0.4))) + " block pickup radius";
             case "cursed_plushie" -> Math.round(Math.min(0.75, 0.25 + (tier * 0.025)) * 100) + "% mob distraction chance";
             case "owl" -> "+" + (tier * 25) + " luck";
             case "panda" -> "+" + Math.round(tier * 5.0) + "% knockback";
-            case "penguin" -> "+" + formatDecimal(tier * 0.00375) + " cold speed";
+            case "penguin" -> "+" + formatDecimal(tier * 0.00375) + " cold speed, " + Math.round(Math.min(16.0, 6.0 + (tier * 0.4))) + " block chest sense";
             case "phoenix" -> level >= 100 ? "12h revive cooldown" : level >= 50 ? "18h revive cooldown" : "24h revive cooldown";
             case "platypus" -> (80 + tier * 6) + " tick poison on attackers while wet";
             case "polar_bear" -> "+" + formatDecimal(tier * 0.25) + " armor in cold biomes";
-            case "pufferfish" -> "7 block wither aura";
+            case "pufferfish" -> formatDecimal(5.0 + (tier * 0.25)) + " block Wither " + (1 + (tier / 8)) + " aura";
             case "rabbit" -> formatDecimal(Math.min(1.01, 0.4 + tier * 0.03158)) + " jump";
             case "reaper" -> formatDecimal(4.0 + tier * 0.2) + " attack speed";
             case "red_parrot" -> Math.min(30, 10 + (level / 10) * 2) + " block reveal";
