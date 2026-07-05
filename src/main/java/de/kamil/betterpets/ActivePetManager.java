@@ -209,9 +209,10 @@ public final class ActivePetManager {
     private final Map<UUID, Set<PotionEffectType>> petBuffs = new HashMap<>();
     private final Set<UUID> herobrineWeather = new HashSet<>();
     private final Map<UUID, Set<UUID>> revealedMobs = new HashMap<>();
-    // Penguin container reveal: block containers glow via owner-only Shulker proxies, chest minecarts
-    // (which are entities) glow via the shared per-viewer GlowController like revealed mobs.
-    private final Map<UUID, Map<Long, org.bukkit.entity.Shulker>> chestGlows = new HashMap<>();
+    // Penguin container reveal: block containers glow via owner-only BlockDisplay proxies (which have no
+    // hitbox, so they never block opening the chest and cannot be attacked), chest minecarts (real
+    // entities) glow via the shared per-viewer GlowController like revealed mobs.
+    private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> chestGlows = new HashMap<>();
     private final Map<UUID, Set<UUID>> minecartGlows = new HashMap<>();
     private final Map<UUID, BossBar> shadowBars = new HashMap<>();
     private final Map<UUID, Long> shadowAoeReadyAt = new HashMap<>();
@@ -1544,9 +1545,9 @@ public final class ActivePetManager {
         final double radius = Math.min(24.0, 8.0 + (abilityTier(pet.level()) * 0.5));
         final double radiusSq = radius * radius;
 
-        // Block containers: keep one owner-only glowing Shulker per unopened container in range.
+        // Block containers: keep one owner-only glowing BlockDisplay per unopened container in range.
         final Set<Long> desiredBlocks = new HashSet<>();
-        final Map<Long, org.bukkit.entity.Shulker> playerGlows =
+        final Map<Long, org.bukkit.entity.BlockDisplay> playerGlows =
             chestGlows.computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>());
         final int chunkRadius = (int) Math.ceil(radius / 16.0);
         final int baseX = center.getBlockX() >> 4;
@@ -1563,9 +1564,9 @@ public final class ActivePetManager {
                     }
                     final long key = blockKey(state);
                     desiredBlocks.add(key);
-                    final org.bukkit.entity.Shulker existing = playerGlows.get(key);
+                    final org.bukkit.entity.BlockDisplay existing = playerGlows.get(key);
                     if (existing == null || existing.isDead()) {
-                        final org.bukkit.entity.Shulker spawned = spawnChestGlow(player, state);
+                        final org.bukkit.entity.BlockDisplay spawned = spawnChestGlow(player, state);
                         if (spawned != null) {
                             playerGlows.put(key, spawned);
                         }
@@ -1617,23 +1618,23 @@ public final class ActivePetManager {
         return cart instanceof org.bukkit.loot.Lootable lootable && lootable.hasLootTable();
     }
 
-    private org.bukkit.entity.Shulker spawnChestGlow(final Player player, final BlockState state) {
-        final Location loc = state.getLocation().add(0.5, 0.0, 0.5);
+    private org.bukkit.entity.BlockDisplay spawnChestGlow(final Player player, final BlockState state) {
+        // A BlockDisplay has no hitbox: it cannot be clicked, so it never blocks opening the container,
+        // and it cannot be attacked or killed. It renders the real block and glows through walls.
+        final Location loc = state.getLocation();
+        final org.bukkit.block.data.BlockData blockData = state.getBlockData();
         try {
-            final org.bukkit.entity.Shulker shulker = loc.getWorld().spawn(loc, org.bukkit.entity.Shulker.class, entity -> {
-                entity.setAI(false);
-                entity.setGravity(false);
-                entity.setInvulnerable(true);
-                entity.setSilent(true);
-                entity.setCollidable(false);
+            final org.bukkit.entity.BlockDisplay display = loc.getWorld().spawn(loc, org.bukkit.entity.BlockDisplay.class, entity -> {
+                entity.setBlock(blockData);
+                entity.setGlowing(true);
+                entity.setGlowColorOverride(Color.AQUA);
+                entity.setBrightness(new org.bukkit.entity.Display.Brightness(15, 15));
                 entity.setPersistent(false);
                 entity.setVisibleByDefault(false);
-                entity.addPotionEffect(new PotionEffect(PotionEffectType.INVISIBILITY, PotionEffect.INFINITE_DURATION, 0, false, false, false));
-                entity.setGlowing(true);
                 entity.addScoreboardTag(CHEST_GLOW_TAG);
             });
-            player.showEntity(plugin, shulker);
-            return shulker;
+            player.showEntity(plugin, display);
+            return display;
         } catch (final RuntimeException | LinkageError error) {
             return null;
         }
@@ -1665,11 +1666,11 @@ public final class ActivePetManager {
     }
 
     private void clearChestGlow(final Player player) {
-        final Map<Long, org.bukkit.entity.Shulker> glows = chestGlows.remove(player.getUniqueId());
+        final Map<Long, org.bukkit.entity.BlockDisplay> glows = chestGlows.remove(player.getUniqueId());
         if (glows != null) {
-            for (final org.bukkit.entity.Shulker shulker : glows.values()) {
-                if (shulker != null && !shulker.isDead()) {
-                    shulker.remove();
+            for (final org.bukkit.entity.BlockDisplay display : glows.values()) {
+                if (display != null && !display.isDead()) {
+                    display.remove();
                 }
             }
         }
@@ -2179,7 +2180,7 @@ public final class ActivePetManager {
                 .toList();
             removed += staleMounts.size();
             staleMounts.forEach(Entity::remove);
-            final List<org.bukkit.entity.Shulker> staleGlows = world.getEntitiesByClass(org.bukkit.entity.Shulker.class).stream()
+            final List<org.bukkit.entity.BlockDisplay> staleGlows = world.getEntitiesByClass(org.bukkit.entity.BlockDisplay.class).stream()
                 .filter(entity -> entity.getScoreboardTags().contains(CHEST_GLOW_TAG))
                 .toList();
             removed += staleGlows.size();

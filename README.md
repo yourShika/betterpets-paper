@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.5.1-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.5.2-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,12 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.5.2
+
+* 🐧 **Fix: Penguin container glow no longer blocks chests.** The glow used an invisible Shulker, whose hitbox intercepted your clicks (you couldn't open the container) and could even be attacked. It now uses a **BlockDisplay**, which has **no hitbox** — clicks pass straight through to the container and it cannot be attacked or killed. Same owner-only through-wall glow, now in cyan.
 
 ---
 
