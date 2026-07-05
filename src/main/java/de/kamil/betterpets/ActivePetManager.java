@@ -754,6 +754,7 @@ public final class ActivePetManager {
                 player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 1, true, false, true));
                 player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 1, true, false, true));
             }
+            case "shadow_dragon" -> tryShadowAoeOnAttack(player, pet);
             default -> {
             }
         }
@@ -884,7 +885,7 @@ public final class ActivePetManager {
                 markPenguinChests(player, pet);
             }
             if (pet.definitionId().equals("shadow_dragon")) {
-                handleShadowDragonAoe(player, pet, petVisible);
+                updateShadowBar(player, pet);
             } else {
                 clearShadowBar(player);
             }
@@ -1226,18 +1227,18 @@ public final class ActivePetManager {
     }
 
     /**
-     * Drives the Shadow Dragon's cooldown-based AoE. A boss bar shows the owner the time until the next
-     * burst ("Cooldown to AOE Damage"); when it fills, a ring of shadow particles briefly appears and all
-     * nearby hostiles take damage. The cooldown shrinks as the pet levels.
+     * Keeps the Shadow Dragon's boss bar in sync each tick. The bar only *shows* the cooldown state — it
+     * never triggers the AoE. When ready it invites the player to attack; while on cooldown it fills up
+     * again. The burst itself is fired from {@link #tryShadowAoeOnAttack} when the player lands a hit.
      */
-    private void handleShadowDragonAoe(final Player player, final OwnedPet pet, final boolean visible) {
+    private void updateShadowBar(final Player player, final OwnedPet pet) {
         final UUID id = player.getUniqueId();
         final long now = System.currentTimeMillis();
         final long cooldown = shadowAoeCooldownMillis(pet.level());
-        long readyAt = shadowAoeReadyAt.computeIfAbsent(id, ignored -> now + cooldown);
+        final long readyAt = shadowAoeReadyAt.getOrDefault(id, 0L);
 
         final BossBar bar = shadowBars.computeIfAbsent(id, ignored -> {
-            final BossBar created = Bukkit.createBossBar("Cooldown to AOE Damage", BarColor.PURPLE, BarStyle.SEGMENTED_10);
+            final BossBar created = Bukkit.createBossBar("Shadow Dragon AOE ready — attack!", BarColor.PURPLE, BarStyle.SEGMENTED_10);
             created.addPlayer(player);
             return created;
         });
@@ -1246,15 +1247,27 @@ public final class ActivePetManager {
         }
 
         if (now >= readyAt) {
-            triggerShadowAoe(player, pet, visible);
-            shadowAoeReadyAt.put(id, now + cooldown);
-            bar.setTitle("AOE Damage!");
+            bar.setTitle("Shadow Dragon AOE ready — attack!");
             bar.setProgress(1.0);
+        } else {
+            bar.setTitle("Cooldown to AOE Damage");
+            bar.setProgress(Math.max(0.0, Math.min(1.0, 1.0 - ((readyAt - now) / (double) cooldown))));
+        }
+    }
+
+    /**
+     * Fires the Shadow Dragon's AoE burst when the owner lands a melee hit, but only if the cooldown has
+     * elapsed. After firing, the cooldown runs until the player attacks again. The cooldown shrinks with
+     * level (see {@link #shadowAoeCooldownMillis}).
+     */
+    private void tryShadowAoeOnAttack(final Player player, final OwnedPet pet) {
+        final UUID id = player.getUniqueId();
+        final long now = System.currentTimeMillis();
+        if (now < shadowAoeReadyAt.getOrDefault(id, 0L)) {
             return;
         }
-        final double remaining = readyAt - now;
-        bar.setTitle("Cooldown to AOE Damage");
-        bar.setProgress(Math.max(0.0, Math.min(1.0, 1.0 - (remaining / cooldown))));
+        triggerShadowAoe(player, pet, storage.data(id).visible());
+        shadowAoeReadyAt.put(id, now + shadowAoeCooldownMillis(pet.level()));
     }
 
     private void triggerShadowAoe(final Player player, final OwnedPet pet, final boolean visible) {

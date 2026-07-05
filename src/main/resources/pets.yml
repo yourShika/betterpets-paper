@@ -603,8 +603,8 @@ pets:
     weight: 1
     lore:
       - "Umbral Breath"
-      - "Dark aura damages nearby foes"
-      - "with shadow particles."
+      - "Attacking unleashes a shadow AoE burst"
+      - "on a cooldown shown as a boss bar."
       - "Nightwing"
       - "Fly on your dragon from level 50."
       - "Mythical pet"

@@ -1438,13 +1438,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final int refund = emeralds;
+        final String emeraldWord = refund + " emerald" + (refund == 1 ? "" : "s");
         // Deferred a tick so the refund lands after the trade has removed the emeralds from the inventory.
         Bukkit.getScheduler().runTask(this, () -> {
             player.getInventory().addItem(new ItemStack(Material.EMERALD, refund)).values()
                 .forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
             player.spawnParticle(Particle.HAPPY_VILLAGER, player.getLocation().add(0, 1.0, 0), 8, 0.3, 0.4, 0.3, 0.0);
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6F, 1.4F);
-            player.sendActionBar(Component.text("Your Goblin snatched back " + refund + " emerald" + (refund == 1 ? "" : "s") + "!", NamedTextColor.GREEN));
+            // Player-only notification: a chat message plus an action-bar flash.
+            player.sendMessage(Component.text("[Goblin] ", NamedTextColor.DARK_PURPLE)
+                .append(Component.text("Your Goblin stole ", NamedTextColor.GREEN))
+                .append(Component.text(emeraldWord, NamedTextColor.GOLD))
+                .append(Component.text(" back from the villager!", NamedTextColor.GREEN)));
+            player.sendActionBar(Component.text("Your Goblin snatched back " + emeraldWord + "!", NamedTextColor.GREEN));
         });
     }
 
@@ -2795,7 +2801,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "moon_fox" -> "Speed and Strength at night.";
             case "otter" -> "Water breathing and faster swimming.";
             case "pixie" -> "Grants random small buffs over time.";
-            case "shadow_dragon" -> "Cooldown AoE burst shown on a boss bar, rideable at level 50.";
+            case "shadow_dragon" -> "AoE burst when you attack (boss-bar cooldown), rideable at level 50.";
             case "ancient_elf" -> "Shortens debuffs, then blocks and finally nullifies them.";
             case "hamster" -> "Higher step height.";
             case "hedgehog" -> "Reflects a small amount of melee damage.";
@@ -2854,7 +2860,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "moon_fox" -> "+" + formatDecimal(tier * 0.003) + " speed & Strength at night";
             case "otter" -> "+" + Math.round(tier * 5.0) + "% water movement, water breathing";
             case "pixie" -> (level >= 80 ? 3 : level >= 40 ? 2 : 1) + " random buff" + (level >= 40 ? "s" : "") + (level >= 90 ? " III" : level >= 50 ? " II" : "");
-            case "shadow_dragon" -> formatDecimal(1.5 + (tier * 0.3)) + " AoE damage every " + (Math.max(4000L, 12000L - (level * 80L)) / 1000L) + "s, " + (level >= 100 ? 8 : level >= 50 ? 6 : 4) + " block radius";
+            case "shadow_dragon" -> formatDecimal(1.5 + (tier * 0.3)) + " AoE damage on hit, " + (Math.max(4000L, 12000L - (level * 80L)) / 1000L) + "s cooldown, " + (level >= 100 ? 8 : level >= 50 ? 6 : 4) + " block radius";
             case "ancient_elf" -> level >= 100 ? "Nullifies all debuffs" : level >= 50 ? "Debuffs capped to 2s" : "Debuff duration cut by 40%";
             case "hamster" -> formatDecimal(0.6 + tier * 0.045) + " step height";
             case "hedgehog" -> formatDecimal(Math.min(3.0, 0.4 + tier * 0.08)) + " reflected damage";

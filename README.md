@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.5.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.5.1-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 
 ---
@@ -17,6 +17,13 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.5.1
+
+* ⚔️ **Shadow Dragon AoE is now on-hit.** The burst only fires **when you attack** and the cooldown is ready; after firing, the boss bar counts down and the next hit triggers it again (instead of pulsing on a timer). The bar now reads *"Shadow Dragon AOE ready — attack!"* when charged.
+* 👛 **Goblin steal notification.** When your Goblin snatches the emeralds back from a villager, you now get a clear **player-only chat message** (plus the action-bar flash), so you actually notice the free trade.
 
 ---
 
