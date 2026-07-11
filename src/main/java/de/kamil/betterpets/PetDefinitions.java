@@ -15,15 +15,12 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
 
 public final class PetDefinitions {
     private final Map<String, PetDefinition> definitions;
-    private final int totalWeight;
 
     private PetDefinitions(final Map<String, PetDefinition> definitions) {
         this.definitions = definitions;
-        this.totalWeight = definitions.values().stream().mapToInt(PetDefinition::weight).sum();
     }
 
     public static PetDefinitions load(final JavaPlugin plugin) {
@@ -80,21 +77,6 @@ public final class PetDefinitions {
         return definitions.values().stream()
             .filter(definition -> normalize(definition.id()).equals(normalized) || normalize(definition.name()).equals(normalized))
             .findFirst();
-    }
-
-    public PetDefinition randomWeighted(final Random random) {
-        int roll = random.nextInt(Math.max(1, totalWeight));
-        for (final PetDefinition definition : definitions.values()) {
-            roll -= definition.weight();
-            if (roll < 0) {
-                return definition;
-            }
-        }
-        return definitions.values().iterator().next();
-    }
-
-    public int totalWeight() {
-        return totalWeight;
     }
 
     private static NamedTextColor color(final String color) {

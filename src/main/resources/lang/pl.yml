@@ -1,0 +1,77 @@
+# ============================================================================
+#  Better Pets - Plik jezykowy polski (pl)
+#  Wybierz aktywny jezyk w config.yml w polu "language:" (en, de, pl).
+#  Przy kazdej aktualizacji NOWE klucze sa automatycznie dodawane do Twoich
+#  istniejacych plikow jezykowych; Twoje zmienione linie pozostaja nienaruszone.
+#  Brakujace klucze korzystaja z jezyka angielskiego.
+#  Symbole %pet% %player% %level% %chance% %tier% %time% sa zastepowane.
+# ============================================================================
+messages:
+  only-players: "Tylko gracze moga uzywac /pets."
+  no-permission: "Nie masz uprawnien, aby uzyc /pets."
+  cooldown: "Poczekaj chwile przed ponownym otwarciem menu zwierzakow."
+  pet-added: "Dodano %pet% do Twojej listy zwierzakow."
+  duplicate-pet: "Masz juz tego zwierzaka."
+  pet-limit: "Osiagnales maksymalna liczbe zwierzakow."
+  active-pet: "Przywolales %pet%."
+  despawned: "Twoj aktywny zwierzak zostal usuniety."
+  converted: "Zamieniono %pet% z powrotem na przedmiot."
+  no-active-pet: "Nie masz aktywnego zwierzaka."
+  no-space: "Twój ekwipunek jest pelny, wiec przedmiot zostal upuszczony."
+  usage-give: "Uzycie: /pets give <pet|all> [poziom] [gracz]"
+  usage-xpboost: "Uzycie: /pets xpboost give <x2-x5> <czas> [gracz]"
+  usage-set-name: "Uzycie: /pets set name <nazwa> (zwierzak musi byc przywolany)."
+  unknown-pet: "Nieznany zwierzak: %pet%"
+  player-not-found: "Nie znaleziono gracza: %player%"
+  test-give: "Dano %pet% poziom %level% graczowi %player%."
+  booster-give: "Dano Booster XP zwierzaka %tier% na %time% graczowi %player%."
+  protected-anvil: "Przedmiotow Better Pets nie mozna zmieniac nazwy w kowadle."
+  chances-saved: "Szansa pojawienia sie %pet% wynosi teraz %chance%%."
+  info-opened: "Otwieranie katalogu zwierzakow."
+  alpaca-storage-not-empty: "Oprozznij schowek Alpaki przed zmiana, usunieciem lub zamiana tego zwierzaka."
+  no-pet-storage: "Przedmiotow-zwierzakow nie mozna przechowywac w schowku zwierzaka."
+  modules-experimental: "Zewnetrzne moduly sa eksperymentalne i wylaczone. Ustaw experimental-modules: true w config.yml, aby uzyc /pets modules."
+
+rename:
+  length: "Nazwa zwierzaka musi miec od 1 do 32 znakow."
+  success: "Zmieniono nazwe zwierzaka na '%name%'."
+  restored: "Przywrocono domyslna nazwe (%pet%)."
+
+booster:
+  already-active: "Masz juz aktywny Booster XP zwierzaka (x%tier%, pozostalo %time%). Boostery sie nie sumuja."
+  activated: "<light_purple>Booster XP zwierzaka </light_purple><gradient:#E040FB:#B388FF><bold>x%tier%</bold></gradient><light_purple> aktywowany na </light_purple><aqua>%time%</aqua><light_purple>! Przyspiesza tylko rozwoj zwierzaka; licznik dziala tylko gdy jestes online.</light_purple>"
+  expired: "<gray>Twoj </gray><light_purple>Booster XP zwierzaka</light_purple><gray> wygasl.</gray>"
+  received: "<light_purple>Otrzymales Booster XP zwierzaka </light_purple><gradient:#E040FB:#B388FF><bold>x%tier%</bold></gradient><light_purple> na </light_purple><aqua>%time%</aqua><light_purple>.</light_purple>"
+  no-active: "Brak aktywnego Boostera XP zwierzaka."
+  active-line: "Aktywny booster: x%tier%"
+  time-left: "Pozostaly czas: %time%"
+  only-leveling: "Przyspiesza tylko rozwoj zwierzaka; odlicza tylko online."
+
+pet:
+  leveled: "<green>✦ Twoj </green><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><green> osiagnal poziom </green><gold><bold>%level%</bold></gold><green>!</green>"
+  phoenix-saved: "<gradient:#FF8A00:#FFD54F><bold>✦ Twoj Feniks uratowal Cie od smierci!</bold></gradient>"
+
+hint:
+  help: "Wskazowka: wpisz /pets help, aby zobaczyc wszystkie komendy."
+
+broadcast:
+  muted: "<yellow>Ogloszenia o znalezieniu/boosterze sa teraz </yellow><red><bold>WYL.</bold></red><yellow> Uzyj /pets mute ponownie, aby je wlaczyc.</yellow>"
+  unmuted: "<green>Ogloszenia o znalezieniu/boosterze sa znow </green><dark_green><bold>WL.</bold></dark_green><green></green>"
+
+convert:
+  confirm: "<gold>Kliknij ponownie 'Zamien na przedmiot', aby zamienic </gold><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><gold>. Poziom i postep zostana zachowane.</gold>"
+  cancelled: "Zamiana anulowana."
+
+input:
+  prompt-chance: "Wpisz nowa szanse pojawienia sie dla %pet% w procentach (0.001 - 100) lub 'cancel'."
+  prompt-xp: "Wpisz nowy mnoznik XP zwierzaka (0.1 - 5.0) lub 'cancel'."
+  cancelled: "Wprowadzanie anulowane."
+  invalid: "To nie jest prawidlowa liczba. Sprobuj ponownie lub wpisz 'cancel'."
+  applied: "Wartosc zmieniona na %value%."
+
+module:
+  needs-plugin: "Wymaga %plugin% - nie zainstalowano lub wylaczono."
+  click-enable: "Kliknij, aby wlaczyc."
+  click-disable: "Kliknij, aby wylaczyc."
+  waiting-plugin: "Aktywne w modules.yml, oczekiwanie na wymagany plugin."
+  icon: "Ikona: %material%"

@@ -1,0 +1,77 @@
+# ============================================================================
+#  Better Pets - Deutsche Sprachdatei (de)
+#  Aktive Sprache in der config.yml unter "language:" waehlen (en, de, pl).
+#  Bei jedem Update werden NEUE Schluessel automatisch in deine vorhandenen
+#  Sprachdateien uebernommen; deine bearbeiteten Zeilen bleiben erhalten.
+#  Fehlende Schluessel fallen auf Englisch zurueck.
+#  Platzhalter wie %pet% %player% %level% %chance% %tier% %time% werden ersetzt.
+# ============================================================================
+messages:
+  only-players: "Nur Spieler koennen /pets benutzen."
+  no-permission: "Du hast keine Berechtigung, /pets zu benutzen."
+  cooldown: "Bitte warte einen Moment, bevor du das Pet-Menue erneut oeffnest."
+  pet-added: "%pet% wurde deiner Pet-Liste hinzugefuegt."
+  duplicate-pet: "Du besitzt dieses Pet bereits."
+  pet-limit: "Du hast die maximale Anzahl an Pets erreicht."
+  active-pet: "Du hast %pet% beschworen."
+  despawned: "Dein aktives Pet wurde entfernt."
+  converted: "%pet% wurde wieder in einen Gegenstand umgewandelt."
+  no-active-pet: "Du hast kein aktives Pet."
+  no-space: "Dein Inventar ist voll, deshalb wurde der Gegenstand fallen gelassen."
+  usage-give: "Verwendung: /pets give <pet|all> [level] [spieler]"
+  usage-xpboost: "Verwendung: /pets xpboost give <x2-x5> <zeit> [spieler]"
+  usage-set-name: "Verwendung: /pets set name <name> (dein Pet muss beschworen sein)."
+  unknown-pet: "Unbekanntes Pet: %pet%"
+  player-not-found: "Spieler nicht gefunden: %player%"
+  test-give: "%pet% Level %level% an %player% gegeben."
+  booster-give: "Pet-XP-Booster %tier% fuer %time% an %player% gegeben."
+  protected-anvil: "Better-Pets-Gegenstaende koennen nicht im Amboss umbenannt werden."
+  chances-saved: "Spawn-Chance fuer %pet% ist jetzt %chance%%."
+  info-opened: "Pet-Katalog wird geoeffnet."
+  alpaca-storage-not-empty: "Leere den Alpaka-Speicher, bevor du dieses Pet wechselst, entfernst oder umwandelst."
+  no-pet-storage: "Pet-Gegenstaende koennen nicht im Pet-Speicher abgelegt werden."
+  modules-experimental: "Externe Module sind experimentell und deaktiviert. Setze experimental-modules: true in der config.yml, um /pets modules zu nutzen."
+
+rename:
+  length: "Der Pet-Name muss zwischen 1 und 32 Zeichen lang sein."
+  success: "Dein Pet wurde in '%name%' umbenannt."
+  restored: "Standardname wiederhergestellt (%pet%)."
+
+booster:
+  already-active: "Du hast bereits einen Pet-XP-Booster aktiv (x%tier%, noch %time%). Booster stapeln sich nicht."
+  activated: "<light_purple>Pet-XP-Booster </light_purple><gradient:#E040FB:#B388FF><bold>x%tier%</bold></gradient><light_purple> fuer </light_purple><aqua>%time%</aqua><light_purple> aktiviert! Beschleunigt nur das Pet-Leveln; der Timer laeuft nur, waehrend du online bist.</light_purple>"
+  expired: "<gray>Dein </gray><light_purple>Pet-XP-Booster</light_purple><gray> ist abgelaufen.</gray>"
+  received: "<light_purple>Du hast einen Pet-XP-Booster </light_purple><gradient:#E040FB:#B388FF><bold>x%tier%</bold></gradient><light_purple> fuer </light_purple><aqua>%time%</aqua><light_purple> erhalten.</light_purple>"
+  no-active: "Kein aktiver Pet-XP-Booster."
+  active-line: "Aktiver Booster: x%tier%"
+  time-left: "Verbleibende Zeit: %time%"
+  only-leveling: "Beschleunigt nur das Pet-Leveln; laeuft nur online herunter."
+
+pet:
+  leveled: "<green>✦ Dein </green><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><green> hat Level </green><gold><bold>%level%</bold></gold><green> erreicht!</green>"
+  phoenix-saved: "<gradient:#FF8A00:#FFD54F><bold>✦ Dein Phoenix hat dich vor dem Tod gerettet!</bold></gradient>"
+
+hint:
+  help: "Tipp: Tippe /pets help, um alle Befehle zu sehen."
+
+broadcast:
+  muted: "<yellow>Pet-Fund-/Booster-Nachrichten sind jetzt </yellow><red><bold>AUS</bold></red><yellow>. Nutze /pets mute erneut, um sie wieder zu aktivieren.</yellow>"
+  unmuted: "<green>Pet-Fund-/Booster-Nachrichten sind wieder </green><dark_green><bold>AN</bold></dark_green><green>.</green>"
+
+convert:
+  confirm: "<gold>Klicke erneut auf 'In Gegenstand umwandeln', um </gold><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><gold> umzuwandeln. Level und Fortschritt bleiben erhalten.</gold>"
+  cancelled: "Umwandlung abgebrochen."
+
+input:
+  prompt-chance: "Gib die neue Spawn-Chance fuer %pet% in Prozent ein (0.001 - 100) oder 'cancel'."
+  prompt-xp: "Gib den neuen Pet-XP-Multiplikator ein (0.1 - 5.0) oder 'cancel'."
+  cancelled: "Eingabe abgebrochen."
+  invalid: "Das ist keine gueltige Zahl. Versuche es erneut oder tippe 'cancel'."
+  applied: "Wert auf %value% aktualisiert."
+
+module:
+  needs-plugin: "Benoetigt %plugin% - nicht installiert oder deaktiviert."
+  click-enable: "Klick zum Aktivieren."
+  click-disable: "Klick zum Deaktivieren."
+  waiting-plugin: "In modules.yml aktiv, wartet auf das benoetigte Plugin."
+  icon: "Symbol: %material%"

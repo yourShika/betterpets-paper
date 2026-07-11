@@ -9,6 +9,8 @@ public final class PlayerPetData {
     private final List<OwnedPet> pets = new ArrayList<>();
     private UUID activePet;
     private boolean visible = true;
+    // When true, this player receives no discovery/booster broadcast messages or sounds.
+    private boolean broadcastsMuted;
     // Pet XP booster: tier (0 = none, else 2..5) and remaining time. Remaining time only counts down
     // while the player is online; boosterTickReference is a transient marker for that (not persisted).
     private int boosterTier;
@@ -40,6 +42,14 @@ public final class PlayerPetData {
 
     public void setVisible(final boolean visible) {
         this.visible = visible;
+    }
+
+    public boolean broadcastsMuted() {
+        return broadcastsMuted;
+    }
+
+    public void setBroadcastsMuted(final boolean broadcastsMuted) {
+        this.broadcastsMuted = broadcastsMuted;
     }
 
     public Optional<OwnedPet> findPet(final UUID uuid) {

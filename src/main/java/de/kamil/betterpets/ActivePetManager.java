@@ -200,6 +200,7 @@ public final class ActivePetManager {
     private final PetStorage storage;
     private final PetItemFactory itemFactory;
     private final PetModelService modelService;
+    private final LangManager lang;
     private final NamespacedKey ownerKey;
     private final NamespacedKey petUuidKey;
     private final NamespacedKey generatedChestKey;
@@ -220,16 +221,25 @@ public final class ActivePetManager {
     // damage event (and applyHitAbility) — without this, that would trigger the burst again forever.
     private final Set<UUID> shadowAoeBursting = new HashSet<>();
     private final GlowController glow;
+    // Per-pet behaviour registry: each pet registers only the hooks it uses. Adding a pet's behaviour
+    // is a few put() calls in registerAbilities() instead of edits across six switch statements.
+    private final Map<String, Behavior> passiveBehaviors = new HashMap<>();
+    private final Map<String, Behavior> periodicBehaviors = new HashMap<>();
+    private final Map<String, Hit> hitBehaviors = new HashMap<>();
+    private final Map<String, Hit> killBehaviors = new HashMap<>();
+    private final Map<String, Defense> defenseBehaviors = new HashMap<>();
+    private final Map<String, Target> targetBehaviors = new HashMap<>();
     private BukkitTask task;
     private BukkitTask rideTask;
     private long tick;
 
-    public ActivePetManager(final JavaPlugin plugin, final PetDefinitions definitions, final PetStorage storage, final PetItemFactory itemFactory, final PetModelService modelService) {
+    public ActivePetManager(final JavaPlugin plugin, final PetDefinitions definitions, final PetStorage storage, final PetItemFactory itemFactory, final PetModelService modelService, final LangManager lang) {
         this.plugin = plugin;
         this.definitions = definitions;
         this.storage = storage;
         this.itemFactory = itemFactory;
         this.modelService = modelService;
+        this.lang = lang;
         this.ownerKey = new NamespacedKey(plugin, "active_owner");
         this.petUuidKey = new NamespacedKey(plugin, "active_pet");
         // Same keys BetterPetsPlugin uses on containers, so we can tell an unlooted container from one
@@ -237,6 +247,7 @@ public final class ActivePetManager {
         this.generatedChestKey = new NamespacedKey(plugin, "pet_loot_generated");
         this.containerOpenedKey = new NamespacedKey(plugin, "container_opened");
         this.glow = new GlowController(plugin);
+        registerAbilities();
     }
 
     public void start() {
@@ -323,7 +334,7 @@ public final class ActivePetManager {
 
         activePets.put(player.getUniqueId(), new ActivePet(pet, display, hitbox, player.getLocation().getYaw(), modelHandle, modelName, nametag));
         applyPassive(player, pet);
-        if (plugin.getConfig().getBoolean("debug-logging", true)) {
+        if (plugin.getConfig().getBoolean("debug-logging", false)) {
             plugin.getLogger().info("[Debug] Spawned active pet " + definition.id() + " for " + player.getName() + (modelHandle == null ? " with head fallback." : " with BetterModel model " + modelName + "."));
         }
     }
@@ -725,21 +736,9 @@ public final class ActivePetManager {
         if (pet == null) {
             return;
         }
-        switch (pet.definitionId()) {
-            case "warden" -> {
-                if (event.getEntityType() == EntityType.WARDEN) {
-                    event.setCancelled(true);
-                }
-            }
-            case "cursed_plushie" -> {
-                final double chance = Math.min(0.75, 0.25 + (abilityTier(pet.level()) * 0.025));
-                if (isHostile(event.getEntity()) && ThreadLocalRandom.current().nextDouble() < chance) {
-                    event.setCancelled(true);
-                    spawnPlushieDistraction(player);
-                }
-            }
-            default -> {
-            }
+        final Target target = targetBehaviors.get(pet.definitionId());
+        if (target != null) {
+            target.run(ctx(player, pet), event);
         }
     }
 
@@ -756,25 +755,9 @@ public final class ActivePetManager {
             return;
         }
 
-        final int level = pet.level();
-        switch (pet.definitionId()) {
-            case "dog" -> {
-                if (isUndead(victim) && Math.random() <= Math.min(1.0, level / 100.0)) {
-                    victim.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 40, 1, true, false, true));
-                }
-            }
-            case "phoenix" -> {
-                if (isUndead(victim)) {
-                    victim.setFireTicks(Math.max(victim.getFireTicks(), level * 2));
-                }
-            }
-            case "reaper" -> {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 1, true, false, true));
-                player.addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 1, true, false, true));
-            }
-            case "shadow_dragon" -> tryShadowAoeOnAttack(player, pet);
-            default -> {
-            }
+        final Hit hit = hitBehaviors.get(pet.definitionId());
+        if (hit != null) {
+            hit.run(ctx(player, pet), victim);
         }
     }
 
@@ -784,23 +767,9 @@ public final class ActivePetManager {
             return;
         }
 
-        final int tier = abilityTier(pet.level());
-        switch (pet.definitionId()) {
-            case "hedgehog" -> {
-                if (damager instanceof LivingEntity living && !living.equals(player)) {
-                    living.damage(Math.min(3.0, 0.4 + (tier * 0.08)));
-                }
-            }
-            case "platypus" -> {
-                final LivingEntity attacker = resolveAttacker(player, damager);
-                if (attacker != null && isWetOrNearWater(player)) {
-                    // Undead mobs are immune to Poison, so wither them instead for a visible effect.
-                    final PotionEffectType effect = isUndead(attacker) ? PotionEffectType.WITHER : PotionEffectType.POISON;
-                    attacker.addPotionEffect(new PotionEffect(effect, 80 + (tier * 6), 0, true, false, true));
-                }
-            }
-            default -> {
-            }
+        final Defense defense = defenseBehaviors.get(pet.definitionId());
+        if (defense != null) {
+            defense.run(ctx(player, pet), damager);
         }
     }
 
@@ -820,21 +789,9 @@ public final class ActivePetManager {
             return;
         }
 
-        switch (pet.definitionId()) {
-            case "ghast" -> {
-                if (player.getWorld().getEnvironment() == World.Environment.NETHER) {
-                    player.giveExp(10);
-                }
-            }
-            case "lich" -> {
-                final AttributeInstance maxHealth = player.getAttribute(Attribute.MAX_HEALTH);
-                final double max = maxHealth == null ? 20.0 : maxHealth.getValue();
-                final double heal = 2.0 + (abilityTier(pet.level()) * 0.2);
-                player.setHealth(Math.max(0.0, Math.min(max, player.getHealth() + heal)));
-                player.getWorld().spawnParticle(Particle.HEART, player.getLocation().add(0, 1.0, 0), 3, 0.3, 0.3, 0.3, 0.0);
-            }
-            default -> {
-            }
+        final Hit kill = killBehaviors.get(pet.definitionId());
+        if (kill != null) {
+            kill.run(ctx(player, pet), killed);
         }
     }
 
@@ -855,6 +812,7 @@ public final class ActivePetManager {
     private void tick() {
         tick++;
         final int abilityInterval = Math.max(20, plugin.getConfig().getInt("ability-update-ticks", 100));
+        final int penguinInterval = Math.max(20, plugin.getConfig().getInt("penguin-glow-update-ticks", 40));
 
         for (final Player player : Bukkit.getOnlinePlayers()) {
             final PlayerPetData data = storage.data(player.getUniqueId());
@@ -900,7 +858,7 @@ public final class ActivePetManager {
                 collectAllayItems(player, Math.min(12.0, 4.0 + (abilityTier(pet.level()) * 0.4)));
             }
             if (pet.definitionId().equals("penguin")) {
-                if (tick % 20L == 0L) {
+                if (tick % penguinInterval == 0L) {
                     updatePenguinChestGlow(player, pet);
                 }
             } else if (chestGlows.containsKey(player.getUniqueId()) || minecartGlows.containsKey(player.getUniqueId())) {
@@ -1342,80 +1300,10 @@ public final class ActivePetManager {
     }
 
     private void applyPeriodicAbilities(final Player player, final OwnedPet pet) {
-        switch (pet.definitionId()) {
-            case "blue_dragon", "red_dragon" -> applyPetBuff(player, PotionEffectType.ABSORPTION, 3, 220);
-            case "ender_dragon" -> applyPetBuff(player, PotionEffectType.ABSORPTION, 2, 220);
-            case "capybara" -> {
-                if (isWetOrNearWater(player)) {
-                    applyPetBuff(player, PotionEffectType.REGENERATION, player.getWorld().hasStorm() && pet.level() >= 80 ? 1 : 0);
-                }
-            }
-            case "bee" -> {
-                if (nearFlowersOrCrops(player)) {
-                    applyPetBuff(player, PotionEffectType.REGENERATION, pet.level() >= 80 ? 1 : 0);
-                }
-            }
-            case "chicken" -> {
-                applyPetBuff(player, PotionEffectType.SLOW_FALLING, 1);
-                layChickenEgg(player, pet.level());
-            }
-            case "pixie" -> {
-                // Higher level = more simultaneous buffs and stronger amplifiers.
-                final int lvl = pet.level();
-                final int count = lvl >= 80 ? 3 : lvl >= 40 ? 2 : 1;
-                final int amplifier = lvl >= 90 ? 2 : lvl >= 50 ? 1 : 0;
-                final List<PotionEffectType> pool = new java.util.ArrayList<>(PIXIE_BUFFS);
-                java.util.Collections.shuffle(pool, ThreadLocalRandom.current());
-                for (int i = 0; i < count && i < pool.size(); i++) {
-                    applyPetBuff(player, pool.get(i), amplifier);
-                }
-            }
-            // shadow_dragon AoE is driven by the cooldown/boss-bar system in handleShadowDragonAoe().
-            case "duck" -> {
-                if (isAirborne(player)) {
-                    applyPetBuff(player, PotionEffectType.SLOW_FALLING, 0);
-                }
-            }
-            case "koala" -> {
-                if (nearTree(player)) {
-                    final int lvl = pet.level();
-                    applyPetBuff(player, PotionEffectType.REGENERATION, lvl >= 80 ? 2 : lvl >= 40 ? 1 : 0);
-                }
-            }
-            case "panda" -> {
-                if (biomeKey(player).contains("bamboo_jungle")) {
-                    applyPetBuff(player, PotionEffectType.HERO_OF_THE_VILLAGE, 1);
-                }
-            }
-            case "penguin" -> freezeWaterNear(player);
-            case "pufferfish" -> {
-                // Same aura at every level, but its reach and wither strength scale up with tier.
-                final int t = abilityTier(pet.level());
-                final double radius = 5.0 + (t * 0.25);
-                final int amplifier = 1 + (t / 8);
-                affectNearby(player, radius, true, entity ->
-                    entity.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 80 + (t * 8), amplifier, true, false, true)));
-            }
-            case "reaper" -> {
-                final int radius = pet.level() >= 100 ? 25 : pet.level() >= 50 ? 20 : 15;
-                affectNearby(player, radius, true, entity -> {
-                    entity.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 160, 1, true, false, true));
-                    entity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 160, 1, true, false, true));
-                });
-            }
-            case "warden" -> Bukkit.getWorlds().forEach(world -> world.getEntitiesByClass(org.bukkit.entity.Warden.class).forEach(warden -> {
-                if (warden.getTarget() != null && warden.getTarget().equals(player)) {
-                    warden.setTarget(null);
-                }
-            }));
-            case "herobrine" -> {
-                // Personal, client-side weather only, so other players and the world are unaffected.
-                herobrineWeather.add(player.getUniqueId());
-                player.setPlayerWeather(WeatherType.DOWNFALL);
-            }
-            case "unicorn" -> applyPetBuff(player, PotionEffectType.REGENERATION, pet.level() >= 80 ? 1 : 0);
-            default -> {
-            }
+        // shadow_dragon AoE is driven by the cooldown/boss-bar system, not a periodic behaviour here.
+        final Behavior behavior = periodicBehaviors.get(pet.definitionId());
+        if (behavior != null) {
+            behavior.run(ctx(player, pet));
         }
     }
 
@@ -1457,7 +1345,7 @@ public final class ActivePetManager {
         player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 800, 0, true, true, true));
         player.playEffect(EntityEffect.TOTEM_RESURRECT);
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TOTEM_USE, 1.0F, 1.0F);
-        player.sendMessage(Component.text("Your Phoenix saved you from death!", net.kyori.adventure.text.format.NamedTextColor.GOLD));
+        player.sendMessage(lang.colored("pet.phoenix-saved", net.kyori.adventure.text.format.NamedTextColor.GOLD));
         storage.save();
         return true;
     }
@@ -1699,121 +1587,284 @@ public final class ActivePetManager {
         return ((long) (state.getX() & 0x3FFFFFF) << 38) | ((long) (state.getZ() & 0x3FFFFFF) << 12) | (state.getY() & 0xFFFL);
     }
 
+    /** Per-pet dispatch context: the owner, the pet, and its cached level/ability tier. */
+    private record AbilityCtx(Player player, OwnedPet pet, int level, int tier) {
+    }
+
+    @FunctionalInterface
+    private interface Behavior {
+        void run(AbilityCtx c);
+    }
+
+    @FunctionalInterface
+    private interface Hit {
+        void run(AbilityCtx c, LivingEntity target);
+    }
+
+    @FunctionalInterface
+    private interface Defense {
+        void run(AbilityCtx c, Entity damager);
+    }
+
+    @FunctionalInterface
+    private interface Target {
+        void run(AbilityCtx c, EntityTargetLivingEntityEvent event);
+    }
+
+    private AbilityCtx ctx(final Player player, final OwnedPet pet) {
+        final int level = pet.level();
+        return new AbilityCtx(player, pet, level, PetAbilities.tier(level));
+    }
+
+    /**
+     * Registers each pet's behaviour hooks. Lambdas close over this manager, so they reach the same
+     * private helpers (setTarget, applyPetBuff, biome/water checks, ...) the old switch statements used.
+     * Formulas are unchanged from the previous inline versions.
+     */
+    private void registerAbilities() {
+        // Passive attribute / potion effects, reapplied while the pet is active.
+        passiveBehaviors.put("ant", c -> setTarget(c.player(), Attribute.SCALE, Math.max(0.5, 1.0 - (c.tier() * 0.025))));
+        passiveBehaviors.put("axolotl", c -> setTarget(c.player(), Attribute.OXYGEN_BONUS, c.tier() * 0.5));
+        passiveBehaviors.put("alpaca", c -> {
+            if (usedInventorySlots(c.player()) >= 27) {
+                setTarget(c.player(), Attribute.MOVEMENT_SPEED, 0.1 + (c.tier() * 0.0015));
+            }
+        });
+        passiveBehaviors.put("beaver", c -> {
+            if (isHoldingTool(c.player(), "_AXE")) {
+                setTarget(c.player(), Attribute.MINING_EFFICIENCY, c.tier() * 0.35);
+            }
+        });
+        passiveBehaviors.put("blue_dragon", c -> {
+            if (c.player().getWorld().getEnvironment() == World.Environment.THE_END) {
+                setTarget(c.player(), Attribute.ATTACK_DAMAGE, 2.0 + (c.tier() * 0.3));
+            }
+        });
+        passiveBehaviors.put("cat", c -> setTarget(c.player(), Attribute.FALL_DAMAGE_MULTIPLIER, Math.max(0.0, 1.0 - (c.tier() * 0.05))));
+        passiveBehaviors.put("crab", c -> {
+            if (isWetOrNearWater(c.player())) {
+                setTarget(c.player(), Attribute.ATTACK_DAMAGE, 2.0 + (c.tier() * 0.2));
+                setTarget(c.player(), Attribute.ARMOR, c.tier() * 0.3);
+            }
+        });
+        passiveBehaviors.put("goblin", c -> applyPetBuff(c.player(), PotionEffectType.HERO_OF_THE_VILLAGE, Math.min(4, 1 + (c.tier() / 5))));
+        passiveBehaviors.put("moon_fox", c -> {
+            if (isNight(c.player())) {
+                setTarget(c.player(), Attribute.MOVEMENT_SPEED, 0.1 + (c.tier() * 0.003));
+                applyPetBuff(c.player(), PotionEffectType.STRENGTH, 0);
+            }
+        });
+        passiveBehaviors.put("otter", c -> {
+            setTarget(c.player(), Attribute.WATER_MOVEMENT_EFFICIENCY, c.tier() * 0.05);
+            setTarget(c.player(), Attribute.OXYGEN_BONUS, c.tier() * 0.5);
+            applyPetBuff(c.player(), PotionEffectType.WATER_BREATHING, 0);
+            applyPetBuff(c.player(), PotionEffectType.DOLPHINS_GRACE, 1);
+        });
+        passiveBehaviors.put("dolphin", c -> {
+            applyPetBuff(c.player(), PotionEffectType.DOLPHINS_GRACE, 1);
+            setTarget(c.player(), Attribute.WATER_MOVEMENT_EFFICIENCY, c.tier() * 0.05);
+        });
+        passiveBehaviors.put("elder_guardian", c -> setTarget(c.player(), Attribute.SUBMERGED_MINING_SPEED, Math.min(1.0, 0.2 + (c.tier() * 0.04))));
+        // The Ender Dragon now empowers you in every dimension, not just The End.
+        passiveBehaviors.put("ender_dragon", c -> setTarget(c.player(), Attribute.ATTACK_DAMAGE, 2.0 + (c.tier() * 0.35)));
+        passiveBehaviors.put("ghast", c -> setTarget(c.player(), Attribute.EXPLOSION_KNOCKBACK_RESISTANCE, c.tier() * 0.05));
+        passiveBehaviors.put("hamster", c -> setTarget(c.player(), Attribute.STEP_HEIGHT, 0.6 + (c.tier() * 0.045)));
+        passiveBehaviors.put("herobrine", c -> {
+            setTarget(c.player(), Attribute.MAX_HEALTH, 20.0 + c.tier());
+            setTarget(c.player(), Attribute.ENTITY_INTERACTION_RANGE, 3.0 + (c.tier() * 0.1125));
+        });
+        passiveBehaviors.put("owl", c -> {
+            applyPetBuff(c.player(), PotionEffectType.NIGHT_VISION, 1);
+            setTarget(c.player(), Attribute.LUCK, c.tier() * 25.0);
+        });
+        passiveBehaviors.put("panda", c -> setTarget(c.player(), Attribute.ATTACK_KNOCKBACK, c.tier() * 0.05));
+        passiveBehaviors.put("penguin", c -> {
+            if (isColdBiome(c.player())) {
+                setTarget(c.player(), Attribute.MOVEMENT_SPEED, 0.1 + (c.tier() * 0.00375));
+            }
+        });
+        passiveBehaviors.put("polar_bear", c -> {
+            if (isColdBiome(c.player())) {
+                setTarget(c.player(), Attribute.ARMOR, c.tier() * 0.25);
+            }
+        });
+        passiveBehaviors.put("phoenix", c -> applyPetBuff(c.player(), PotionEffectType.FIRE_RESISTANCE, 1));
+        passiveBehaviors.put("red_panda", c -> {
+            if (isForestBiome(c.player())) {
+                setTarget(c.player(), Attribute.MOVEMENT_SPEED, 0.1 + (c.tier() * 0.002));
+            }
+            setTarget(c.player(), Attribute.SNEAKING_SPEED, 0.3 + (c.tier() * 0.02));
+        });
+        passiveBehaviors.put("rabbit", c -> {
+            setTarget(c.player(), Attribute.SAFE_FALL_DISTANCE, 10.0);
+            setTarget(c.player(), Attribute.JUMP_STRENGTH, Math.min(1.01, 0.4 + (c.tier() * 0.03158)));
+        });
+        passiveBehaviors.put("reaper", c -> setTarget(c.player(), Attribute.ATTACK_SPEED, 4.0 + (c.tier() * 0.2)));
+        passiveBehaviors.put("red_dragon", c -> {
+            if (c.player().getWorld().getEnvironment() == World.Environment.NETHER) {
+                setTarget(c.player(), Attribute.ATTACK_DAMAGE, 2.0 + (c.tier() * 0.3));
+            }
+        });
+        passiveBehaviors.put("snail", c -> setTarget(c.player(), Attribute.SNEAKING_SPEED, 0.3 + (c.tier() * 0.035)));
+        passiveBehaviors.put("spinosaurus", c -> setTarget(c.player(), Attribute.SCALE, 1.0 + (c.tier() * 0.025)));
+        passiveBehaviors.put("slime", c -> {
+            setTarget(c.player(), Attribute.SAFE_FALL_DISTANCE, 5.0 + c.tier());
+            setTarget(c.player(), Attribute.JUMP_STRENGTH, Math.min(0.85, 0.4 + (c.tier() * 0.018)));
+        });
+        passiveBehaviors.put("tiger", c -> {
+            setTarget(c.player(), Attribute.SWEEPING_DAMAGE_RATIO, 1.0);
+            setTarget(c.player(), Attribute.MOVEMENT_SPEED, 0.1 + (Math.min(100, c.level()) * 0.001));
+        });
+        passiveBehaviors.put("turtle", c -> setTarget(c.player(), Attribute.KNOCKBACK_RESISTANCE, c.tier() * 5.0));
+        passiveBehaviors.put("duck", c -> setTarget(c.player(), Attribute.WATER_MOVEMENT_EFFICIENCY, c.tier() * 0.035));
+        passiveBehaviors.put("unicorn", c -> setTarget(c.player(), Attribute.LUCK, c.tier() * 8.0));
+        passiveBehaviors.put("worm", c -> setTarget(c.player(), Attribute.MINING_EFFICIENCY, c.tier() * 0.5));
+
+        // Periodic effects, applied every ability interval.
+        final Behavior dragonAbsorption = c -> applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 3, 220);
+        periodicBehaviors.put("blue_dragon", dragonAbsorption);
+        periodicBehaviors.put("red_dragon", dragonAbsorption);
+        periodicBehaviors.put("ender_dragon", c -> applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 2, 220));
+        periodicBehaviors.put("capybara", c -> {
+            if (isWetOrNearWater(c.player())) {
+                applyPetBuff(c.player(), PotionEffectType.REGENERATION, c.player().getWorld().hasStorm() && c.level() >= 80 ? 1 : 0);
+            }
+        });
+        periodicBehaviors.put("bee", c -> {
+            if (nearFlowersOrCrops(c.player())) {
+                applyPetBuff(c.player(), PotionEffectType.REGENERATION, c.level() >= 80 ? 1 : 0);
+            }
+        });
+        periodicBehaviors.put("chicken", c -> {
+            applyPetBuff(c.player(), PotionEffectType.SLOW_FALLING, 1);
+            layChickenEgg(c.player(), c.level());
+        });
+        periodicBehaviors.put("pixie", c -> {
+            // Higher level = more simultaneous buffs and stronger amplifiers.
+            final int lvl = c.level();
+            final int count = lvl >= 80 ? 3 : lvl >= 40 ? 2 : 1;
+            final int amplifier = lvl >= 90 ? 2 : lvl >= 50 ? 1 : 0;
+            final List<PotionEffectType> pool = new java.util.ArrayList<>(PIXIE_BUFFS);
+            java.util.Collections.shuffle(pool, ThreadLocalRandom.current());
+            for (int i = 0; i < count && i < pool.size(); i++) {
+                applyPetBuff(c.player(), pool.get(i), amplifier);
+            }
+        });
+        periodicBehaviors.put("duck", c -> {
+            if (isAirborne(c.player())) {
+                applyPetBuff(c.player(), PotionEffectType.SLOW_FALLING, 0);
+            }
+        });
+        periodicBehaviors.put("koala", c -> {
+            if (nearTree(c.player())) {
+                final int lvl = c.level();
+                applyPetBuff(c.player(), PotionEffectType.REGENERATION, lvl >= 80 ? 2 : lvl >= 40 ? 1 : 0);
+            }
+        });
+        periodicBehaviors.put("panda", c -> {
+            if (biomeKey(c.player()).contains("bamboo_jungle")) {
+                applyPetBuff(c.player(), PotionEffectType.HERO_OF_THE_VILLAGE, 1);
+            }
+        });
+        periodicBehaviors.put("penguin", c -> freezeWaterNear(c.player()));
+        periodicBehaviors.put("pufferfish", c -> {
+            // Same aura at every level, but its reach and wither strength scale up with tier.
+            final int t = c.tier();
+            final double radius = 5.0 + (t * 0.25);
+            final int amplifier = 1 + (t / 8);
+            affectNearby(c.player(), radius, true, entity ->
+                entity.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 80 + (t * 8), amplifier, true, false, true)));
+        });
+        periodicBehaviors.put("reaper", c -> {
+            final int radius = c.level() >= 100 ? 25 : c.level() >= 50 ? 20 : 15;
+            affectNearby(c.player(), radius, true, entity -> {
+                entity.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 160, 1, true, false, true));
+                entity.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 160, 1, true, false, true));
+            });
+        });
+        periodicBehaviors.put("warden", c -> Bukkit.getWorlds().forEach(world -> world.getEntitiesByClass(org.bukkit.entity.Warden.class).forEach(warden -> {
+            if (warden.getTarget() != null && warden.getTarget().equals(c.player())) {
+                warden.setTarget(null);
+            }
+        })));
+        periodicBehaviors.put("herobrine", c -> {
+            // Personal, client-side weather only, so other players and the world are unaffected.
+            herobrineWeather.add(c.player().getUniqueId());
+            c.player().setPlayerWeather(WeatherType.DOWNFALL);
+        });
+        periodicBehaviors.put("unicorn", c -> applyPetBuff(c.player(), PotionEffectType.REGENERATION, c.level() >= 80 ? 1 : 0));
+
+        // On-hit effects (owner lands a melee/projectile hit on a victim).
+        hitBehaviors.put("dog", (c, victim) -> {
+            if (isUndead(victim) && Math.random() <= Math.min(1.0, c.level() / 100.0)) {
+                victim.addPotionEffect(new PotionEffect(PotionEffectType.WITHER, 40, 1, true, false, true));
+            }
+        });
+        hitBehaviors.put("phoenix", (c, victim) -> {
+            if (isUndead(victim)) {
+                victim.setFireTicks(Math.max(victim.getFireTicks(), c.level() * 2));
+            }
+        });
+        hitBehaviors.put("reaper", (c, victim) -> {
+            c.player().addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 100, 1, true, false, true));
+            c.player().addPotionEffect(new PotionEffect(PotionEffectType.STRENGTH, 100, 1, true, false, true));
+        });
+        hitBehaviors.put("shadow_dragon", (c, victim) -> tryShadowAoeOnAttack(c.player(), c.pet()));
+
+        // On-kill effects.
+        killBehaviors.put("ghast", (c, killed) -> {
+            if (c.player().getWorld().getEnvironment() == World.Environment.NETHER) {
+                c.player().giveExp(10);
+            }
+        });
+        killBehaviors.put("lich", (c, killed) -> {
+            final AttributeInstance maxHealth = c.player().getAttribute(Attribute.MAX_HEALTH);
+            final double max = maxHealth == null ? 20.0 : maxHealth.getValue();
+            final double heal = 2.0 + (c.tier() * 0.2);
+            c.player().setHealth(Math.max(0.0, Math.min(max, c.player().getHealth() + heal)));
+            c.player().getWorld().spawnParticle(Particle.HEART, c.player().getLocation().add(0, 1.0, 0), 3, 0.3, 0.3, 0.3, 0.0);
+        });
+
+        // On-defense effects (owner is hit by a damager).
+        defenseBehaviors.put("hedgehog", (c, damager) -> {
+            if (damager instanceof LivingEntity living && !living.equals(c.player())) {
+                living.damage(Math.min(3.0, 0.4 + (c.tier() * 0.08)));
+            }
+        });
+        defenseBehaviors.put("platypus", (c, damager) -> {
+            final LivingEntity attacker = resolveAttacker(c.player(), damager);
+            if (attacker != null && isWetOrNearWater(c.player())) {
+                // Undead mobs are immune to Poison, so wither them instead for a visible effect.
+                final PotionEffectType effect = isUndead(attacker) ? PotionEffectType.WITHER : PotionEffectType.POISON;
+                attacker.addPotionEffect(new PotionEffect(effect, 80 + (c.tier() * 6), 0, true, false, true));
+            }
+        });
+
+        // Mob-targeting overrides.
+        targetBehaviors.put("warden", (c, event) -> {
+            if (event.getEntityType() == EntityType.WARDEN) {
+                event.setCancelled(true);
+            }
+        });
+        targetBehaviors.put("cursed_plushie", (c, event) -> {
+            final double chance = Math.min(0.75, 0.25 + (c.tier() * 0.025));
+            if (isHostile(event.getEntity()) && ThreadLocalRandom.current().nextDouble() < chance) {
+                event.setCancelled(true);
+                spawnPlushieDistraction(c.player());
+            }
+        });
+    }
+
     private void applyPassive(final Player player, final OwnedPet pet) {
         resetPlayerState(player);
-        final int level = pet.level();
-        final int tier = abilityTier(level);
-        switch (pet.definitionId()) {
-            case "ant" -> setTarget(player, Attribute.SCALE, Math.max(0.5, 1.0 - (tier * 0.025)));
-            case "axolotl" -> setTarget(player, Attribute.OXYGEN_BONUS, tier * 0.5);
-            case "alpaca" -> {
-                if (usedInventorySlots(player) >= 27) {
-                    setTarget(player, Attribute.MOVEMENT_SPEED, 0.1 + (tier * 0.0015));
-                }
-            }
-            case "beaver" -> {
-                if (isHoldingTool(player, "_AXE")) {
-                    setTarget(player, Attribute.MINING_EFFICIENCY, tier * 0.35);
-                }
-            }
-            case "blue_dragon" -> {
-                if (player.getWorld().getEnvironment() == World.Environment.THE_END) {
-                    setTarget(player, Attribute.ATTACK_DAMAGE, 2.0 + (tier * 0.3));
-                }
-            }
-            case "cat" -> setTarget(player, Attribute.FALL_DAMAGE_MULTIPLIER, Math.max(0.0, 1.0 - (tier * 0.05)));
-            case "crab" -> {
-                if (isWetOrNearWater(player)) {
-                    setTarget(player, Attribute.ATTACK_DAMAGE, 2.0 + (tier * 0.2));
-                    setTarget(player, Attribute.ARMOR, tier * 0.3);
-                }
-            }
-            case "goblin" -> applyPetBuff(player, PotionEffectType.HERO_OF_THE_VILLAGE, Math.min(4, 1 + (tier / 5)));
-            case "moon_fox" -> {
-                if (isNight(player)) {
-                    setTarget(player, Attribute.MOVEMENT_SPEED, 0.1 + (tier * 0.003));
-                    applyPetBuff(player, PotionEffectType.STRENGTH, 0);
-                }
-            }
-            case "otter" -> {
-                setTarget(player, Attribute.WATER_MOVEMENT_EFFICIENCY, tier * 0.05);
-                setTarget(player, Attribute.OXYGEN_BONUS, tier * 0.5);
-                applyPetBuff(player, PotionEffectType.WATER_BREATHING, 0);
-                applyPetBuff(player, PotionEffectType.DOLPHINS_GRACE, 1);
-            }
-            case "dolphin" -> {
-                applyPetBuff(player, PotionEffectType.DOLPHINS_GRACE, 1);
-                setTarget(player, Attribute.WATER_MOVEMENT_EFFICIENCY, tier * 0.05);
-            }
-            case "elder_guardian" -> setTarget(player, Attribute.SUBMERGED_MINING_SPEED, Math.min(1.0, 0.2 + (tier * 0.04)));
-            // The Ender Dragon now empowers you in every dimension, not just The End.
-            case "ender_dragon" -> setTarget(player, Attribute.ATTACK_DAMAGE, 2.0 + (tier * 0.35));
-            case "ghast" -> setTarget(player, Attribute.EXPLOSION_KNOCKBACK_RESISTANCE, tier * 0.05);
-            case "hamster" -> setTarget(player, Attribute.STEP_HEIGHT, 0.6 + (tier * 0.045));
-            case "herobrine" -> {
-                setTarget(player, Attribute.MAX_HEALTH, 20.0 + tier);
-                setTarget(player, Attribute.ENTITY_INTERACTION_RANGE, 3.0 + (tier * 0.1125));
-            }
-            case "owl" -> {
-                applyPetBuff(player, PotionEffectType.NIGHT_VISION, 1);
-                setTarget(player, Attribute.LUCK, tier * 25.0);
-            }
-            case "panda" -> setTarget(player, Attribute.ATTACK_KNOCKBACK, tier * 0.05);
-            case "penguin" -> {
-                if (isColdBiome(player)) {
-                    setTarget(player, Attribute.MOVEMENT_SPEED, 0.1 + (tier * 0.00375));
-                }
-            }
-            case "polar_bear" -> {
-                if (isColdBiome(player)) {
-                    setTarget(player, Attribute.ARMOR, tier * 0.25);
-                }
-            }
-            case "phoenix" -> applyPetBuff(player, PotionEffectType.FIRE_RESISTANCE, 1);
-            case "red_panda" -> {
-                if (isForestBiome(player)) {
-                    setTarget(player, Attribute.MOVEMENT_SPEED, 0.1 + (tier * 0.002));
-                }
-                setTarget(player, Attribute.SNEAKING_SPEED, 0.3 + (tier * 0.02));
-            }
-            case "rabbit" -> {
-                setTarget(player, Attribute.SAFE_FALL_DISTANCE, 10.0);
-                setTarget(player, Attribute.JUMP_STRENGTH, Math.min(1.01, 0.4 + (tier * 0.03158)));
-            }
-            case "reaper" -> setTarget(player, Attribute.ATTACK_SPEED, 4.0 + (tier * 0.2));
-            case "red_dragon" -> {
-                if (player.getWorld().getEnvironment() == World.Environment.NETHER) {
-                    setTarget(player, Attribute.ATTACK_DAMAGE, 2.0 + (tier * 0.3));
-                }
-            }
-            case "snail" -> setTarget(player, Attribute.SNEAKING_SPEED, 0.3 + (tier * 0.035));
-            case "spinosaurus" -> setTarget(player, Attribute.SCALE, 1.0 + (tier * 0.025));
-            case "slime" -> {
-                setTarget(player, Attribute.SAFE_FALL_DISTANCE, 5.0 + tier);
-                setTarget(player, Attribute.JUMP_STRENGTH, Math.min(0.85, 0.4 + (tier * 0.018)));
-            }
-            case "tiger" -> {
-                setTarget(player, Attribute.SWEEPING_DAMAGE_RATIO, 1.0);
-                setTarget(player, Attribute.MOVEMENT_SPEED, 0.1 + (Math.min(100, level) * 0.001));
-            }
-            case "turtle" -> setTarget(player, Attribute.KNOCKBACK_RESISTANCE, tier * 5.0);
-            case "duck" -> setTarget(player, Attribute.WATER_MOVEMENT_EFFICIENCY, tier * 0.035);
-            case "unicorn" -> setTarget(player, Attribute.LUCK, tier * 8.0);
-            case "worm" -> setTarget(player, Attribute.MINING_EFFICIENCY, tier * 0.5);
-            default -> {
-            }
+        final Behavior behavior = passiveBehaviors.get(pet.definitionId());
+        if (behavior != null) {
+            behavior.run(ctx(player, pet));
         }
     }
 
     private int abilityTier(final int level) {
-        final int capped = Math.max(1, Math.min(100, level));
-        if (capped <= 7) {
-            return 1;
-        }
-        if (capped >= 98) {
-            return 20;
-        }
-        return Math.min(20, 2 + ((capped - 8) / 5));
+        return PetAbilities.tier(level);
     }
 
     private void resetPlayerState(final Player player) {
@@ -1872,7 +1923,7 @@ public final class ActivePetManager {
     private void setTarget(final Player player, final Attribute attribute, final double targetValue) {
         final AttributeInstance instance = player.getAttribute(attribute);
         if (instance == null) {
-            if (plugin.getConfig().getBoolean("debug-logging", true)) {
+            if (plugin.getConfig().getBoolean("debug-logging", false)) {
                 plugin.getLogger().info("[Debug] Missing player attribute " + attribute.getKey() + " for " + player.getName() + ".");
             }
             return;

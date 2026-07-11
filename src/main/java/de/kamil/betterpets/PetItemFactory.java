@@ -28,6 +28,7 @@ public final class PetItemFactory {
     private final NamespacedKey petIdKey;
     private final NamespacedKey petUuidKey;
     private final NamespacedKey petLevelKey;
+    private final NamespacedKey petExpKey;
     private final NamespacedKey petNameKey;
     private final NamespacedKey boosterTierKey;
     private final NamespacedKey boosterMinutesKey;
@@ -36,6 +37,7 @@ public final class PetItemFactory {
         this.petIdKey = new NamespacedKey(plugin, "pet_id");
         this.petUuidKey = new NamespacedKey(plugin, "pet_uuid");
         this.petLevelKey = new NamespacedKey(plugin, "pet_level");
+        this.petExpKey = new NamespacedKey(plugin, "pet_exp");
         this.petNameKey = new NamespacedKey(plugin, "pet_name");
         this.boosterTierKey = new NamespacedKey(plugin, "booster_tier");
         this.boosterMinutesKey = new NamespacedKey(plugin, "booster_minutes");
@@ -108,6 +110,7 @@ public final class PetItemFactory {
                 Component.text("Left-click: +1%", NamedTextColor.GREEN),
                 Component.text("Right-click: -1%", NamedTextColor.RED),
                 Component.text("Shift-click: +/-10%", NamedTextColor.YELLOW),
+                Component.text("Middle-click: type an exact value", NamedTextColor.AQUA),
                 Component.text("Range: 0.001% - 100%", NamedTextColor.DARK_GRAY)
             )
         );
@@ -155,6 +158,15 @@ public final class PetItemFactory {
         }
         final Integer level = item.getItemMeta().getPersistentDataContainer().get(petLevelKey, PersistentDataType.INTEGER);
         return level == null ? 1 : Math.max(1, Math.min(100, level));
+    }
+
+    /** Saved in-level XP stored on a converted pet item, or 0 if none. */
+    public int petExp(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return 0;
+        }
+        final Integer exp = item.getItemMeta().getPersistentDataContainer().get(petExpKey, PersistentDataType.INTEGER);
+        return exp == null ? 0 : Math.max(0, exp);
     }
 
     public Optional<String> petCustomName(final ItemStack item) {
@@ -212,6 +224,7 @@ public final class PetItemFactory {
         if (pet != null) {
             if (discovery) {
                 meta.getPersistentDataContainer().set(petLevelKey, PersistentDataType.INTEGER, pet.level());
+                meta.getPersistentDataContainer().set(petExpKey, PersistentDataType.INTEGER, pet.exp());
                 if (pet.hasCustomName()) {
                     meta.getPersistentDataContainer().set(petNameKey, PersistentDataType.STRING, pet.customName());
                 }

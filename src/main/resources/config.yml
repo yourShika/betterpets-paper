@@ -1,35 +1,34 @@
-# ============================================================================
-#  Better Pets Paper - configuration
-#  Every option is documented. Missing options are repaired automatically on
-#  start (your existing values are kept).
-# ============================================================================
+# ╔══════════════════════════════════════════════════════════════════════════╗
+# ║                         BETTER PETS  ·  config.yml                          ║
+# ╠══════════════════════════════════════════════════════════════════════════╣
+# ║  Every option is documented below. Missing options are added automatically ║
+# ║  on start and your existing values are kept, so updates never wipe your     ║
+# ║  settings. Sections:                                                        ║
+# ║    1) Language      2) General        3) Pet following & abilities          ║
+# ║    4) XP & boosters 5) Flight         6) Pet sources                        ║
+# ║    7) Broadcasts    8) Storage        9) 3D models                          ║
+# ║   10) Modules      11) Auto-updater  12) Debug                              ║
+# ╚══════════════════════════════════════════════════════════════════════════╝
 
+
+# ═══ 1) LANGUAGE ════════════════════════════════════════════════════════════
+# Language for ALL player-facing text. Bundled: en (English), de (Deutsch),
+# pl (Polski). The actual text lives in plugins/BetterPets/lang/<code>.yml and
+# can be freely edited (MiniMessage tags like <gradient:#a:#b>, <bold>, colours
+# are supported). New keys are merged into your files on update, so custom text
+# survives upgrades.
+#   Change it here and run /pets reload, or switch live with:  /pets language <en|de|pl>
+language: en
+
+
+# ═══ 2) GENERAL ═════════════════════════════════════════════════════════════
 # Cooldown (in ticks, 20 = 1 second) between opening the /pets menu.
 open-cooldown-ticks: 20
 # Maximum number of pets a single player can own.
 max-pets-per-player: 45
-# Base chance (percent) for a generated chest to contain a pet.
-chest-pet-chance-percent: 2.5
-# Global pet XP multiplier. Higher = pets level faster. Range 0.1 - 5.0.
-pet-xp-multiplier: 1.0
-# Pet XP Booster settings. max-minutes caps admin-created boosters and consumption.
-xp-booster:
-  max-minutes: 1440
-  broadcast-drops: true
-  broadcast-activations: true
-# Pet flight tuning (used while riding a dragon, Phoenix, or Shadow Dragon pet at
-# level 50+). You sit on the pet and steer it like a real mount: look where you
-# want to go and hold forward, jump to climb, look down to dive, sneak to
-# dismount. The mount is moved by velocity every tick, so it stays smooth and
-# collides with blocks instead of clipping through them.
-#   flight-speed:      horizontal/forward flight speed in blocks per tick.
-#   flight-lift:       extra upward speed while holding jump.
-#   flight-pet-offset: how far below the seat the pet body floats.
-flight-speed: 0.6
-flight-lift: 0.5
-flight-pet-offset: -0.4
-# How often (ticks) all pet data is auto-saved. Minimum 1200 (60s).
-save-interval-ticks: 6000
+
+
+# ═══ 3) PET FOLLOWING & ABILITIES ═══════════════════════════════════════════
 # How often (ticks) the active pet follows/updates. Lower = smoother, more CPU.
 follow-update-ticks: 3
 # How often (ticks) periodic pet abilities are applied.
@@ -43,48 +42,45 @@ follow-turn-speed-degrees: 6.0
 follow-teleport-distance: 24.0
 # Interpolation duration (ticks) used when the pet display teleports.
 follow-teleport-duration-ticks: 8
-# Log extra info to the console (pet spawns, booster drops, etc.).
-debug-logging: true
-# Log each chest/vault/trial-spawner loot roll attempt (very verbose).
-debug-loot-rolls: false
+# How often (ticks) the Penguin re-scans nearby containers for its Treasure Sense
+# glow. Higher = cheaper. Minimum 20 (once per second).
+penguin-glow-update-ticks: 40
 
-# External modules (e.g. BetterModel) are experimental. While this is false the
-# /pets modules command is blocked and no external module can be activated.
-experimental-modules: false
 
-# ---------------------------------------------------------------------------
-#  Storage
-# ---------------------------------------------------------------------------
-storage:
-  # Storage backend. "yaml" is the stable default. "sqlite" is planned/opt-in
-  # and experimental; until it ships, selecting it keeps using the YAML store.
-  type: yaml
-  backup:
-    # Master switch for automatic backups.
-    enabled: true
-    # Keep one dated copy of pets.yml per day in plugins/BetterPets/backups.
-    daily: true
-    # How many daily backups to keep before the oldest are pruned.
-    keep-days: 14
+# ═══ 4) XP & BOOSTERS ═══════════════════════════════════════════════════════
+# Global pet XP multiplier. Higher = pets level faster. Range 0.1 - 5.0.
+# (Admins can also change this live in /pets, and boosters stack on top of it.)
+pet-xp-multiplier: 1.0
+# Pet XP Booster settings.
+#   max-minutes:           caps admin-created boosters and consumption.
+#   broadcast-drops:       announce when a mob drops a booster.
+#   broadcast-activations: announce when a player activates a booster.
+xp-booster:
+  max-minutes: 1440
+  broadcast-drops: true
+  broadcast-activations: true
 
-# ---------------------------------------------------------------------------
-#  3D model rendering (only used when the BetterModel module is enabled)
-# ---------------------------------------------------------------------------
-# Vertical offset applied when a grounded model is snapped to the ground.
-model-ground-offset: 0.05
-# Height (blocks) of the pet name hologram above the model.
-model-nametag-height: 2.6
-# Extra yaw (degrees) if a model was built facing a different direction.
-model-facing-yaw-offset-degrees: 0.0
-# Per-pet model name overrides (petNameOrId -> modelFileName without .bbmodel).
-model-overrides: {}
 
-# ---------------------------------------------------------------------------
-#  Pet sources - where pets (and XP boosters) can be obtained.
-#  Toggle and tune each one in /pets drop. Each has its own chance-percent.
-# ---------------------------------------------------------------------------
+# ═══ 5) FLIGHT ══════════════════════════════════════════════════════════════
+# Used while riding a Dragon, Phoenix or Shadow Dragon at level 50+. You sit on
+# the pet and steer it like a real mount: look where you want to go and hold
+# forward, jump to climb, look down to dive, sneak to dismount. The mount moves
+# by velocity every tick, so it stays smooth and collides with blocks.
+#   flight-speed:      horizontal/forward flight speed in blocks per tick.
+#   flight-lift:       extra upward speed while holding jump.
+#   flight-pet-offset: how far below the seat the pet body floats.
+flight-speed: 0.6
+flight-lift: 0.5
+flight-pet-offset: -0.4
+
+
+# ═══ 6) PET SOURCES ═════════════════════════════════════════════════════════
+# Where pets (and XP boosters) can be obtained. Toggle and tune each one live in
+# /pets drop (admin). Each source has its own chance-percent (0 - 100).
+# Base chance (percent) for a generated chest to contain a pet.
+chest-pet-chance-percent: 2.5
 pet-sources:
-  # Chests keep using chest-pet-chance-percent above.
+  # Chests use chest-pet-chance-percent above.
   chest:
     enabled: true
   # Chance to fish out a pet instead of the normal catch.
@@ -114,9 +110,10 @@ pet-sources:
     enabled: true
     chance-percent: 1.5
 
-# ---------------------------------------------------------------------------
-#  Discovery broadcasts - which rarities announce a find in chat.
-# ---------------------------------------------------------------------------
+
+# ═══ 7) DISCOVERY BROADCASTS ════════════════════════════════════════════════
+# Which rarities announce a find in chat. Players can mute these for themselves
+# with /pets mute.
 discovery-broadcasts:
   common: true
   rare: true
@@ -124,32 +121,63 @@ discovery-broadcasts:
   legendary: true
   mythical: true
 
-# ---------------------------------------------------------------------------
-#  Messages - all player-facing text. %pet%, %player%, %level%, %chance% are
-#  replaced where applicable.
-# ---------------------------------------------------------------------------
-messages:
-  only-players: "Only players can use /pets."
-  no-permission: "You do not have permission to use /pets."
-  cooldown: "Please wait a moment before opening the pet menu again."
-  pet-added: "Added %pet% to your pet list."
-  duplicate-pet: "You already have this pet."
-  pet-limit: "You have reached the maximum amount of pets."
-  active-pet: "You summoned %pet%."
-  despawned: "Your active pet has been despawned."
-  converted: "Converted %pet% back to an item."
-  no-active-pet: "You do not have an active pet."
-  no-space: "Your inventory is full, so the item was dropped."
-  usage-give: "Usage: /pets give <pet|all> [level] [player]"
-  usage-xpboost: "Usage: /pets xpboost give <x2-x5> <time> [player]"
-  usage-set-name: "Usage: /pets set name <name> (your pet must be summoned)."
-  unknown-pet: "Unknown pet: %pet%"
-  player-not-found: "Player not found: %player%"
-  test-give: "Gave %pet% level %level% to %player%."
-  booster-give: "Gave Pet XP Booster %tier% for %time% to %player%."
-  protected-anvil: "Better Pets items cannot be renamed in an anvil."
-  chances-saved: "Spawn chance for %pet% is now %chance%%."
-  info-opened: "Opening pet catalogue."
-  alpaca-storage-not-empty: "Empty the Alpaca storage before switching, despawning, or converting this pet."
-  no-pet-storage: "Pet items cannot be stored inside pet storage."
-  modules-experimental: "External modules are experimental and disabled. Set experimental-modules: true in config.yml to use /pets modules."
+
+# ═══ 8) STORAGE & BACKUPS ═══════════════════════════════════════════════════
+# How often (ticks) all pet data is auto-saved. Minimum 1200 (60s). Interactive
+# changes are also saved automatically; this is the periodic safety net.
+save-interval-ticks: 6000
+storage:
+  # Storage backend. "yaml" is the stable default and the only backend that ships
+  # today. "sqlite" is NOT YET AVAILABLE - selecting it logs a warning and safely
+  # keeps using the YAML store (with backups). Leave this as "yaml".
+  type: yaml
+  backup:
+    # Master switch for automatic backups.
+    enabled: true
+    # Keep one dated copy of pets.yml per day in plugins/BetterPets/backups.
+    daily: true
+    # How many daily backups to keep before the oldest are pruned.
+    keep-days: 14
+
+
+# ═══ 9) 3D MODELS ═══════════════════════════════════════════════════════════
+# Only used when the (experimental) BetterModel module is enabled. Drop .bbmodel
+# files into plugins/BetterPets/models/ named after the pet id (e.g. dog.bbmodel).
+# Vertical offset applied when a grounded model is snapped to the ground.
+model-ground-offset: 0.05
+# Height (blocks) of the pet name hologram above the model.
+model-nametag-height: 2.6
+# Extra yaw (degrees) if a model was built facing a different direction.
+model-facing-yaw-offset-degrees: 0.0
+# Per-pet model name overrides (petNameOrId -> modelFileName without .bbmodel).
+model-overrides: {}
+
+
+# ═══ 10) MODULES ════════════════════════════════════════════════════════════
+# External modules (e.g. BetterModel) are experimental. While this is false the
+# /pets modules command is blocked and no external module can be activated.
+experimental-modules: false
+
+
+# ═══ 11) AUTO-UPDATER ═══════════════════════════════════════════════════════
+# Admin only (/pets update and the /pets version check). Downloading and staging
+# a new jar is opt-in. While "enabled" is false the version check still tells you
+# if a newer release exists, but nothing is downloaded. "repo" is the GitHub
+# "owner/name" the release is pulled from; leave it blank to disable the
+# update/version-check network calls entirely.
+update:
+  enabled: false
+  repo: ""
+
+
+# ═══ 12) DEBUG ══════════════════════════════════════════════════════════════
+# Log extra info to the console (pet spawns, booster drops, etc.). Off by default
+# to keep production consoles quiet; turn on when diagnosing an issue.
+debug-logging: false
+# Log each chest/vault/trial-spawner loot roll attempt (very verbose).
+debug-loot-rolls: false
+
+
+# ─── Messages / translations live in plugins/BetterPets/lang/ ───────────────
+# See section 1 (Language). Any old "messages:" block here is migrated into the
+# language files automatically on first start.

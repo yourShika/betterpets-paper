@@ -31,10 +31,6 @@ public final class OwnedPet {
         setStorageContents(storageContents);
     }
 
-    public static OwnedPet create(final String definitionId) {
-        return new OwnedPet(UUID.randomUUID(), definitionId, 1, 0, 16, 0L);
-    }
-
     public static OwnedPet create(final String definitionId, final int level) {
         final int safeLevel = Math.max(1, Math.min(100, level));
         return new OwnedPet(UUID.randomUUID(), definitionId, safeLevel, 0, expForNextLevel(safeLevel + 1), 0L);
@@ -111,10 +107,6 @@ public final class OwnedPet {
         return Arrays.stream(storageContents).anyMatch(item -> item != null && item.getType() != Material.AIR);
     }
 
-    public boolean addExp(final int amount) {
-        return addExp(amount, 1.0);
-    }
-
     public boolean addExp(final int amount, final double multiplier) {
         if (amount <= 0 || level >= 100) {
             return false;
@@ -137,6 +129,16 @@ public final class OwnedPet {
         }
 
         return leveled;
+    }
+
+    /** Restores saved in-level progress (used when a converted pet item is turned back into a pet). */
+    public void setExp(final int exp) {
+        this.exp = Math.max(0, exp);
+        if (level >= 100) {
+            this.exp = 0;
+        } else if (this.exp >= nextLevelExp) {
+            this.exp = Math.max(0, nextLevelExp - 1);
+        }
     }
 
     public void recalculateNextLevelExp(final double multiplier) {
