@@ -5,8 +5,10 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.5.3-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.6.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
+![License](https://img.shields.io/badge/License-MIT-green)
+![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
 
 ---
 
@@ -17,6 +19,39 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.6.0
+
+### 🌍 Localization — English / Deutsch / Polski
+* All player-facing text now lives in **`plugins/BetterPets/lang/<code>.yml`** (bundled: `en`, `de`, `pl`). Pick one with **`language:`** in `config.yml`, or switch live with **`/pets language <en|de|pl>`**.
+* **Upgrade-safe:** new message keys are merged into your language files on every start, so your custom text survives updates. A legacy `messages:` block in `config.yml` is migrated automatically.
+* Messages support **MiniMessage** formatting (`<gradient:#a:#b>`, `<bold>`, colours). Substituted values are escaped, so a player-chosen pet name can never inject formatting.
+
+### 🎨 Nicer look
+* **Gradient GUI titles** and a gradient **`[BetterPets]`** broadcast prefix.
+* Prettier **level-up**, **Phoenix revive**, **booster** and **convert** messages.
+* **`config.yml`** reorganized into numbered, documented sections.
+
+### 🙂 Quality of life
+* **Convert To Item** now asks for a confirming second click and **keeps the pet's level *and* in-level XP** on the item, so nothing is lost on a misclick.
+* **`/pets mute`** — hide discovery/booster broadcasts (text *and* sound) just for yourself; persists across relogs.
+* **Middle-click** a pet in the *Spawn Chances* menu (or the *XP Multiplier*) to **type an exact value** in chat.
+* A one-time **`/pets help`** hint the first time you open the menu.
+
+### 🛠️ Fixes & performance
+* Phoenix revive no longer fires (and wastes its cooldown) on a hit fully soaked by absorption hearts.
+* Experience-orb XP is no longer double-counted toward the active pet.
+* The auto-updater is now **config-driven and opt-in** (`update.repo` / `update.enabled`) — no more placeholder repository.
+* Interactive saves are **coalesced**, the XP multiplier is cached, the Penguin container scan interval is configurable, and **`debug-logging` now defaults to off**.
+
+### 🔒 Permissions
+* The **XP Multiplier** control and the **`/pets drop`** (Pet Sources) menu now require **`betterpets.admin`** (previously `betterpets.chances`).
+
+### 🧑‍💻 Under the hood
+* Per-pet data and behaviour moved into a single **`PetAbilities` registry**, and the menu holders and updater were split out of the main class — adding a new pet is now far less work.
+* Added a small **dependency-free test suite** (`test.ps1`).
 
 ---
 
@@ -402,3 +437,11 @@ All rights to the original project, name, concepts, assets, and related content 
 ## ⚠️ Disclaimer
 
 This project is **not an official update**, **not an official continuation**, and **not directly affiliated with the original Better Pets project**, unless explicitly stated otherwise. It does not claim ownership of the original project. If the original author or rights holder wants specific content removed, changed, or credited differently, please contact the repository owner.
+
+---
+
+## 📄 License
+
+The **source code of this Paper plugin rewrite** is released under the **MIT License** — see [`LICENSE`](LICENSE).
+
+This covers the plugin's **own code only**. The original **Better Pets** name, concepts, and assets remain with their respective rights holders (see *Credits* and *Disclaimer* above).
