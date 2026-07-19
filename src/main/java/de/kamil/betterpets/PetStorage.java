@@ -50,6 +50,7 @@ public final class PetStorage {
                 data.setVisible(section.getBoolean("visible", true));
                 data.setBroadcastsMuted(section.getBoolean("broadcasts-muted", false));
                 data.setTokens(section.getInt("tokens", 0));
+                data.setSlotFeaturedPet(section.getString("slot-featured-pet", null));
                 data.setBooster(section.getInt("booster-tier", 0), section.getLong("booster-remaining-millis", 0L));
                 final String activeText = section.getString("active");
                 if (activeText != null && !activeText.isBlank()) {
@@ -129,6 +130,7 @@ public final class PetStorage {
             config.set(base + ".visible", data.visible());
             config.set(base + ".broadcasts-muted", data.broadcastsMuted());
             config.set(base + ".tokens", data.tokens());
+            config.set(base + ".slot-featured-pet", data.slotFeaturedPet());
             config.set(base + ".active", data.activePetId() == null ? null : data.activePetId().toString());
             config.set(base + ".booster-tier", data.boosterTier());
             config.set(base + ".booster-remaining-millis", data.boosterRemainingMillis());

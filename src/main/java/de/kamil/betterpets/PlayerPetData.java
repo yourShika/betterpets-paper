@@ -18,6 +18,8 @@ public final class PlayerPetData {
     private transient long boosterTickReference;
     // Pet tokens: currency earned by scrapping (duplicate) pets, spent in the /pets slots machine.
     private int tokens;
+    // The pet currently featured in the slot machine; only re-rolled after a spin, not on each open.
+    private String slotFeaturedPet;
 
     public List<OwnedPet> pets() {
         return pets;
@@ -109,5 +111,13 @@ public final class PlayerPetData {
 
     public void addTokens(final int amount) {
         this.tokens = Math.max(0, this.tokens + amount);
+    }
+
+    public String slotFeaturedPet() {
+        return slotFeaturedPet;
+    }
+
+    public void setSlotFeaturedPet(final String slotFeaturedPet) {
+        this.slotFeaturedPet = slotFeaturedPet == null || slotFeaturedPet.isBlank() ? null : slotFeaturedPet;
     }
 }

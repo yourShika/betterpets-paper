@@ -2025,13 +2025,25 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return definition != null ? definition.id() : definitions.ordered().getFirst().id();
     }
 
+    /** The player's persistent featured pet - only rolled if unset/invalid, so it survives menu re-opens. */
+    private String currentFeaturedPet(final Player player) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        String featured = data.slotFeaturedPet();
+        if (featured == null || definitions.get(featured).isEmpty()) {
+            featured = randomPetId();
+            data.setSlotFeaturedPet(featured);
+            requestSave();
+        }
+        return featured;
+    }
+
     void openSlotMenu(final Player player) {
         if (!tokensEnabled()) {
             player.sendMessage(message("tokens.disabled"));
             return;
         }
         final SlotMenuHolder holder = new SlotMenuHolder(player.getUniqueId());
-        holder.setFeaturedPetId(randomPetId());
+        holder.setFeaturedPetId(currentFeaturedPet(player));
         final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle("Pet Slots"));
         holder.setInventory(inventory);
         renderSlotMenu(inventory, player, holder);
@@ -2177,7 +2189,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.3F);
             player.sendMessage(lang.component("slots.won", "%reward%", reward.name(), "%amount%", Integer.toString(reward.item().getAmount())));
         }
-        holder.setFeaturedPetId(randomPetId());
+        final String next = randomPetId();
+        storage.data(player.getUniqueId()).setSlotFeaturedPet(next);
+        holder.setFeaturedPetId(next);
         if (stillOpen) {
             updateSlotChrome(inventory, player, holder);
         }
