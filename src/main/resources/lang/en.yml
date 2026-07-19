@@ -64,11 +64,24 @@ tokens:
   scrapped: "<gray>Scrapped </gray><white>%pet%</white><gray> for </gray><gold>%tokens%</gold><gray> token(s) - balance </gray><gold>%total%</gold><gray>.</gray>"
   scrapped-none: "<red>Hold a Better Pets pet item to scrap it into tokens.</red>"
   scrapped-all: "<gray>Scrapped </gray><aqua>%count%</aqua><gray> pet item(s) for </gray><gold>%tokens%</gold><gray> token(s) - balance </gray><gold>%total%</gold><gray>.</gray>"
+  usage: "Usage: /pets tokens [give|remove <player|all> <amount> | pass <player> <amount>]"
+  invalid-amount: "Enter a positive whole number of tokens."
+  player-not-found: "Player not found: %player%"
+  given: "Gave %amount% token(s) to %player% (their balance: %total%)."
+  removed: "Removed %amount% token(s) from %player% (their balance: %total%)."
+  given-all: "Gave %amount% token(s) to every online player."
+  removed-all: "Removed %amount% token(s) from every online player."
+  received-admin: "You received %amount% pet token(s)."
+  pass-sent: "Sent %amount% token(s) to %player%. Balance: %total%."
+  pass-received: "%player% sent you %amount% pet token(s)."
+  pass-self: "You cannot pass tokens to yourself."
+  pass-not-enough: "You only have %total% token(s)."
 slots:
   not-enough: "<red>You need </red><gold>%cost%</gold><red> tokens to spin - you have </red><gold>%total%</gold><red>.</red>"
   spinning: "<gray>Wait for the reels to stop.</gray>"
   won: "<green>The reels landed on </green><yellow>%reward% x%amount%</yellow><green>!</green>"
   won-pet: "<gradient:#FFE082:#FF8A00><bold>✦ JACKPOT! You pulled a %pet%!</bold></gradient>"
+  jackpot-broadcast: "<aqua>%player%</aqua><gray> hit the slots jackpot and won </gray><gradient:#FFE082:#FF8A00><bold>%pet%</bold></gradient><gray>!</gray>"
 
 # Per-player broadcast mute (/pets mute).
 broadcast:

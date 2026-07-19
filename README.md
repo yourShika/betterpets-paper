@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.7.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.8.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -19,6 +19,21 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.8.0
+
+### 🎰 Slot machine, expanded
+* **Way more loot** in the reels: gold nuggets, coal, iron, copper, redstone, lapis, gold ingots, XP bottles, emeralds, diamonds, netherite scrap & ingots — each with its own chance (netherite stays rare).
+* **Real slot feel:** the three reels now settle **left → middle → right**.
+* **A featured pet every spin** is shown above the reels — land on the pet symbol to win *that* pet, with a chat message and an optional server-wide jackpot broadcast. The pet chance was bumped up a little (still rare).
+* **Spinning now costs just 1 token.**
+* **Admin loot editor:** a **Configure Loot** button inside `/pets slots` opens a GUI to adjust every reward's chance live (left/right-click ±1, shift ±10, shows the %). Everything is also under `tokens:` in `config.yml`.
+
+### 🎟️ Token commands
+* `/pets tokens pass <player> <amount>` — send some of **your** tokens to another player (anyone can use it).
+* `/pets tokens give|remove <player|all> <amount>` — admins hand out or take back tokens (works from console too).
 
 ---
 

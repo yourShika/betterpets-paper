@@ -76,18 +76,28 @@ tokens:
     mythical: 5
   slots:
     # Tokens spent per spin.
-    cost-per-spin: 3
-    # Relative weights of each reward (higher = more likely; they need not sum to
-    # any particular total). "pet" is intentionally tiny - a very rare jackpot;
-    # which pet you then pull is chosen by its spawn weight. Keep it low so pulling
-    # a pet stays special regardless of the pet's rarity.
+    cost-per-spin: 1
+    # Announce a pet jackpot to the whole server (players who muted broadcasts with
+    # /pets mute are skipped).
+    broadcast-jackpot: true
+    # Relative weight of each reward (higher = more likely; they need not sum to any
+    # total). Edit here, or live in-game via the "Configure Loot" button inside
+    # /pets slots (admin only). "pet" is the rare jackpot - the featured pet shown
+    # each spin - while rarer materials like netherite are intentionally low.
     weights:
-      gold-nugget: 450
-      iron-ingot: 250
-      gold-ingot: 140
-      diamond: 100
-      netherite: 55
-      pet: 5
+      gold-nugget: 300
+      coal: 200
+      iron-ingot: 150
+      copper-ingot: 150
+      redstone: 130
+      lapis-lazuli: 100
+      gold-ingot: 80
+      experience-bottle: 70
+      emerald: 45
+      diamond: 35
+      netherite-scrap: 12
+      netherite-ingot: 6
+      pet: 15
 
 
 # ═══ 5) FLIGHT ══════════════════════════════════════════════════════════════

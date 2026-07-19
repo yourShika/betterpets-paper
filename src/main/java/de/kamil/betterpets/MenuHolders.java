@@ -206,9 +206,41 @@ final class ModulesMenuHolder implements InventoryHolder {
 
 final class SlotMenuHolder implements InventoryHolder {
     private final UUID owner;
+    // The pet featured this spin - if the reels land on the pet symbol, this is what you win.
+    private String featuredPetId;
     private Inventory inventory;
 
     SlotMenuHolder(final UUID owner) {
+        this.owner = owner;
+    }
+
+    UUID owner() {
+        return owner;
+    }
+
+    String featuredPetId() {
+        return featuredPetId;
+    }
+
+    void setFeaturedPetId(final String featuredPetId) {
+        this.featuredPetId = featuredPetId;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
+final class SlotConfigMenuHolder implements InventoryHolder {
+    private final UUID owner;
+    private Inventory inventory;
+
+    SlotConfigMenuHolder(final UUID owner) {
         this.owner = owner;
     }
 
