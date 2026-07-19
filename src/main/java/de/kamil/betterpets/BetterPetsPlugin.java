@@ -72,6 +72,7 @@ import org.bukkit.loot.LootTable;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.projectiles.ProjectileSource;
+import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.util.Collection;
@@ -124,6 +125,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, PendingInput> pendingInputs = new java.util.concurrent.ConcurrentHashMap<>();
     // Players already shown the one-time "/pets help" hint this session.
     private final Set<UUID> menuHintShown = new HashSet<>();
+    // Players whose slot machine is mid-spin (ignore further clicks until the reels stop).
+    private final Set<UUID> spinningPlayers = new HashSet<>();
+    private static final int[] SLOT_REELS = {11, 13, 15};
+    private static final Material[] SLOT_REEL_ICONS = {
+        Material.GOLD_NUGGET, Material.IRON_INGOT, Material.GOLD_INGOT,
+        Material.DIAMOND, Material.NETHERITE_INGOT, Material.EMERALD, Material.EXPERIENCE_BOTTLE
+    };
     private static final String[] DROP_SOURCES = {"chest", "fishing", "wandering-trader", "brushing", "vault", "trial-spawner", "xp-booster"};
     private static final int[] BOOSTER_DURATIONS = {15, 30, 45, 60};
     private static final int[] DROP_SLOTS = {10, 11, 12, 13, 14, 15, 16};
@@ -306,6 +314,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handleModulesClick(event, modulesHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof DropMenuHolder dropHolder) {
                 handleDropClick(event, dropHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof SlotMenuHolder slotHolder) {
+                handleSlotClick(event, slotHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof AlpacaStorageHolder alpacaHolder) {
                 handleAlpacaStorageClick(event, alpacaHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder) {
@@ -407,6 +417,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             || event.getView().getTopInventory().getHolder() instanceof XpMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof ModulesMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof DropMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof SlotMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof PetDetailMenuHolder) {
             event.setCancelled(true);
@@ -706,6 +717,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         convertConfirms.remove(event.getPlayer().getUniqueId());
         pendingInputs.remove(event.getPlayer().getUniqueId());
         menuHintShown.remove(event.getPlayer().getUniqueId());
+        spinningPlayers.remove(event.getPlayer().getUniqueId());
         // A player leaving is a natural, infrequent save point, so persist immediately for durability.
         storage.save();
     }
@@ -1775,6 +1787,255 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         };
     }
 
+    // ---------------------------------------------------------------------------
+    //  Pet tokens & slot machine
+    // ---------------------------------------------------------------------------
+
+    private boolean tokensEnabled() {
+        return getConfig().getBoolean("tokens.enabled", true);
+    }
+
+    private int slotCost() {
+        return Math.max(1, getConfig().getInt("tokens.slots.cost-per-spin", 3));
+    }
+
+    /** Tokens a pet of the given rarity is worth when scrapped. */
+    private int tokenValueForRarity(final String rarity) {
+        final String key = rarity == null ? "common" : rarity.toLowerCase(Locale.ROOT);
+        final String configKey = key.equals("extraordinary") ? "mythical" : key;
+        final int fallback = switch (configKey) {
+            case "rare" -> 2;
+            case "epic" -> 3;
+            case "legendary" -> 4;
+            case "mythical" -> 5;
+            default -> 1;
+        };
+        return Math.max(0, getConfig().getInt("tokens.per-rarity." + configKey, fallback));
+    }
+
+    /** Token value of a single unit of a pet item, or 0 if it is not a scrappable pet item. */
+    private int scrapValue(final ItemStack item) {
+        return itemFactory.petId(item).flatMap(definitions::get).map(def -> tokenValueForRarity(def.rarity())).orElse(0);
+    }
+
+    void handleScrap(final Player player, final String[] args) {
+        if (!tokensEnabled()) {
+            player.sendMessage(message("tokens.disabled"));
+            return;
+        }
+        final PlayerPetData data = storage.data(player.getUniqueId());
+
+        if (args.length >= 2 && args[1].equalsIgnoreCase("all")) {
+            int count = 0;
+            int gained = 0;
+            final ItemStack[] contents = player.getInventory().getStorageContents();
+            for (int i = 0; i < contents.length; i++) {
+                final ItemStack item = contents[i];
+                final int value = scrapValue(item);
+                if (item == null || value <= 0) {
+                    continue;
+                }
+                gained += value * item.getAmount();
+                count += item.getAmount();
+                player.getInventory().setItem(i, null);
+            }
+            if (count == 0) {
+                player.sendMessage(message("tokens.scrapped-none"));
+                return;
+            }
+            data.addTokens(gained);
+            requestSave();
+            player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8F, 1.2F);
+            player.sendMessage(lang.component("tokens.scrapped-all",
+                "%count%", Integer.toString(count), "%tokens%", Integer.toString(gained), "%total%", Integer.toString(data.tokens())));
+            return;
+        }
+
+        final ItemStack held = player.getInventory().getItemInMainHand();
+        final int value = scrapValue(held);
+        if (value <= 0) {
+            player.sendMessage(message("tokens.scrapped-none"));
+            return;
+        }
+        final int gained = value * held.getAmount();
+        final String name = itemFactory.petId(held).flatMap(definitions::get).map(PetDefinition::name).orElse("pet");
+        player.getInventory().setItemInMainHand(null);
+        data.addTokens(gained);
+        requestSave();
+        player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8F, 1.4F);
+        player.sendMessage(lang.component("tokens.scrapped",
+            "%pet%", name, "%tokens%", Integer.toString(gained), "%total%", Integer.toString(data.tokens())));
+    }
+
+    void handleTokens(final Player player) {
+        if (!tokensEnabled()) {
+            player.sendMessage(message("tokens.disabled"));
+            return;
+        }
+        player.sendMessage(lang.component("tokens.balance", "%total%", Integer.toString(storage.data(player.getUniqueId()).tokens())));
+    }
+
+    void openSlotMenu(final Player player) {
+        if (!tokensEnabled()) {
+            player.sendMessage(message("tokens.disabled"));
+            return;
+        }
+        final SlotMenuHolder holder = new SlotMenuHolder(player.getUniqueId());
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle("Pet Slots"));
+        holder.setInventory(inventory);
+        renderSlotMenu(inventory, player);
+        player.openInventory(inventory);
+    }
+
+    private void renderSlotMenu(final Inventory inventory, final Player player) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        for (int i = 0; i < inventory.getSize(); i++) {
+            inventory.setItem(i, filler);
+        }
+        inventory.setItem(4, itemFactory.control(
+            Material.SUNFLOWER,
+            Component.text("Pet Tokens: " + data.tokens(), NamedTextColor.GOLD),
+            List.of(
+                Component.text("Earn tokens with /pets scrap.", NamedTextColor.GRAY),
+                Component.text("Cost per spin: " + slotCost(), NamedTextColor.DARK_GRAY)
+            )
+        ));
+        for (final int reel : SLOT_REELS) {
+            inventory.setItem(reel, itemFactory.control(Material.NETHER_STAR, Component.text("?", NamedTextColor.YELLOW), List.of()));
+        }
+        inventory.setItem(22, itemFactory.control(
+            Material.LIME_DYE,
+            Component.text("SPIN", NamedTextColor.GREEN),
+            List.of(
+                Component.text("Costs " + slotCost() + " tokens.", NamedTextColor.GRAY),
+                Component.text("Balance: " + data.tokens(), NamedTextColor.GRAY),
+                Component.text("Pull materials or, very rarely, a pet!", NamedTextColor.DARK_GRAY)
+            )
+        ));
+        inventory.setItem(26, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+    }
+
+    private void handleSlotClick(final InventoryClickEvent event, final SlotMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player) || !player.getUniqueId().equals(holder.owner())) {
+            return;
+        }
+        final int slot = event.getRawSlot();
+        if (slot == 26) {
+            player.closeInventory();
+            return;
+        }
+        if (slot != 22) {
+            return;
+        }
+        if (spinningPlayers.contains(player.getUniqueId())) {
+            player.sendMessage(message("slots.spinning"));
+            return;
+        }
+        if (!tokensEnabled()) {
+            player.sendMessage(message("tokens.disabled"));
+            return;
+        }
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final int cost = slotCost();
+        if (data.tokens() < cost) {
+            player.sendMessage(lang.component("slots.not-enough", "%cost%", Integer.toString(cost), "%total%", Integer.toString(data.tokens())));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.7F);
+            return;
+        }
+        data.addTokens(-cost);
+        requestSave();
+        startSpin(player, event.getView().getTopInventory());
+    }
+
+    private void startSpin(final Player player, final Inventory inventory) {
+        final UUID id = player.getUniqueId();
+        spinningPlayers.add(id);
+        final SlotReward reward = rollSlotReward();
+        new BukkitRunnable() {
+            private int frame;
+            private static final int FRAMES = 14;
+
+            @Override
+            public void run() {
+                final boolean stillOpen = player.isOnline()
+                    && player.getOpenInventory().getTopInventory().getHolder() instanceof SlotMenuHolder open
+                    && open.owner().equals(id);
+                if (frame < FRAMES) {
+                    if (stillOpen) {
+                        for (final int reel : SLOT_REELS) {
+                            final Material material = SLOT_REEL_ICONS[ThreadLocalRandom.current().nextInt(SLOT_REEL_ICONS.length)];
+                            inventory.setItem(reel, new ItemStack(material));
+                        }
+                        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 0.5F, 1.0F + (frame * 0.03F));
+                    }
+                    frame++;
+                    return;
+                }
+                spinningPlayers.remove(id);
+                final ItemStack icon = reward.item().clone();
+                if (stillOpen) {
+                    renderSlotMenu(inventory, player);
+                    for (final int reel : SLOT_REELS) {
+                        inventory.setItem(reel, icon.clone());
+                    }
+                }
+                if (player.isOnline()) {
+                    giveOrDrop(player, reward.item());
+                    if (reward.isPet()) {
+                        player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.8F, 1.4F);
+                        player.sendMessage(lang.component("slots.won-pet", "%pet%", reward.name()));
+                    } else {
+                        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.3F);
+                        player.sendMessage(lang.component("slots.won",
+                            "%reward%", reward.name(), "%amount%", Integer.toString(reward.item().getAmount())));
+                    }
+                }
+                requestSave();
+                cancel();
+            }
+        }.runTaskTimer(this, 0L, 2L);
+    }
+
+    private SlotReward rollSlotReward() {
+        final double nugget = getConfig().getDouble("tokens.slots.weights.gold-nugget", 450);
+        final double iron = getConfig().getDouble("tokens.slots.weights.iron-ingot", 250);
+        final double goldIngot = getConfig().getDouble("tokens.slots.weights.gold-ingot", 140);
+        final double diamond = getConfig().getDouble("tokens.slots.weights.diamond", 100);
+        final double netherite = getConfig().getDouble("tokens.slots.weights.netherite", 55);
+        final double pet = getConfig().getDouble("tokens.slots.weights.pet", 5);
+        final double total = Math.max(0.0, nugget) + Math.max(0.0, iron) + Math.max(0.0, goldIngot)
+            + Math.max(0.0, diamond) + Math.max(0.0, netherite) + Math.max(0.0, pet);
+        final ThreadLocalRandom random = ThreadLocalRandom.current();
+        double roll = total <= 0.0 ? 0.0 : random.nextDouble(total);
+
+        if ((roll -= Math.max(0.0, nugget)) < 0) {
+            return new SlotReward(new ItemStack(Material.GOLD_NUGGET, random.nextInt(3, 13)), "Gold Nugget", false);
+        }
+        if ((roll -= Math.max(0.0, iron)) < 0) {
+            return new SlotReward(new ItemStack(Material.IRON_INGOT, random.nextInt(2, 7)), "Iron Ingot", false);
+        }
+        if ((roll -= Math.max(0.0, goldIngot)) < 0) {
+            return new SlotReward(new ItemStack(Material.GOLD_INGOT, random.nextInt(1, 5)), "Gold Ingot", false);
+        }
+        if ((roll -= Math.max(0.0, diamond)) < 0) {
+            return new SlotReward(new ItemStack(Material.DIAMOND, random.nextInt(1, 3)), "Diamond", false);
+        }
+        if ((roll -= Math.max(0.0, netherite)) < 0) {
+            return new SlotReward(new ItemStack(Material.NETHERITE_INGOT, 1), "Netherite Ingot", false);
+        }
+        final PetDefinition definition = rollSourcePet();
+        if (definition != null) {
+            return new SlotReward(itemFactory.discoveryItem(definition), definition.name(), true);
+        }
+        // Fallback if no pet weights are configured.
+        return new SlotReward(new ItemStack(Material.DIAMOND, 1), "Diamond", false);
+    }
+
+    private record SlotReward(ItemStack item, String name, boolean isPet) {
+    }
+
     private void convertActivePet(final Player player, final PlayerPetData data, final Inventory inventory) {
         final OwnedPet pet = data.activePet().orElse(null);
         if (pet == null) {
@@ -2721,6 +2982,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         sender.sendMessage(Component.empty());
         sender.sendMessage(Component.text("Better Pets Commands", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
         helpLine(sender, "/pets", "Open your pet menu", NamedTextColor.GOLD);
+        helpLine(sender, "/pets scrap [all]", "Turn held (or all) duplicate pets into tokens", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets slots", "Spend tokens in the pet slot machine", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets tokens", "Show your pet token balance", NamedTextColor.YELLOW);
         helpLine(sender, "/pets mute", "Toggle pet find/booster broadcasts for yourself", NamedTextColor.YELLOW);
         helpLine(sender, "/pets set name <name>", "Rename your active pet", NamedTextColor.YELLOW);
         helpLine(sender, "/pets restore name", "Restore the default pet name", NamedTextColor.YELLOW);
@@ -3040,6 +3304,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 return;
             }
 
+            if (args.length > 0 && args[0].equalsIgnoreCase("scrap")) {
+                plugin.handleScrap(player, args);
+                return;
+            }
+            if (args.length > 0 && (args[0].equalsIgnoreCase("slots") || args[0].equalsIgnoreCase("slot"))) {
+                plugin.openSlotMenu(player);
+                return;
+            }
+            if (args.length > 0 && args[0].equalsIgnoreCase("tokens")) {
+                plugin.handleTokens(player);
+                return;
+            }
+
             if (args.length >= 1 && args[0].equalsIgnoreCase("set") && args.length >= 2 && args[1].equalsIgnoreCase("name")) {
                 if (args.length < 3) {
                     player.sendMessage(plugin.message("messages.usage-set-name"));
@@ -3063,6 +3340,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 suggestions.add("help");
                 suggestions.add("version");
                 suggestions.add("mute");
+                suggestions.add("tokens");
+                suggestions.add("scrap");
+                suggestions.add("slots");
                 suggestions.add("set");
                 suggestions.add("restore");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {
@@ -3092,6 +3372,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
             if (args.length == 2 && (args[0].equalsIgnoreCase("language") || args[0].equalsIgnoreCase("lang"))) {
                 return plugin.lang().languageCodes();
+            }
+            if (args.length == 2 && args[0].equalsIgnoreCase("scrap")) {
+                return List.of("all");
             }
             if (args.length == 2 && args[0].equalsIgnoreCase("give")) {
                 final List<String> suggestions = new java.util.ArrayList<>();

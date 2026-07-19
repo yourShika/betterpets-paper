@@ -51,6 +51,18 @@ pet:
   leveled: "<green>✦ Twoj </green><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><green> osiagnal poziom </green><gold><bold>%level%</bold></gold><green>!</green>"
   phoenix-saved: "<gradient:#FF8A00:#FFD54F><bold>✦ Twoj Feniks uratowal Cie od smierci!</bold></gradient>"
 
+tokens:
+  disabled: "<gray>Funkcja tokenow / slotow jest wylaczona.</gray>"
+  balance: "<gray>Masz </gray><gold><bold>%total%</bold></gold><gray> token(ow) zwierzaka. Wydaj je w /pets slots.</gray>"
+  scrapped: "<gray>Rozlozono </gray><white>%pet%</white><gray> na </gray><gold>%tokens%</gold><gray> token(ow) - saldo </gray><gold>%total%</gold><gray>.</gray>"
+  scrapped-none: "<red>Trzymaj przedmiot-zwierzaka Better Pets, aby rozlozyc go na tokeny.</red>"
+  scrapped-all: "<gray>Rozlozono </gray><aqua>%count%</aqua><gray> przedmiot(ow) na </gray><gold>%tokens%</gold><gray> token(ow) - saldo </gray><gold>%total%</gold><gray>.</gray>"
+slots:
+  not-enough: "<red>Potrzebujesz </red><gold>%cost%</gold><red> tokenow, aby zakrecic - masz </red><gold>%total%</gold><red>.</red>"
+  spinning: "<gray>Poczekaj, az bebny sie zatrzymaja.</gray>"
+  won: "<green>Bebny pokazaly </green><yellow>%reward% x%amount%</yellow><green>!</green>"
+  won-pet: "<gradient:#FFE082:#FF8A00><bold>✦ JACKPOT! Wylosowales %pet%!</bold></gradient>"
+
 hint:
   help: "Wskazowka: wpisz /pets help, aby zobaczyc wszystkie komendy."
 

@@ -204,6 +204,28 @@ final class ModulesMenuHolder implements InventoryHolder {
     }
 }
 
+final class SlotMenuHolder implements InventoryHolder {
+    private final UUID owner;
+    private Inventory inventory;
+
+    SlotMenuHolder(final UUID owner) {
+        this.owner = owner;
+    }
+
+    UUID owner() {
+        return owner;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
 final class AlpacaStorageHolder implements InventoryHolder {
     private final UUID owner;
     private final UUID pet;

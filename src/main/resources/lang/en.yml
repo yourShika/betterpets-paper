@@ -57,6 +57,19 @@ pet:
 hint:
   help: "Tip: type /pets help to see all commands."
 
+# Pet tokens (/pets scrap) and the slot machine (/pets slots).
+tokens:
+  disabled: "<gray>The pet token / slots feature is disabled.</gray>"
+  balance: "<gray>You have </gray><gold><bold>%total%</bold></gold><gray> pet token(s). Spend them in /pets slots.</gray>"
+  scrapped: "<gray>Scrapped </gray><white>%pet%</white><gray> for </gray><gold>%tokens%</gold><gray> token(s) - balance </gray><gold>%total%</gold><gray>.</gray>"
+  scrapped-none: "<red>Hold a Better Pets pet item to scrap it into tokens.</red>"
+  scrapped-all: "<gray>Scrapped </gray><aqua>%count%</aqua><gray> pet item(s) for </gray><gold>%tokens%</gold><gray> token(s) - balance </gray><gold>%total%</gold><gray>.</gray>"
+slots:
+  not-enough: "<red>You need </red><gold>%cost%</gold><red> tokens to spin - you have </red><gold>%total%</gold><red>.</red>"
+  spinning: "<gray>Wait for the reels to stop.</gray>"
+  won: "<green>The reels landed on </green><yellow>%reward% x%amount%</yellow><green>!</green>"
+  won-pet: "<gradient:#FFE082:#FF8A00><bold>✦ JACKPOT! You pulled a %pet%!</bold></gradient>"
+
 # Per-player broadcast mute (/pets mute).
 broadcast:
   muted: "<yellow>Pet find/booster broadcasts are now </yellow><red><bold>OFF</bold></red><yellow>. Use /pets mute again to turn them back on.</yellow>"

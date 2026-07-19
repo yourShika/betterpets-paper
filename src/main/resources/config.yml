@@ -61,6 +61,35 @@ xp-booster:
   broadcast-activations: true
 
 
+# ═══ 4b) TOKENS & SLOT MACHINE ══════════════════════════════════════════════
+# Turn duplicate/unwanted pets into "pet tokens" (/pets scrap or /pets scrap all)
+# and gamble them in a slot machine (/pets slots) for materials or, very rarely,
+# another pet.
+tokens:
+  enabled: true
+  # Tokens earned when a pet of each rarity is scrapped.
+  per-rarity:
+    common: 1
+    rare: 2
+    epic: 3
+    legendary: 4
+    mythical: 5
+  slots:
+    # Tokens spent per spin.
+    cost-per-spin: 3
+    # Relative weights of each reward (higher = more likely; they need not sum to
+    # any particular total). "pet" is intentionally tiny - a very rare jackpot;
+    # which pet you then pull is chosen by its spawn weight. Keep it low so pulling
+    # a pet stays special regardless of the pet's rarity.
+    weights:
+      gold-nugget: 450
+      iron-ingot: 250
+      gold-ingot: 140
+      diamond: 100
+      netherite: 55
+      pet: 5
+
+
 # ═══ 5) FLIGHT ══════════════════════════════════════════════════════════════
 # Used while riding a Dragon, Phoenix or Shadow Dragon at level 50+. You sit on
 # the pet and steer it like a real mount: look where you want to go and hold

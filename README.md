@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.1.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.6.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.7.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -19,6 +19,16 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.7.0
+
+### 🎟️ Pet tokens & 🎰 the slot machine
+* **Duplicate pets are no longer dead weight.** Turn any pet item into **pet tokens** with **`/pets scrap`** (the item in your hand) or **`/pets scrap all`** (every pet item in your inventory). Check your balance with **`/pets tokens`**.
+* Tokens by rarity: **Common 1 · Rare 2 · Epic 3 · Legendary 4 · Mythical 5** (all configurable).
+* **`/pets slots`** opens an animated **slot machine**: spend tokens per spin to pull **gold nuggets → iron → gold → diamonds → netherite**, or — *very, very rarely* — **another pet** (~0.5 %, the pulled pet chosen by spawn weight). Tuned to be a fun sink for duplicates, not a farm.
+* Fully configurable under `tokens:` in `config.yml`; set `tokens.enabled: false` to switch the whole feature off.
 
 ---
 

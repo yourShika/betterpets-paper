@@ -51,6 +51,18 @@ pet:
   leveled: "<green>✦ Dein </green><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><green> hat Level </green><gold><bold>%level%</bold></gold><green> erreicht!</green>"
   phoenix-saved: "<gradient:#FF8A00:#FFD54F><bold>✦ Dein Phoenix hat dich vor dem Tod gerettet!</bold></gradient>"
 
+tokens:
+  disabled: "<gray>Das Token-/Slots-Feature ist deaktiviert.</gray>"
+  balance: "<gray>Du hast </gray><gold><bold>%total%</bold></gold><gray> Pet-Token. Setze sie in /pets slots ein.</gray>"
+  scrapped: "<gray>Verwertet: </gray><white>%pet%</white><gray> fuer </gray><gold>%tokens%</gold><gray> Token - Guthaben </gray><gold>%total%</gold><gray>.</gray>"
+  scrapped-none: "<red>Halte ein Better-Pets-Pet-Item in der Hand, um es zu Token zu verwerten.</red>"
+  scrapped-all: "<gray>Verwertet: </gray><aqua>%count%</aqua><gray> Pet-Item(s) fuer </gray><gold>%tokens%</gold><gray> Token - Guthaben </gray><gold>%total%</gold><gray>.</gray>"
+slots:
+  not-enough: "<red>Du brauchst </red><gold>%cost%</gold><red> Token zum Drehen - du hast </red><gold>%total%</gold><red>.</red>"
+  spinning: "<gray>Warte, bis die Walzen stoppen.</gray>"
+  won: "<green>Die Walzen zeigen </green><yellow>%reward% x%amount%</yellow><green>!</green>"
+  won-pet: "<gradient:#FFE082:#FF8A00><bold>✦ JACKPOT! Du hast %pet% gezogen!</bold></gradient>"
+
 hint:
   help: "Tipp: Tippe /pets help, um alle Befehle zu sehen."
 

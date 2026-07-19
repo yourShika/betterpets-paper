@@ -16,6 +16,8 @@ public final class PlayerPetData {
     private int boosterTier;
     private long boosterRemainingMillis;
     private transient long boosterTickReference;
+    // Pet tokens: currency earned by scrapping (duplicate) pets, spent in the /pets slots machine.
+    private int tokens;
 
     public List<OwnedPet> pets() {
         return pets;
@@ -95,5 +97,17 @@ public final class PlayerPetData {
 
     public void setBoosterTickReference(final long boosterTickReference) {
         this.boosterTickReference = boosterTickReference;
+    }
+
+    public int tokens() {
+        return tokens;
+    }
+
+    public void setTokens(final int tokens) {
+        this.tokens = Math.max(0, tokens);
+    }
+
+    public void addTokens(final int amount) {
+        this.tokens = Math.max(0, this.tokens + amount);
     }
 }
