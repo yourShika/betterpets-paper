@@ -3,9 +3,9 @@
 # compiles src/main/java).
 $ErrorActionPreference = 'Continue'
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
-$paperApi = Join-Path $root 'lib\paper-api-26.1.2.build.69-stable.jar'
+$paperApi = Join-Path $root 'lib\paper-api-26.2.build.62-beta.jar'
 if (-not (Test-Path -LiteralPath $paperApi)) {
-    throw "Missing Paper API jar: $paperApi"
+    throw "Missing Paper API jar: $paperApi (run build.ps1 once - it downloads it)"
 }
 
 # Same compile classpath as build.ps1: Paper API + the downloaded BetterModel APIs + any extra libs.

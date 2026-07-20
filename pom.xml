@@ -6,7 +6,7 @@
 
     <groupId>de.kamil</groupId>
     <artifactId>better-pets-paper</artifactId>
-    <version>1.8.1</version>
+    <version>1.9.0</version>
     <packaging>jar</packaging>
 
     <name>BetterPets</name>
@@ -15,7 +15,7 @@
     <properties>
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <paper.version>26.1.2.build.69-stable</paper.version>
+        <paper.version>26.2.build.62-beta</paper.version>
         <bettermodel.version>3.2.0</bettermodel.version>
     </properties>
 
@@ -42,7 +42,7 @@
     </dependencies>
 
     <build>
-        <finalName>better-pets-26.1.2-plugin</finalName>
+        <finalName>better-pets-26.2-plugin</finalName>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

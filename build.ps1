@@ -2,14 +2,22 @@ $ErrorActionPreference = 'Stop'
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $classes = Join-Path $root 'target\classes'
-$jarFile = Join-Path $root 'target\better-pets-26.1.2-plugin.jar'
-$paperApi = Join-Path $root 'lib\paper-api-26.1.2.build.69-stable.jar'
+# Paper 26.2 currently ships as beta/experimental builds; 26.1.2 is the stable branch.
+$paperVersion = '26.2.build.62-beta'
+# Paper 26.2 is built against Adventure 5.x - the old 4.x jars lack e.g. ObjectContentsLike.
+$adventureVersion = '5.2.0'
+$jarFile = Join-Path $root 'target\better-pets-26.2-plugin.jar'
+$paperApi = Join-Path $root "lib\paper-api-$paperVersion.jar"
 $externalLibraryRoot = 'C:\Users\Kamil Bura\Desktop\Neuer Ordner (6)\libraries'
 $compileOnlyLibs = Join-Path $root 'target\compile-libs'
 $betterModelVersion = '3.2.0'
 
 if (-not (Test-Path -LiteralPath $paperApi)) {
-    throw "Missing Paper API jar: $paperApi"
+    New-Item -ItemType Directory -Force (Split-Path -Parent $paperApi) | Out-Null
+    Write-Host "Downloading Paper API $paperVersion ..."
+    Invoke-WebRequest -UseBasicParsing `
+        -Uri "https://repo.papermc.io/repository/maven-public/io/papermc/paper/paper-api/$paperVersion/paper-api-$paperVersion.jar" `
+        -OutFile $paperApi
 }
 
 if (Test-Path -LiteralPath $classes) {
@@ -45,7 +53,17 @@ $betterModelApi = Ensure-CompileJar `
     "https://repo.maven.apache.org/maven2/io/github/toxicity188/bettermodel-api/$betterModelVersion/bettermodel-api-$betterModelVersion.jar" `
     "bettermodel-api-$betterModelVersion.jar"
 
-$classpathJars = @($paperApi, $betterModelBukkitApi, $betterModelApi)
+# Adventure 5.x, matching what Paper 26.2 is compiled against.
+$adventureJars = @()
+foreach ($artifact in @('adventure-api', 'adventure-key', 'adventure-text-minimessage', 'adventure-text-serializer-plain')) {
+    $adventureJars += Ensure-CompileJar `
+        "https://repo.papermc.io/repository/maven-public/net/kyori/$artifact/$adventureVersion/$artifact-$adventureVersion.jar" `
+        "$artifact-$adventureVersion.jar"
+}
+
+# Order matters: Paper + Adventure 5.x must precede the external server-library folder,
+# which still contains older Adventure 4.x jars that would otherwise shadow them.
+$classpathJars = @($paperApi) + $adventureJars + @($betterModelBukkitApi, $betterModelApi)
 if (Test-Path -LiteralPath $externalLibraryRoot) {
     $classpathJars += Get-ChildItem -Path $externalLibraryRoot -Recurse -Filter '*.jar' | ForEach-Object { $_.FullName }
 }
