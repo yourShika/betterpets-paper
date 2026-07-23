@@ -111,6 +111,10 @@ tokens:
 flight-speed: 0.6
 flight-lift: 0.5
 flight-pet-offset: -0.4
+# Highest Y a pet mount may fly to. There is no build-height cap - you can fly well
+# above the world's max height (it is empty air up there). This is only a sanity
+# ceiling; raise it if you want to fly even higher.
+flight-max-height: 1024
 
 
 # ═══ 6) PET SOURCES ═════════════════════════════════════════════════════════

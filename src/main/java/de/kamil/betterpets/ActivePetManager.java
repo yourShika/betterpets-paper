@@ -1013,8 +1013,17 @@ public final class ActivePetManager {
 
     private boolean isRideLocationSafe(final Location location) {
         final World world = location.getWorld();
-        if (world == null || location.getY() <= world.getMinHeight() + 1 || location.getY() >= world.getMaxHeight() - 1) {
+        if (world == null || location.getY() <= world.getMinHeight() + 1) {
             return false;
+        }
+        // No build-height cap: you can fly well above the world's max height (empty air up there).
+        // A generous configurable ceiling only guards against absurd Y values.
+        if (location.getY() >= plugin.getConfig().getDouble("flight-max-height", 1024.0)) {
+            return false;
+        }
+        // Above the build limit there are no blocks, so the bounding-box block checks below are skipped.
+        if (location.getY() >= world.getMaxHeight()) {
+            return true;
         }
         // Sample the rider's rough bounding box (centre + edges, at foot and body height) so you can't
         // clip a shoulder or head into a wall and get stuck.
