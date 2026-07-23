@@ -322,10 +322,14 @@ public final class ActivePetManager {
         if (modelHandle != null && !visible) {
             modelHandle.hideFromAll();
         }
+        // Only pets with a right-click action (Alpaca storage, flyable mounts) keep a full clickable
+        // hitbox; every other pet gets a tiny, non-responsive one so it never blocks mining, attacking
+        // or building near it, and can never be attacked.
+        final boolean interactive = isInteractivePet(pet.definitionId());
         final Interaction hitbox = player.getWorld().spawn(location, Interaction.class, entity -> {
-            entity.setInteractionWidth(visible ? 1.2F : 0.1F);
-            entity.setInteractionHeight(visible ? 1.8F : 0.1F);
-            entity.setResponsive(visible);
+            entity.setInteractionWidth(visible && interactive ? 1.2F : 0.1F);
+            entity.setInteractionHeight(visible && interactive ? 1.8F : 0.1F);
+            entity.setResponsive(false);
             entity.setPersistent(false);
             entity.addScoreboardTag("BetterPets.Pet");
             entity.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, player.getUniqueId().toString());
@@ -401,10 +405,11 @@ public final class ActivePetManager {
     public void setVisible(final Player player, final boolean visible) {
         final ActivePet active = activePets.get(player.getUniqueId());
         if (active != null) {
+            final boolean interactive = isInteractivePet(active.pet().definitionId());
             active.display().setViewRange(visible ? 32.0F : 0.0F);
-            active.hitbox().setInteractionWidth(visible ? 1.2F : 0.1F);
-            active.hitbox().setInteractionHeight(visible ? 1.8F : 0.1F);
-            active.hitbox().setResponsive(visible);
+            active.hitbox().setInteractionWidth(visible && interactive ? 1.2F : 0.1F);
+            active.hitbox().setInteractionHeight(visible && interactive ? 1.8F : 0.1F);
+            active.hitbox().setResponsive(false);
             active.setNametagVisible(visible);
             if (active.modelHandle() != null) {
                 if (visible) {
@@ -720,6 +725,16 @@ public final class ActivePetManager {
         return isDragon(id) || id.equals("phoenix") || id.equals("shadow_dragon");
     }
 
+    /** Pets that respond to right-click (Alpaca storage, flyable mounts) and thus keep a clickable hitbox. */
+    private boolean isInteractivePet(final String id) {
+        return id.equals("alpaca") || isFlyablePet(id);
+    }
+
+    /** Whether the player is currently seated on (flying) their pet. */
+    public boolean isRiding(final Player player) {
+        return rides.containsKey(player.getUniqueId());
+    }
+
     public boolean isUndead(final Entity entity) {
         return UNDEAD.contains(entity.getType());
     }
@@ -1001,7 +1016,17 @@ public final class ActivePetManager {
         if (world == null || location.getY() <= world.getMinHeight() + 1 || location.getY() >= world.getMaxHeight() - 1) {
             return false;
         }
-        return location.getBlock().isPassable() && location.clone().add(0, 1, 0).getBlock().isPassable();
+        // Sample the rider's rough bounding box (centre + edges, at foot and body height) so you can't
+        // clip a shoulder or head into a wall and get stuck.
+        final double radius = 0.35;
+        final double[][] offsets = {{0, 0}, {radius, 0}, {-radius, 0}, {0, radius}, {0, -radius}};
+        for (final double[] offset : offsets) {
+            final Location foot = location.clone().add(offset[0], 0, offset[1]);
+            if (!foot.getBlock().isPassable() || !foot.clone().add(0, 1, 0).getBlock().isPassable()) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private void repositionRidePet(final ActivePet active, final RideState ride) {

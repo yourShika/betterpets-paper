@@ -5,7 +5,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.9.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.9.1-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -19,6 +19,13 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.9.1
+
+* 🐉 **Fix: flying pets no longer clip you into blocks.** The mount's collision now samples your whole body (not just the centre), and while flying you can never take **suffocation** damage from briefly touching a block.
+* 🚫 **Pets no longer get in your way.** Pet hitboxes are now non-attackable and, for pets without a right-click action, tiny — so they never block your mining, attacking, or building. Pets that *do* use right-click (the **Alpaca** and the flyable dragons/Phoenix) keep a clickable hitbox; hide any pet with the visibility toggle in `/pets` if it's ever in the way.
 
 ---
 

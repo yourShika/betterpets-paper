@@ -883,6 +883,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (!(event.getEntity() instanceof Player player)) {
             return;
         }
+        // While flying on a pet you can briefly clip into a block; never let that suffocate the rider.
+        if ((event.getCause() == EntityDamageEvent.DamageCause.SUFFOCATION
+            || event.getCause() == EntityDamageEvent.DamageCause.CRAMMING)
+            && activePets.isRiding(player)) {
+            event.setCancelled(true);
+            return;
+        }
         if (event.getCause() == EntityDamageEvent.DamageCause.VOID) {
             return;
         }
