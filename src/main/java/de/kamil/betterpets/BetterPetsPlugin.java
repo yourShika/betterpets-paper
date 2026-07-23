@@ -3235,6 +3235,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             nowMuted ? NamedTextColor.YELLOW : NamedTextColor.GREEN));
     }
 
+    void handleVisibility(final Player player, final boolean visible) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        data.setVisible(visible);
+        activePets.setVisible(player, visible);
+        requestSave();
+        player.sendMessage(lang.colored(visible ? "visibility.shown" : "visibility.hidden",
+            visible ? NamedTextColor.GREEN : NamedTextColor.YELLOW));
+    }
+
     void handleSetName(final Player player, final String name) {
         final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
         if (pet == null) {
@@ -3274,6 +3283,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         helpLine(sender, "/pets slots", "Spend tokens in the pet slot machine", NamedTextColor.YELLOW);
         helpLine(sender, "/pets tokens", "Show your pet token balance", NamedTextColor.YELLOW);
         helpLine(sender, "/pets tokens pass <player> <amount>", "Send tokens to another player", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets visible | invisible", "Show or hide your active pet", NamedTextColor.YELLOW);
         helpLine(sender, "/pets mute", "Toggle pet find/booster broadcasts for yourself", NamedTextColor.YELLOW);
         helpLine(sender, "/pets set name <name>", "Rename your active pet", NamedTextColor.YELLOW);
         helpLine(sender, "/pets restore name", "Restore the default pet name", NamedTextColor.YELLOW);
@@ -3597,6 +3607,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 plugin.handleMute(player);
                 return;
             }
+            if (args.length > 0 && (args[0].equalsIgnoreCase("visible") || args[0].equalsIgnoreCase("show"))) {
+                plugin.handleVisibility(player, true);
+                return;
+            }
+            if (args.length > 0 && (args[0].equalsIgnoreCase("invisible") || args[0].equalsIgnoreCase("unvisible") || args[0].equalsIgnoreCase("hide"))) {
+                plugin.handleVisibility(player, false);
+                return;
+            }
 
             if (args.length > 0 && args[0].equalsIgnoreCase("scrap")) {
                 plugin.handleScrap(player, args);
@@ -3630,6 +3648,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 suggestions.add("help");
                 suggestions.add("version");
                 suggestions.add("mute");
+                suggestions.add("visible");
+                suggestions.add("invisible");
                 suggestions.add("tokens");
                 suggestions.add("scrap");
                 suggestions.add("slots");

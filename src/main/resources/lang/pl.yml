@@ -51,6 +51,14 @@ pet:
   leveled: "<green>✦ Twoj </green><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><green> osiagnal poziom </green><gold><bold>%level%</bold></gold><green>!</green>"
   phoenix-saved: "<gradient:#FF8A00:#FFD54F><bold>✦ Twoj Feniks uratowal Cie od smierci!</bold></gradient>"
 
+flight:
+  level-required: "Tym zwierzakiem mozna latac od poziomu 50."
+  confirm-mount: "<gold>Kliknij ponownie prawym, aby poleciec na </gold><yellow>%pet%</yellow><gold>.</gold>"
+
+visibility:
+  shown: "<green>Twoj zwierzak jest teraz widoczny.</green>"
+  hidden: "<yellow>Twoj zwierzak jest teraz ukryty.</yellow>"
+
 tokens:
   disabled: "<gray>Funkcja tokenow / slotow jest wylaczona.</gray>"
   balance: "<gray>Masz </gray><gold><bold>%total%</bold></gold><gray> token(ow) zwierzaka. Wydaj je w /pets slots.</gray>"

@@ -207,6 +207,9 @@ public final class ActivePetManager {
     private final NamespacedKey containerOpenedKey;
     private final Map<UUID, ActivePet> activePets = new HashMap<>();
     private final Map<UUID, RideState> rides = new HashMap<>();
+    // Pending mount confirmations: flight only starts on a confirming second right-click within this window.
+    private final Map<UUID, Long> mountConfirms = new HashMap<>();
+    private static final long MOUNT_CONFIRM_MILLIS = 2000L;
     private final Map<UUID, Set<PotionEffectType>> petBuffs = new HashMap<>();
     private final Set<UUID> herobrineWeather = new HashSet<>();
     private final Map<UUID, Set<UUID>> revealedMobs = new HashMap<>();
@@ -344,6 +347,7 @@ public final class ActivePetManager {
     }
 
     public void despawn(final Player player, final boolean clearActive) {
+        mountConfirms.remove(player.getUniqueId());
         stopRide(player, false);
         clearReveal(player);
         clearChestGlow(player);
@@ -609,14 +613,25 @@ public final class ActivePetManager {
         if (!isFlyablePet(active.pet().definitionId())) {
             return true;
         }
-        if (active.pet().level() < 50) {
-            player.sendMessage(Component.text("This pet can be flown from level 50.", net.kyori.adventure.text.format.NamedTextColor.YELLOW));
-            return true;
-        }
+        // While already flying, right-click does nothing - dismounting is sneak-only now.
         if (rides.containsKey(player.getUniqueId())) {
-            stopRide(player, true);
             return true;
         }
+        if (active.pet().level() < 50) {
+            player.sendMessage(lang.colored("flight.level-required", net.kyori.adventure.text.format.NamedTextColor.YELLOW));
+            return true;
+        }
+        // Require a confirming second right-click so you never take off by accident.
+        final long now = System.currentTimeMillis();
+        final Long armed = mountConfirms.get(player.getUniqueId());
+        if (armed == null || now > armed) {
+            mountConfirms.put(player.getUniqueId(), now + MOUNT_CONFIRM_MILLIS);
+            final String name = definitions.get(active.pet().definitionId()).map(PetDefinition::name).orElse("pet");
+            player.sendMessage(lang.colored("flight.confirm-mount", net.kyori.adventure.text.format.NamedTextColor.GOLD, "%pet%", name));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 0.8F, 1.2F);
+            return true;
+        }
+        mountConfirms.remove(player.getUniqueId());
         startRide(player, active);
         return true;
     }

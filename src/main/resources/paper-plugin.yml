@@ -1,5 +1,5 @@
 name: BetterPets
-version: '1.9.2'
+version: '1.9.3'
 main: de.kamil.betterpets.BetterPetsPlugin
 description: Better Pets converted fully to Paper plugin form.
 api-version: '26.2'

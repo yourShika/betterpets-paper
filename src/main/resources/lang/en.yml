@@ -53,6 +53,16 @@ pet:
   leveled: "<green>✦ Your </green><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><green> reached level </green><gold><bold>%level%</bold></gold><green>!</green>"
   phoenix-saved: "<gradient:#FF8A00:#FFD54F><bold>✦ Your Phoenix saved you from death!</bold></gradient>"
 
+# Pet flight (rideable dragons / Phoenix at level 50+). Dismount by sneaking.
+flight:
+  level-required: "This pet can be flown from level 50."
+  confirm-mount: "<gold>Right-click again to fly your </gold><yellow>%pet%</yellow><gold>.</gold>"
+
+# Pet visibility (/pets visible | invisible, or the menu toggle).
+visibility:
+  shown: "<green>Your pet is now visible.</green>"
+  hidden: "<yellow>Your pet is now hidden.</yellow>"
+
 # First-time hint shown when a player opens the menu.
 hint:
   help: "Tip: type /pets help to see all commands."
