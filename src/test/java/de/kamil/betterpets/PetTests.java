@@ -17,6 +17,7 @@ public final class PetTests {
         setExpClamp();
         maxLevel();
         versionCompare();
+        textureVariants();
 
         System.out.println();
         System.out.println("Passed: " + passed + "   Failed: " + failed);
@@ -95,6 +96,25 @@ public final class PetTests {
         eq("1.6 == 1.6.0", Updater.compareVersions("1.6", "1.6.0"), 0);
         eq("2.0.0 > 1.9.9", Updater.compareVersions("2.0.0", "1.9.9") > 0, true);
         eq("v-prefix parts ignore letters", Updater.compareVersions("1.6.0", "1.6.0-beta"), 0);
+    }
+
+    private static void textureVariants() {
+        final java.util.Map<String, String> variants = java.util.Map.of("lucy", "LUCY_TEX", "wild", "WILD_TEX");
+        final PetDefinition axolotl = new PetDefinition("axolotl", "Axolotl",
+            net.kyori.adventure.text.format.NamedTextColor.BLUE, "Rare", 8, "BASE_TEX", null, variants, java.util.List.of());
+        eq("variant texture chosen", axolotl.textureFor(1, "wild"), "WILD_TEX");
+        eq("unknown variant falls back to base", axolotl.textureFor(1, "nope"), "BASE_TEX");
+        eq("no variant -> base", axolotl.textureFor(50, null), "BASE_TEX");
+        eq("hasVariants true", axolotl.hasVariants(), true);
+        eq("variant display caps", PetDefinition.variantDisplay("lucy"), "Lucy");
+        eq("randomVariant in set", variants.containsKey(axolotl.randomVariant(new java.util.Random(1))), true);
+
+        final PetDefinition panda = new PetDefinition("panda", "Panda",
+            net.kyori.adventure.text.format.NamedTextColor.WHITE, "Epic", 5, "BASE", "MAX_TEX", java.util.Map.of(), java.util.List.of());
+        eq("panda below 100 base", panda.textureFor(99, null), "BASE");
+        eq("panda at 100 max skin", panda.textureFor(100, null), "MAX_TEX");
+        eq("panda no variants", panda.hasVariants(), false);
+        eq("randomVariant null when none", panda.randomVariant(new java.util.Random(1)), null);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

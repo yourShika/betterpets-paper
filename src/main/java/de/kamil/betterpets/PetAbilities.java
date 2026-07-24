@@ -76,6 +76,13 @@ public final class PetAbilities {
         return String.format(Locale.ROOT, "%.3f", value);
     }
 
+    /** Describes the richest ore veins a Ferret reveals at the given level (mirrors its unlock tiers). */
+    private static String ferretOreLabel(final int level) {
+        final String[] names = {"coal", "copper", "iron/redstone", "gold/quartz", "diamond/emerald", "netherite"};
+        final int idx = Math.min(names.length, 1 + (level / 20)) - 1;
+        return "reveals up to " + names[idx];
+    }
+
     private static void put(final Map<String, Info> map, final String id, final String summary,
                             final IntFunction<String> value, final IntFunction<List<String>> milestones) {
         map.put(id, new Info(summary, value, milestones));
@@ -165,6 +172,16 @@ public final class PetAbilities {
             lvl -> Math.round(Math.min(0.75, 0.25 + (tier(lvl) * 0.025)) * 100) + "% mob distraction chance", NONE);
         put(m, "owl", "Night Vision and increased luck.",
             lvl -> "+" + (tier(lvl) * 25) + " luck", NONE);
+        put(m, "firefly", "Night Vision and a hostile-mob spawn shield that grows with level.",
+            lvl -> dec(Math.min(20.0, 6.0 + (tier(lvl) * 0.5))) + " block no-spawn radius", NONE);
+        put(m, "ferret", "Reveals ore through walls, unlocking richer veins as it levels (coal to netherite).",
+            PetAbilities::ferretOreLabel, NONE);
+        put(m, "kangaroo", "Double-jump: sneak in mid-air to launch forward and up.",
+            lvl -> dec(0.7 + (tier(lvl) * 0.03)) + " leap power", NONE);
+        put(m, "squirrel", "Forages bonus saplings, apples and sticks from leaves and logs.",
+            lvl -> Math.round(Math.min(0.6, 0.12 + (tier(lvl) * 0.02)) * 100) + "% bonus forage chance", NONE);
+        put(m, "water_serpent", "Master angler: faster bites, double catches and sea luck while holding a rod.",
+            lvl -> Math.round(Math.min(0.5, 0.1 + (tier(lvl) * 0.02)) * 100) + "% double catch, +" + (tier(lvl) * 3) + " luck", NONE);
         put(m, "panda", "More attack knockback, bamboo biome hero effect. Enchanted skin at level 100.",
             lvl -> "+" + Math.round(tier(lvl) * 5.0) + "% knockback",
             lvl -> lvl == 100 ? List.of("Enchanted Panda skin") : List.of());

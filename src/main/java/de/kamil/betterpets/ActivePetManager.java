@@ -218,6 +218,25 @@ public final class ActivePetManager {
     // entities) glow via the shared per-viewer GlowController like revealed mobs.
     private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> chestGlows = new HashMap<>();
     private final Map<UUID, Set<UUID>> minecartGlows = new HashMap<>();
+    // Ferret ore sense: unlocked ores glow through walls via the same owner-only BlockDisplay proxies.
+    private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> oreGlows = new HashMap<>();
+    // Kangaroo double-jump cooldown: one mid-air dash per short window per owner.
+    private final Map<UUID, Long> kangarooCooldowns = new HashMap<>();
+    // Ferret ore tiers, unlocked progressively by level (coal at level 1, netherite at 100).
+    private static final List<Set<Material>> FERRET_ORE_TIERS = List.of(
+        Set.of(Material.COAL_ORE, Material.DEEPSLATE_COAL_ORE),
+        Set.of(Material.COPPER_ORE, Material.DEEPSLATE_COPPER_ORE),
+        Set.of(Material.IRON_ORE, Material.DEEPSLATE_IRON_ORE, Material.LAPIS_ORE, Material.DEEPSLATE_LAPIS_ORE,
+            Material.REDSTONE_ORE, Material.DEEPSLATE_REDSTONE_ORE),
+        Set.of(Material.GOLD_ORE, Material.DEEPSLATE_GOLD_ORE, Material.NETHER_GOLD_ORE, Material.NETHER_QUARTZ_ORE),
+        Set.of(Material.DIAMOND_ORE, Material.DEEPSLATE_DIAMOND_ORE, Material.EMERALD_ORE, Material.DEEPSLATE_EMERALD_ORE),
+        Set.of(Material.ANCIENT_DEBRIS)
+    );
+    // Squirrel forage pool for leaves; logs always drop a stick.
+    private static final List<Material> SQUIRREL_LEAF_DROPS = List.of(
+        Material.OAK_SAPLING, Material.BIRCH_SAPLING, Material.SPRUCE_SAPLING,
+        Material.APPLE, Material.STICK, Material.OAK_SAPLING
+    );
     private final Map<UUID, BossBar> shadowBars = new HashMap<>();
     private final Map<UUID, Long> shadowAoeReadyAt = new HashMap<>();
     // Guards against infinite recursion: the AoE burst damages mobs as the player, which re-fires the
@@ -281,6 +300,7 @@ public final class ActivePetManager {
         activePets.clear();
         Bukkit.getOnlinePlayers().forEach(this::clearReveal);
         Bukkit.getOnlinePlayers().forEach(this::clearChestGlow);
+        Bukkit.getOnlinePlayers().forEach(this::clearOreGlow);
         Bukkit.getOnlinePlayers().forEach(this::resetPlayerState);
         shadowBars.values().forEach(BossBar::removeAll);
         shadowBars.clear();
@@ -351,6 +371,7 @@ public final class ActivePetManager {
         stopRide(player, false);
         clearReveal(player);
         clearChestGlow(player);
+        clearOreGlow(player);
         clearShadowBar(player);
         final ActivePet active = activePets.remove(player.getUniqueId());
         if (active != null) {
@@ -893,6 +914,13 @@ public final class ActivePetManager {
                 }
             } else if (chestGlows.containsKey(player.getUniqueId()) || minecartGlows.containsKey(player.getUniqueId())) {
                 clearChestGlow(player);
+            }
+            if (pet.definitionId().equals("ferret")) {
+                if (tick % penguinInterval == 0L) {
+                    updateFerretOreGlow(player, pet);
+                }
+            } else if (oreGlows.containsKey(player.getUniqueId())) {
+                clearOreGlow(player);
             }
             if (pet.definitionId().equals("shadow_dragon")) {
                 updateShadowBar(player, pet);
@@ -1636,6 +1664,240 @@ public final class ActivePetManager {
         return ((long) (state.getX() & 0x3FFFFFF) << 38) | ((long) (state.getZ() & 0x3FFFFFF) << 12) | (state.getY() & 0xFFFL);
     }
 
+    private static long blockKey(final int x, final int y, final int z) {
+        return ((long) (x & 0x3FFFFFF) << 38) | ((long) (z & 0x3FFFFFF) << 12) | (y & 0xFFFL);
+    }
+
+    // ---- Firefly: hostile-mob spawn shield -----------------------------------------------------
+
+    /** True when a natural hostile spawn at {@code loc} falls inside an active Firefly owner's shield. */
+    public boolean suppressesHostileSpawn(final Location loc) {
+        if (loc == null || loc.getWorld() == null) {
+            return false;
+        }
+        for (final Map.Entry<UUID, ActivePet> entry : activePets.entrySet()) {
+            final ActivePet active = entry.getValue();
+            if (active == null || !active.pet().definitionId().equals("firefly")) {
+                continue;
+            }
+            final Player owner = Bukkit.getPlayer(entry.getKey());
+            if (owner == null || !owner.getWorld().equals(loc.getWorld())) {
+                continue;
+            }
+            final double radius = fireflyRadius(active.pet().level());
+            if (owner.getLocation().distanceSquared(loc) <= radius * radius) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private double fireflyRadius(final int level) {
+        final double base = plugin.getConfig().getDouble("firefly.spawn-protection-radius", 6.0);
+        final double max = plugin.getConfig().getDouble("firefly.spawn-protection-max-radius", 20.0);
+        return Math.min(max, base + (abilityTier(level) * 0.5));
+    }
+
+    // ---- Ferret: ore sense ----------------------------------------------------------------------
+
+    private Set<Material> ferretOreSet(final int level) {
+        final int tiers = Math.min(FERRET_ORE_TIERS.size(), 1 + (level / 20));
+        final Set<Material> set = EnumSet.noneOf(Material.class);
+        for (int i = 0; i < tiers; i++) {
+            set.addAll(FERRET_ORE_TIERS.get(i));
+        }
+        return set;
+    }
+
+    private void updateFerretOreGlow(final Player player, final OwnedPet pet) {
+        final World world = player.getWorld();
+        final Location center = player.getLocation();
+        final double radius = Math.min(12.0, 5.0 + (abilityTier(pet.level()) * 0.25));
+        final int r = (int) Math.ceil(radius);
+        final double radiusSq = radius * radius;
+        final Set<Material> ores = ferretOreSet(pet.level());
+        final int maxGlows = Math.max(16, plugin.getConfig().getInt("ferret.max-glowing-ores", 80));
+        final int cx = center.getBlockX();
+        final int cy = center.getBlockY();
+        final int cz = center.getBlockZ();
+        final int minY = world.getMinHeight();
+        final int maxY = world.getMaxHeight() - 1;
+
+        final Set<Long> desired = new HashSet<>();
+        final Map<Long, org.bukkit.entity.BlockDisplay> playerGlows =
+            oreGlows.computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>());
+        outer:
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dz = -r; dz <= r; dz++) {
+                final int bx = cx + dx;
+                final int bz = cz + dz;
+                if (!world.isChunkLoaded(bx >> 4, bz >> 4)) {
+                    continue;
+                }
+                for (int dy = -r; dy <= r; dy++) {
+                    if ((dx * dx) + (dy * dy) + (dz * dz) > radiusSq) {
+                        continue;
+                    }
+                    final int by = cy + dy;
+                    if (by < minY || by > maxY) {
+                        continue;
+                    }
+                    final Block block = world.getBlockAt(bx, by, bz);
+                    if (!ores.contains(block.getType())) {
+                        continue;
+                    }
+                    final long key = blockKey(bx, by, bz);
+                    desired.add(key);
+                    final org.bukkit.entity.BlockDisplay existing = playerGlows.get(key);
+                    if (existing == null || existing.isDead()) {
+                        final org.bukkit.entity.BlockDisplay spawned = spawnOreGlow(player, block);
+                        if (spawned != null) {
+                            playerGlows.put(key, spawned);
+                        }
+                    }
+                    if (desired.size() >= maxGlows) {
+                        break outer;
+                    }
+                }
+            }
+        }
+        playerGlows.entrySet().removeIf(entry -> {
+            if (!desired.contains(entry.getKey())) {
+                if (entry.getValue() != null && !entry.getValue().isDead()) {
+                    entry.getValue().remove();
+                }
+                return true;
+            }
+            return false;
+        });
+        if (playerGlows.isEmpty()) {
+            oreGlows.remove(player.getUniqueId());
+        }
+    }
+
+    private org.bukkit.entity.BlockDisplay spawnOreGlow(final Player player, final Block block) {
+        final Location loc = block.getLocation();
+        final org.bukkit.block.data.BlockData blockData = block.getBlockData();
+        final Color color = oreGlowColor(block.getType());
+        try {
+            final org.bukkit.entity.BlockDisplay display = loc.getWorld().spawn(loc, org.bukkit.entity.BlockDisplay.class, entity -> {
+                entity.setBlock(blockData);
+                entity.setGlowing(true);
+                entity.setGlowColorOverride(color);
+                entity.setBrightness(new org.bukkit.entity.Display.Brightness(15, 15));
+                entity.setPersistent(false);
+                entity.setVisibleByDefault(false);
+                entity.addScoreboardTag(CHEST_GLOW_TAG);
+            });
+            player.showEntity(plugin, display);
+            return display;
+        } catch (final RuntimeException | LinkageError error) {
+            return null;
+        }
+    }
+
+    private Color oreGlowColor(final Material type) {
+        return switch (type) {
+            case COAL_ORE, DEEPSLATE_COAL_ORE -> Color.GRAY;
+            case COPPER_ORE, DEEPSLATE_COPPER_ORE -> Color.ORANGE;
+            case IRON_ORE, DEEPSLATE_IRON_ORE -> Color.WHITE;
+            case GOLD_ORE, DEEPSLATE_GOLD_ORE, NETHER_GOLD_ORE, NETHER_QUARTZ_ORE -> Color.YELLOW;
+            case REDSTONE_ORE, DEEPSLATE_REDSTONE_ORE -> Color.RED;
+            case LAPIS_ORE, DEEPSLATE_LAPIS_ORE -> Color.BLUE;
+            case DIAMOND_ORE, DEEPSLATE_DIAMOND_ORE -> Color.AQUA;
+            case EMERALD_ORE, DEEPSLATE_EMERALD_ORE -> Color.GREEN;
+            case ANCIENT_DEBRIS -> Color.FUCHSIA;
+            default -> Color.ORANGE;
+        };
+    }
+
+    private void clearOreGlow(final Player player) {
+        final Map<Long, org.bukkit.entity.BlockDisplay> glows = oreGlows.remove(player.getUniqueId());
+        if (glows != null) {
+            for (final org.bukkit.entity.BlockDisplay display : glows.values()) {
+                if (display != null && !display.isDead()) {
+                    display.remove();
+                }
+            }
+        }
+    }
+
+    // ---- Kangaroo: mid-air double jump ----------------------------------------------------------
+
+    /** Launches an airborne Kangaroo owner forward and up when they sneak, once per short cooldown. */
+    public void handleKangarooJump(final Player player) {
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null || !pet.definitionId().equals("kangaroo")) {
+            return;
+        }
+        if (player.isOnGround() || player.isFlying() || player.isGliding() || isRiding(player)) {
+            return;
+        }
+        final long now = System.currentTimeMillis();
+        final Long until = kangarooCooldowns.get(player.getUniqueId());
+        if (until != null && now < until) {
+            return;
+        }
+        final double power = 0.7 + (abilityTier(pet.level()) * 0.03);
+        final Vector dir = player.getLocation().getDirection().normalize().multiply(power);
+        dir.setY(Math.max(0.5, dir.getY() + 0.5));
+        player.setVelocity(dir);
+        kangarooCooldowns.put(player.getUniqueId(), now + 1500L);
+        player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation(), 8, 0.2, 0.05, 0.2, 0.02);
+        player.playSound(player.getLocation(), Sound.ENTITY_RABBIT_JUMP, 0.7F, 1.2F);
+    }
+
+    // ---- Squirrel: forage bonus -----------------------------------------------------------------
+
+    /** Drops bonus forage when a Squirrel owner breaks leaves or logs. */
+    public void handleSquirrelForage(final Player player, final Block block) {
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null || !pet.definitionId().equals("squirrel")) {
+            return;
+        }
+        final Material type = block.getType();
+        final boolean leaves = org.bukkit.Tag.LEAVES.isTagged(type);
+        final boolean logs = org.bukkit.Tag.LOGS.isTagged(type);
+        if (!leaves && !logs) {
+            return;
+        }
+        final double chance = Math.min(0.6, 0.12 + (abilityTier(pet.level()) * 0.02));
+        if (ThreadLocalRandom.current().nextDouble() >= chance) {
+            return;
+        }
+        final Material drop = leaves
+            ? SQUIRREL_LEAF_DROPS.get(ThreadLocalRandom.current().nextInt(SQUIRREL_LEAF_DROPS.size()))
+            : Material.STICK;
+        block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 0.5, 0.5), new ItemStack(drop));
+    }
+
+    // ---- Water Serpent: master angler -----------------------------------------------------------
+
+    /** Speeds up bites while casting and rolls a bonus catch when a Water Serpent owner reels one in. */
+    public void handleWaterSerpentFish(final org.bukkit.event.player.PlayerFishEvent event) {
+        final Player player = event.getPlayer();
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null || !pet.definitionId().equals("water_serpent")) {
+            return;
+        }
+        final int tier = abilityTier(pet.level());
+        if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.FISHING) {
+            final org.bukkit.entity.FishHook hook = event.getHook();
+            final int minWait = Math.max(20, 100 - (tier * 3));
+            final int maxWait = Math.max(minWait + 20, 300 - (tier * 6));
+            hook.setMinWaitTime(minWait);
+            hook.setMaxWaitTime(maxWait);
+            return;
+        }
+        if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_FISH
+            && event.getCaught() instanceof Item caught) {
+            final double chance = Math.min(0.5, 0.1 + (tier * 0.02));
+            if (ThreadLocalRandom.current().nextDouble() < chance) {
+                player.getWorld().dropItemNaturally(player.getLocation(), caught.getItemStack().clone());
+            }
+        }
+    }
+
     /** Per-pet dispatch context: the owner, the pet, and its cached level/ability tier. */
     private record AbilityCtx(Player player, OwnedPet pet, int level, int tier) {
     }
@@ -1768,6 +2030,13 @@ public final class ActivePetManager {
         passiveBehaviors.put("duck", c -> setTarget(c.player(), Attribute.WATER_MOVEMENT_EFFICIENCY, c.tier() * 0.035));
         passiveBehaviors.put("unicorn", c -> setTarget(c.player(), Attribute.LUCK, c.tier() * 8.0));
         passiveBehaviors.put("worm", c -> setTarget(c.player(), Attribute.MINING_EFFICIENCY, c.tier() * 0.5));
+        passiveBehaviors.put("firefly", c -> applyPetBuff(c.player(), PotionEffectType.NIGHT_VISION, 0));
+        passiveBehaviors.put("water_serpent", c -> {
+            if (isHoldingTool(c.player(), "FISHING_ROD")) {
+                setTarget(c.player(), Attribute.LUCK, c.tier() * 3.0);
+                setTarget(c.player(), Attribute.WATER_MOVEMENT_EFFICIENCY, c.tier() * 0.05);
+            }
+        });
 
         // Periodic effects, applied every ability interval.
         final Behavior dragonAbsorption = c -> applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 3, 220);

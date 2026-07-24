@@ -43,8 +43,22 @@ follow-teleport-distance: 24.0
 # Interpolation duration (ticks) used when the pet display teleports.
 follow-teleport-duration-ticks: 8
 # How often (ticks) the Penguin re-scans nearby containers for its Treasure Sense
-# glow. Higher = cheaper. Minimum 20 (once per second).
+# glow. Higher = cheaper. Minimum 20 (once per second). The Ferret's ore glow
+# re-scans on the same interval.
 penguin-glow-update-ticks: 40
+
+# Firefly hostile-mob spawn shield. Cancels NATURAL monster spawns within the
+# radius of an active Firefly owner. Radius grows from the base up to the max
+# as the pet levels. Set enabled: false to turn the shield off server-wide.
+firefly:
+  enabled: true
+  spawn-protection-radius: 6.0
+  spawn-protection-max-radius: 20.0
+
+# Ferret ore sense. Caps how many ore blocks glow at once per owner (keeps the
+# scan cheap on busy servers).
+ferret:
+  max-glowing-ores: 80
 
 
 # ═══ 4) XP & BOOSTERS ═══════════════════════════════════════════════════════

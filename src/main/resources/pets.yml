@@ -628,3 +628,63 @@ pets:
       - "and nullifies all debuffs at level 100."
       - "Mythical pet"
       - "Click to add to your pet list."
+  firefly:
+    name: "Firefly"
+    color: "yellow"
+    rarity: "Common"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZThkMTYxODBmYTRjODAyYWI2YjI2NTdjNDhkMGExMWM5M2IzYTNlNTI3MGFkZDk1NDVmZWIzNzhmNjMwMmRiYiJ9fX0="
+    weight: 9
+    lore:
+      - "Living Lantern"
+      - "Night Vision, and hostile mobs will not"
+      - "spawn in a radius that grows with level."
+      - "Common pet"
+      - "Click to add to your pet list."
+  ferret:
+    name: "Ferret"
+    color: "dark_purple"
+    rarity: "Mythical"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMjM2ZWRmN2RlOWFkY2E3MjMwOGE5NGQxYzM4YzM1OGFjYzgyOTE4ZmU4ZmNlZDI1ZDQ3NDgyMGY0Y2I3ODQifX19"
+    weight: 2
+    lore:
+      - "Ore Sense"
+      - "Reveals nearby ore through walls, unlocking"
+      - "richer veins as it levels: coal to netherite."
+      - "Mythical pet"
+      - "Click to add to your pet list."
+  kangaroo:
+    name: "Kangaroo"
+    color: "gold"
+    rarity: "Rare"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzBhMDRkYWQxNzk0ZTk5MGY4OTcyYjA2OTA4Zjk0ZDYzNWE1NTQ5NzQ5MjI1NjFmMzA1ZjRhM2ExYTQ2MzA1OSJ9fX0="
+    weight: 6
+    lore:
+      - "Outback Leap"
+      - "Sneak in mid-air for a double-jump"
+      - "that launches you forward and up."
+      - "Rare pet"
+      - "Click to add to your pet list."
+  squirrel:
+    name: "Squirrel"
+    color: "gold"
+    rarity: "Common"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvODdkNTg2NGNhYWU3YjVmMWI4NmU2YjBjOTRlY2VhMmU0NjViMzhhYzA1ODVmMmZjN2NmMzcyZjUwNTY1NjRkMyJ9fX0="
+    weight: 9
+    lore:
+      - "Forager"
+      - "Breaking leaves and logs sometimes drops"
+      - "bonus saplings, apples and sticks."
+      - "Common pet"
+      - "Click to add to your pet list."
+  water_serpent:
+    name: "Water Serpent"
+    color: "aqua"
+    rarity: "Epic"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvOTQ2ZTc4MDYxNDU4NTg4OTcwZTU3NDU2MTIwMGQzYmZmYmQ2OGVmZTBjOTIzZTkxYjhjYmQ4YjQ1NjEzYmU2In19fQ=="
+    weight: 4
+    lore:
+      - "Master Angler"
+      - "Faster bites, a chance at double catches,"
+      - "and sea luck while holding a fishing rod."
+      - "Epic pet"
+      - "Click to add to your pet list."

@@ -554,9 +554,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerToggleSneak(final PlayerToggleSneakEvent event) {
-        if (event.isSneaking() && activePets.stopRideIfSneaking(event.getPlayer())) {
-            event.setCancelled(true);
+        if (!event.isSneaking()) {
+            return;
         }
+        if (activePets.stopRideIfSneaking(event.getPlayer())) {
+            event.setCancelled(true);
+            return;
+        }
+        activePets.handleKangarooJump(event.getPlayer());
     }
 
     @EventHandler
@@ -909,6 +914,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     public void onBlockBreak(final BlockBreakEvent event) {
         activePets.handleMoleBreak(event.getPlayer(), event.getBlock());
         activePets.handleOreBonus(event.getPlayer(), event.getBlock());
+        activePets.handleSquirrelForage(event.getPlayer(), event.getBlock());
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -1441,6 +1447,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerFish(final PlayerFishEvent event) {
+        activePets.handleWaterSerpentFish(event);
         if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH || !petSourceEnabled("fishing")) {
             return;
         }
@@ -1499,6 +1506,18 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 1.0, 0.5), itemFactory.discoveryItem(definition));
         }
         announcePet(player, definition, "brushed out", "");
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onFireflySpawnShield(final CreatureSpawnEvent event) {
+        if (event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.NATURAL
+            || !(event.getEntity() instanceof org.bukkit.entity.Monster)
+            || !getConfig().getBoolean("firefly.enabled", true)) {
+            return;
+        }
+        if (activePets.suppressesHostileSpawn(event.getLocation())) {
+            event.setCancelled(true);
+        }
     }
 
     @EventHandler
