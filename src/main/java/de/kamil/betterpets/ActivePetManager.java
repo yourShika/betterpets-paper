@@ -1248,7 +1248,24 @@ public final class ActivePetManager {
             case "herobrine" -> world.spawnParticle(Particle.SOUL_FIRE_FLAME, loc, 3, 0.2, 0.3, 0.2, 0.0);
             case "reaper" -> world.spawnParticle(Particle.SOUL, loc, 4, 0.25, 0.3, 0.25, 0.0);
             case "ancient_elf" -> world.spawnParticle(Particle.ENCHANT, loc, 6, 0.3, 0.35, 0.3, 0.0);
+            // Every Epic-and-above pet without a bespoke effect above still gets a rarity aura.
+            default -> spawnRarityAura(world, loc, pet);
+        }
+    }
+
+    /** Fallback ambient aura for Epic+ pets that have no custom particle case (Common/Rare stay clean). */
+    private void spawnRarityAura(final World world, final Location loc, final OwnedPet pet) {
+        final String rarity = definitions.get(pet.definitionId())
+            .map(PetDefinition::rarity).orElse("Common").toLowerCase(java.util.Locale.ROOT);
+        switch (rarity) {
+            case "epic" -> world.spawnParticle(Particle.WITCH, loc, 4, 0.25, 0.3, 0.25, 0.0);
+            case "legendary" -> world.spawnParticle(Particle.END_ROD, loc, 3, 0.22, 0.3, 0.22, 0.0);
+            case "mythical", "extraordinary" -> {
+                world.spawnParticle(Particle.ENCHANT, loc, 6, 0.3, 0.35, 0.3, 0.0);
+                world.spawnParticle(Particle.END_ROD, loc, 2, 0.2, 0.3, 0.2, 0.0);
+            }
             default -> {
+                // Common and Rare pets intentionally emit no ambient aura.
             }
         }
     }
@@ -1843,8 +1860,11 @@ public final class ActivePetManager {
         dir.setY(Math.max(0.5, dir.getY() + 0.5));
         player.setVelocity(dir);
         kangarooCooldowns.put(player.getUniqueId(), now + 1500L);
-        player.getWorld().spawnParticle(Particle.CLOUD, player.getLocation(), 8, 0.2, 0.05, 0.2, 0.02);
-        player.playSound(player.getLocation(), Sound.ENTITY_RABBIT_JUMP, 0.7F, 1.2F);
+        final Location fx = player.getLocation();
+        player.getWorld().spawnParticle(Particle.CLOUD, fx, 12, 0.3, 0.05, 0.3, 0.04);
+        player.getWorld().spawnParticle(Particle.CRIT, fx, 6, 0.2, 0.1, 0.2, 0.06);
+        player.playSound(fx, Sound.ENTITY_RABBIT_JUMP, 0.8F, 1.3F);
+        player.playSound(fx, Sound.ENTITY_PLAYER_ATTACK_SWEEP, 0.4F, 1.6F);
     }
 
     // ---- Squirrel: forage bonus -----------------------------------------------------------------
