@@ -42,6 +42,17 @@ public final class PetDefinitions {
                 continue;
             }
 
+            final Map<String, String> variants = new LinkedHashMap<>();
+            final ConfigurationSection variantSection = pet.getConfigurationSection("variants");
+            if (variantSection != null) {
+                for (final String key : variantSection.getKeys(false)) {
+                    final String value = variantSection.getString(key, "");
+                    if (value != null && !value.isBlank()) {
+                        variants.put(key.toLowerCase(Locale.ROOT), value);
+                    }
+                }
+            }
+
             loaded.put(id, new PetDefinition(
                 id,
                 pet.getString("name", id),
@@ -49,6 +60,8 @@ public final class PetDefinitions {
                 pet.getString("rarity", "Common"),
                 Math.max(1, pet.getInt("weight", 1)),
                 pet.getString("texture", ""),
+                pet.getString("texture-max", null),
+                Map.copyOf(variants),
                 List.copyOf(pet.getStringList("lore"))
             ));
         }

@@ -193,6 +193,11 @@ public final class PetItemFactory {
 
         final List<Component> lore = new ArrayList<>();
         lore.add(Component.text("Rarity: ", NamedTextColor.GRAY).append(Component.text(definition.rarity(), definition.rarityColor())).decoration(TextDecoration.ITALIC, false));
+        if (pet != null && pet.variant() != null && definition.hasVariants()) {
+            lore.add(Component.text("Variant: ", NamedTextColor.GRAY)
+                .append(Component.text(PetDefinition.variantDisplay(pet.variant()), NamedTextColor.AQUA))
+                .decoration(TextDecoration.ITALIC, false));
+        }
         lore.add(Component.empty());
         lore.add(Component.text("Abilities", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
         definition.lore().stream()
@@ -220,7 +225,7 @@ public final class PetItemFactory {
         }
 
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());
-        applyPetIdentity(meta, definition);
+        applyPetIdentity(meta, definition, pet == null ? 1 : pet.level(), pet == null ? null : pet.variant());
         if (pet != null) {
             if (discovery) {
                 meta.getPersistentDataContainer().set(petLevelKey, PersistentDataType.INTEGER, pet.level());
@@ -242,18 +247,21 @@ public final class PetItemFactory {
         final SkullMeta meta = (SkullMeta) item.getItemMeta();
         meta.displayName(title.decoration(TextDecoration.ITALIC, false));
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());
-        applyPetIdentity(meta, definition);
+        applyPetIdentity(meta, definition, 1, null);
         item.setItemMeta(meta);
         return item;
     }
 
-    private void applyPetIdentity(final SkullMeta meta, final PetDefinition definition) {
-        if (!definition.texture().isBlank()) {
+    private void applyPetIdentity(final SkullMeta meta, final PetDefinition definition, final int level, final String variant) {
+        final String texture = definition.textureFor(level, variant);
+        if (texture != null && !texture.isBlank()) {
+            // Fold the texture into the profile UUID so a variant/level skin swap yields a distinct
+            // profile identity; otherwise the client caches the first skin it saw for that UUID.
             final PlayerProfile profile = Bukkit.createProfile(
-                UUID.nameUUIDFromBytes(("betterpets:" + definition.id()).getBytes(StandardCharsets.UTF_8)),
+                UUID.nameUUIDFromBytes(("betterpets:" + definition.id() + ':' + texture).getBytes(StandardCharsets.UTF_8)),
                 definition.profileName()
             );
-            profile.setProperty(new ProfileProperty("textures", definition.texture()));
+            profile.setProperty(new ProfileProperty("textures", texture));
             meta.setPlayerProfile(profile);
         }
 

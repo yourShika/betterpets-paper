@@ -15,6 +15,7 @@ public final class OwnedPet {
     private int nextLevelExp;
     private long lastTotemMillis;
     private String customName;
+    private String variant;
     private ItemStack[] storageContents;
 
     public OwnedPet(final UUID uuid, final String definitionId, final int level, final int exp, final int nextLevelExp, final long lastTotemMillis) {
@@ -80,6 +81,15 @@ public final class OwnedPet {
 
     public void setCustomName(final String customName) {
         this.customName = customName == null || customName.isBlank() ? null : customName;
+    }
+
+    /** The rolled cosmetic variant (e.g. an Axolotl style), or null when the pet has none. */
+    public String variant() {
+        return variant;
+    }
+
+    public void setVariant(final String variant) {
+        this.variant = variant == null || variant.isBlank() ? null : variant.toLowerCase(java.util.Locale.ROOT);
     }
 
     public ItemStack[] storageContents() {

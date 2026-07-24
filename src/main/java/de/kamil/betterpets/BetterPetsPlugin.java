@@ -164,6 +164,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         storage = new PetStorage(this);
         storage.load();
         recalculateAllPetExp();
+        assignMissingVariants();
         getLogger().info("Loaded pet storage for " + storage.playerCount() + " player(s).");
 
         modelService = new PetModelService(this);
@@ -346,6 +347,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 if (!pet.uuid().equals(data.activePetId()) && activeAlpacaStorageLocked(player, data)) {
                     return;
                 }
+                ensureVariant(pet);
                 data.setActivePet(pet.uuid());
                 activePets.spawn(player, pet);
                 requestSave();
@@ -1209,12 +1211,41 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         itemFactory.petCustomName(item).ifPresent(pet::setCustomName);
         pet.recalculateNextLevelExp(petXpMultiplier());
         pet.setExp(itemFactory.petExp(item));
+        ensureVariant(pet);
         data.pets().add(pet);
         consumeOne(player, item);
         requestSave();
         player.sendMessage(message("messages.pet-added").replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name())));
         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8F, 1.8F);
         debug(player.getName() + " added pet " + definition.id() + " level " + pet.level() + " from item.");
+    }
+
+    /** Rolls a cosmetic variant (e.g. an Axolotl style) for pets that support them but do not have one yet. */
+    private void ensureVariant(final OwnedPet pet) {
+        if (pet == null || pet.variant() != null) {
+            return;
+        }
+        definitions.get(pet.definitionId()).ifPresent(definition -> {
+            if (definition.hasVariants()) {
+                pet.setVariant(definition.randomVariant(ThreadLocalRandom.current()));
+            }
+        });
+    }
+
+    /** Assigns variants to every stored pet that supports them but is missing one (e.g. pre-existing Axolotls). */
+    private void assignMissingVariants() {
+        boolean changed = false;
+        for (final Map.Entry<UUID, PlayerPetData> entry : storage.entries()) {
+            for (final OwnedPet pet : entry.getValue().pets()) {
+                if (pet.variant() == null) {
+                    ensureVariant(pet);
+                    changed = changed || pet.variant() != null;
+                }
+            }
+        }
+        if (changed) {
+            requestSave();
+        }
     }
 
     private void rememberLootOpener(final PlayerInteractEvent event) {

@@ -79,6 +79,7 @@ public final class PetStorage {
                                 storageContents(pet)
                             );
                             owned.setCustomName(pet.getString("name", null));
+                            owned.setVariant(pet.getString("variant", null));
                             data.pets().add(owned);
                         } catch (final RuntimeException petException) {
                             // One broken pet must not drop the whole player's data.
@@ -143,6 +144,7 @@ public final class PetStorage {
                 config.set(petPath + ".next-exp", pet.nextLevelExp());
                 config.set(petPath + ".last-totem", pet.lastTotemMillis());
                 config.set(petPath + ".name", pet.hasCustomName() ? pet.customName() : null);
+                config.set(petPath + ".variant", pet.variant());
                 config.set(petPath + ".storage-bytes", Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(serializableStorageContents(pet))));
                 config.set(petPath + ".storage", null);
             }
