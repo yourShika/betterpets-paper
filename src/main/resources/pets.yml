@@ -648,8 +648,9 @@ pets:
     weight: 2
     lore:
       - "Ore Sense"
-      - "Reveals nearby ore through walls, unlocking"
-      - "richer veins as it levels: coal to netherite."
+      - "While holding a pickaxe, reveals nearby ore"
+      - "through walls, unlocking richer veins as it"
+      - "levels: coal up to diamond."
       - "Mythical pet"
       - "Click to add to your pet list."
   kangaroo:

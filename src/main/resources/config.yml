@@ -55,10 +55,11 @@ firefly:
   spawn-protection-radius: 6.0
   spawn-protection-max-radius: 20.0
 
-# Ferret ore sense. Caps how many ore blocks glow at once per owner (keeps the
-# scan cheap on busy servers).
+# Ferret ore sense. Only active while the owner holds a pickaxe; reveals ore up
+# to diamond (never netherite) in a small radius. This caps how many ore blocks
+# glow at once per owner (keeps the scan cheap and the reveal a hint, not a map).
 ferret:
-  max-glowing-ores: 80
+  max-glowing-ores: 24
 
 
 # ═══ 4) XP & BOOSTERS ═══════════════════════════════════════════════════════

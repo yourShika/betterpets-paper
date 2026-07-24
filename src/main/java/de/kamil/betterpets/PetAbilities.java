@@ -78,7 +78,7 @@ public final class PetAbilities {
 
     /** Describes the richest ore veins a Ferret reveals at the given level (mirrors its unlock tiers). */
     private static String ferretOreLabel(final int level) {
-        final String[] names = {"coal", "copper", "iron/redstone", "gold/quartz", "diamond/emerald", "netherite"};
+        final String[] names = {"coal", "copper", "iron/redstone", "gold/quartz", "diamond/emerald"};
         final int idx = Math.min(names.length, 1 + (level / 20)) - 1;
         return "reveals up to " + names[idx];
     }
@@ -174,7 +174,7 @@ public final class PetAbilities {
             lvl -> "+" + (tier(lvl) * 25) + " luck", NONE);
         put(m, "firefly", "Night Vision and a hostile-mob spawn shield that grows with level.",
             lvl -> dec(Math.min(20.0, 6.0 + (tier(lvl) * 0.5))) + " block no-spawn radius", NONE);
-        put(m, "ferret", "Reveals ore through walls, unlocking richer veins as it levels (coal to netherite).",
+        put(m, "ferret", "While holding a pickaxe, reveals nearby ore through walls, unlocking richer veins as it levels (coal to diamond).",
             PetAbilities::ferretOreLabel, NONE);
         put(m, "kangaroo", "Double-jump: sneak in mid-air to launch forward and up.",
             lvl -> dec(0.7 + (tier(lvl) * 0.03)) + " leap power", NONE);

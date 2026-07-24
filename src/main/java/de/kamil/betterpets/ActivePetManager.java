@@ -222,15 +222,15 @@ public final class ActivePetManager {
     private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> oreGlows = new HashMap<>();
     // Kangaroo double-jump cooldown: one mid-air dash per short window per owner.
     private final Map<UUID, Long> kangarooCooldowns = new HashMap<>();
-    // Ferret ore tiers, unlocked progressively by level (coal at level 1, netherite at 100).
+    // Ferret ore tiers, unlocked progressively by level (coal at level 1, diamond/emerald at 80+).
+    // Deliberately caps at diamond: netherite (ancient debris) x-ray would be too economy-breaking.
     private static final List<Set<Material>> FERRET_ORE_TIERS = List.of(
         Set.of(Material.COAL_ORE, Material.DEEPSLATE_COAL_ORE),
         Set.of(Material.COPPER_ORE, Material.DEEPSLATE_COPPER_ORE),
         Set.of(Material.IRON_ORE, Material.DEEPSLATE_IRON_ORE, Material.LAPIS_ORE, Material.DEEPSLATE_LAPIS_ORE,
             Material.REDSTONE_ORE, Material.DEEPSLATE_REDSTONE_ORE),
         Set.of(Material.GOLD_ORE, Material.DEEPSLATE_GOLD_ORE, Material.NETHER_GOLD_ORE, Material.NETHER_QUARTZ_ORE),
-        Set.of(Material.DIAMOND_ORE, Material.DEEPSLATE_DIAMOND_ORE, Material.EMERALD_ORE, Material.DEEPSLATE_EMERALD_ORE),
-        Set.of(Material.ANCIENT_DEBRIS)
+        Set.of(Material.DIAMOND_ORE, Material.DEEPSLATE_DIAMOND_ORE, Material.EMERALD_ORE, Material.DEEPSLATE_EMERALD_ORE)
     );
     // Squirrel forage pool for leaves; logs always drop a stick.
     private static final List<Material> SQUIRREL_LEAF_DROPS = List.of(
@@ -1727,13 +1727,20 @@ public final class ActivePetManager {
     }
 
     private void updateFerretOreGlow(final Player player, final OwnedPet pet) {
+        // The ore sense only works while a pickaxe is in hand: it is a mining aid, not passive x-ray.
+        if (!isHoldingTool(player, "_PICKAXE")) {
+            if (oreGlows.containsKey(player.getUniqueId())) {
+                clearOreGlow(player);
+            }
+            return;
+        }
         final World world = player.getWorld();
         final Location center = player.getLocation();
-        final double radius = Math.min(12.0, 5.0 + (abilityTier(pet.level()) * 0.25));
+        final double radius = Math.min(7.0, 4.0 + (abilityTier(pet.level()) * 0.15));
         final int r = (int) Math.ceil(radius);
         final double radiusSq = radius * radius;
         final Set<Material> ores = ferretOreSet(pet.level());
-        final int maxGlows = Math.max(16, plugin.getConfig().getInt("ferret.max-glowing-ores", 80));
+        final int maxGlows = Math.max(8, plugin.getConfig().getInt("ferret.max-glowing-ores", 24));
         final int cx = center.getBlockX();
         final int cy = center.getBlockY();
         final int cz = center.getBlockZ();
