@@ -743,6 +743,11 @@ public final class ActivePetManager {
         final ActivePet active = activePets.get(player.getUniqueId());
         if (active != null && !active.display().isDead()) {
             active.display().setTeleportDuration(Math.max(1, plugin.getConfig().getInt("follow-teleport-duration-ticks", 8)));
+            // Restore the clickable hitbox that flight shrank, so the pet can be interacted with again.
+            final boolean visible = storage.data(player.getUniqueId()).visible();
+            final boolean interactive = isInteractivePet(active.pet().definitionId());
+            active.hitbox().setInteractionWidth(visible && interactive ? 1.2F : 0.1F);
+            active.hitbox().setInteractionHeight(visible && interactive ? 1.8F : 0.1F);
         }
         if (notify) {
             player.sendMessage(Component.text("Flight disabled.", net.kyori.adventure.text.format.NamedTextColor.GRAY));
@@ -1090,6 +1095,11 @@ public final class ActivePetManager {
         target.setYaw(mount.getYaw());
         target.setPitch(0.0F);
         active.display().teleport(target);
+        // While flying, the pet's clickable hitbox sits on top of the rider and would intercept the
+        // downward raycast for breaking/placing blocks below. Dismount is sneak-only during flight, so
+        // the hitbox is not needed here — shrink it to a point until the rider lands.
+        active.hitbox().setInteractionWidth(0.1F);
+        active.hitbox().setInteractionHeight(0.1F);
         active.hitbox().teleport(target);
         active.teleportNametag(modelNametagLocation(target));
     }
