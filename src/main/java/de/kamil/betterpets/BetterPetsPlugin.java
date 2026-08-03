@@ -324,6 +324,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handlePetDetailClick(event, detailHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof VariantMenuHolder variantHolder) {
                 handleVariantClick(event, variantHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof CustomizeMenuHolder customizeHolder) {
+                handleCustomizeClick(event, customizeHolder);
             }
             return;
         }
@@ -543,13 +545,25 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (event.getHand() != EquipmentSlot.HAND) {
             return;
         }
-        final Optional<OwnedPet> clickedPet = activePets.clickedActivePet(event.getPlayer(), event.getRightClicked());
-        if (clickedPet.isPresent() && clickedPet.get().definitionId().equals("alpaca")) {
-            event.setCancelled(true);
-            openAlpacaStorage(event.getPlayer(), clickedPet.get());
-            return;
+        final Player player = event.getPlayer();
+        final Optional<OwnedPet> clickedPet = activePets.clickedActivePet(player, event.getRightClicked());
+        if (clickedPet.isPresent()) {
+            final OwnedPet pet = clickedPet.get();
+            // Sneak + right-click always opens Customize; a plain right-click also opens it for pets with
+            // no other right-click action (the Alpaca opens storage, flyable pets start their mount).
+            final boolean special = pet.definitionId().equals("alpaca") || activePets.isFlyable(pet.definitionId());
+            if (player.isSneaking() || !special) {
+                event.setCancelled(true);
+                openCustomizeMenu(player, pet);
+                return;
+            }
+            if (pet.definitionId().equals("alpaca")) {
+                event.setCancelled(true);
+                openAlpacaStorage(player, pet);
+                return;
+            }
         }
-        if (activePets.handlePetInteraction(event.getPlayer(), event.getRightClicked())) {
+        if (activePets.handlePetInteraction(player, event.getRightClicked())) {
             event.setCancelled(true);
         }
     }
@@ -929,7 +943,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (holder instanceof PetMenuHolder || holder instanceof ChanceMenuHolder || holder instanceof NotifyMenuHolder
             || holder instanceof XpMenuHolder || holder instanceof ModulesMenuHolder || holder instanceof InfoMenuHolder || holder instanceof PetDetailMenuHolder
             || holder instanceof AlpacaStorageHolder || holder instanceof SlotMenuHolder || holder instanceof SlotConfigMenuHolder
-            || holder instanceof VariantMenuHolder) {
+            || holder instanceof VariantMenuHolder || holder instanceof CustomizeMenuHolder) {
             return;
         }
         if (event.getSlotType() == InventoryType.SlotType.ARMOR) {
@@ -1895,12 +1909,17 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (args.length >= 2 && args[1].equalsIgnoreCase("all")) {
             int count = 0;
             int gained = 0;
+            final java.util.LinkedHashSet<String> unlocked = new java.util.LinkedHashSet<>();
             final ItemStack[] contents = player.getInventory().getStorageContents();
             for (int i = 0; i < contents.length; i++) {
                 final ItemStack item = contents[i];
                 final int value = scrapValue(item);
                 if (item == null || value <= 0) {
                     continue;
+                }
+                final String unlockedName = tryUnlockScrappedVariant(data, item);
+                if (unlockedName != null) {
+                    unlocked.add(unlockedName);
                 }
                 gained += value * item.getAmount();
                 count += item.getAmount();
@@ -1915,6 +1934,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8F, 1.2F);
             player.sendMessage(lang.component("tokens.scrapped-all",
                 "%count%", Integer.toString(count), "%tokens%", Integer.toString(gained), "%total%", Integer.toString(data.tokens())));
+            if (!unlocked.isEmpty()) {
+                player.sendMessage(lang.component("customize.unlocked", "%variant%", String.join(", ", unlocked)));
+            }
             return;
         }
 
@@ -1926,12 +1948,36 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final int gained = value * held.getAmount();
         final String name = itemFactory.petId(held).flatMap(definitions::get).map(PetDefinition::name).orElse("pet");
+        final String unlockedName = tryUnlockScrappedVariant(data, held);
         player.getInventory().setItemInMainHand(null);
         data.addTokens(gained);
         requestSave();
         player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8F, 1.4F);
         player.sendMessage(lang.component("tokens.scrapped",
             "%pet%", name, "%tokens%", Integer.toString(gained), "%total%", Integer.toString(data.tokens())));
+        if (unlockedName != null) {
+            player.sendMessage(lang.component("customize.unlocked", "%variant%", unlockedName));
+        }
+    }
+
+    /** Unlocks the item's variant on a matching owned pet; returns the display name if newly unlocked. */
+    private String tryUnlockScrappedVariant(final PlayerPetData data, final ItemStack item) {
+        final String petId = itemFactory.petId(item).orElse(null);
+        final String variant = itemFactory.petVariant(item).orElse(null);
+        if (petId == null || variant == null) {
+            return null;
+        }
+        final PetDefinition definition = definitions.get(petId).orElse(null);
+        if (definition == null || !definition.variants().containsKey(variant.toLowerCase(Locale.ROOT))) {
+            return null;
+        }
+        boolean unlocked = false;
+        for (final OwnedPet owned : data.pets()) {
+            if (owned.definitionId().equals(petId) && owned.unlockVariant(variant)) {
+                unlocked = true;
+            }
+        }
+        return unlocked ? PetDefinition.variantDisplay(variant) + " " + definition.name() : null;
     }
 
     void handleTokensCommand(final CommandSender sender, final String[] args) {
@@ -2880,6 +2926,137 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 holder.setPage(target);
                 renderVariantMenu(event.getView().getTopInventory(), holder);
             }
+        }
+    }
+
+    private void openCustomizeMenu(final Player player, final OwnedPet pet) {
+        final PetDefinition definition = definitions.get(pet.definitionId()).orElse(null);
+        if (definition == null) {
+            return;
+        }
+        final CustomizeMenuHolder holder = new CustomizeMenuHolder(pet.uuid(), 0);
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle("Customize " + definition.name(), definition.rarityColor()));
+        holder.setInventory(inventory);
+        renderCustomizeMenu(inventory, holder, player);
+        player.openInventory(inventory);
+    }
+
+    private static final int CUSTOMIZE_PER_PAGE = 36;
+
+    private void renderCustomizeMenu(final Inventory inventory, final CustomizeMenuHolder holder, final Player player) {
+        inventory.clear();
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final OwnedPet pet = data.findPet(holder.petUuid()).orElse(null);
+        if (pet == null) {
+            return;
+        }
+        final PetDefinition definition = definitions.get(pet.definitionId()).orElse(null);
+        if (definition == null) {
+            return;
+        }
+        inventory.setItem(4, itemFactory.menuItem(definition, pet, pet.uuid().equals(data.activePetId())));
+        inventory.setItem(0, itemFactory.control(
+            pet.particlesEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
+            Component.text("Particles: " + (pet.particlesEnabled() ? "ON" : "OFF"), pet.particlesEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY),
+            List.of(Component.text("Click to toggle this pet's ambient particles.", NamedTextColor.GRAY))));
+
+        final List<String> keys = new ArrayList<>(definition.variants().keySet());
+        final int pages = Math.max(1, (keys.size() + CUSTOMIZE_PER_PAGE - 1) / CUSTOMIZE_PER_PAGE);
+        if (holder.page() >= pages) {
+            holder.setPage(pages - 1);
+        }
+        final int start = holder.page() * CUSTOMIZE_PER_PAGE;
+        for (int i = 0; i < CUSTOMIZE_PER_PAGE && start + i < keys.size(); i++) {
+            final String key = keys.get(start + i);
+            final int slot = 9 + i;
+            if (pet.isVariantUnlocked(key)) {
+                final ItemStack icon = itemFactory.variantIcon(definition, key);
+                final boolean active = key.equalsIgnoreCase(pet.variant());
+                icon.editMeta(meta -> {
+                    if (active) {
+                        meta.setEnchantmentGlintOverride(true);
+                    }
+                    final List<Component> lore = new ArrayList<>(meta.lore() == null ? List.of() : meta.lore());
+                    lore.add((active
+                        ? Component.text("✓ Active skin", NamedTextColor.GREEN)
+                        : Component.text("Click to wear this skin.", NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false));
+                    meta.lore(lore);
+                });
+                inventory.setItem(slot, icon);
+            } else {
+                inventory.setItem(slot, itemFactory.control(Material.GRAY_STAINED_GLASS_PANE,
+                    Component.text("Locked: " + PetDefinition.variantDisplay(key), NamedTextColor.DARK_GRAY),
+                    List.of(Component.text("Find and scrap this skin to unlock it.", NamedTextColor.GRAY))));
+            }
+        }
+        if (holder.page() > 0) {
+            inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW,
+                Component.text("Previous Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+        }
+        if (holder.page() + 1 < pages) {
+            inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW,
+                Component.text("Next Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+        }
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+    }
+
+    private void handleCustomizeClick(final InventoryClickEvent event, final CustomizeMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final OwnedPet pet = data.findPet(holder.petUuid()).orElse(null);
+        if (pet == null) {
+            player.closeInventory();
+            return;
+        }
+        final PetDefinition definition = definitions.get(pet.definitionId()).orElse(null);
+        if (definition == null) {
+            return;
+        }
+        final int slot = event.getRawSlot();
+        if (slot == 0) {
+            pet.setParticlesEnabled(!pet.particlesEnabled());
+            requestSave();
+            renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
+            return;
+        }
+        if (slot == 49) {
+            player.closeInventory();
+            return;
+        }
+        if (slot == 48 || slot == 50) {
+            final int pages = Math.max(1, (definition.variants().size() + CUSTOMIZE_PER_PAGE - 1) / CUSTOMIZE_PER_PAGE);
+            final int target = slot == 48 ? holder.page() - 1 : holder.page() + 1;
+            if (target >= 0 && target < pages) {
+                holder.setPage(target);
+                renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
+            }
+            return;
+        }
+        if (slot >= 9 && slot < 45) {
+            final List<String> keys = new ArrayList<>(definition.variants().keySet());
+            final int idx = (holder.page() * CUSTOMIZE_PER_PAGE) + (slot - 9);
+            if (idx < 0 || idx >= keys.size()) {
+                return;
+            }
+            final String key = keys.get(idx);
+            if (!pet.isVariantUnlocked(key)) {
+                player.sendMessage(message("customize.locked"));
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
+                return;
+            }
+            pet.setVariant(key);
+            requestSave();
+            if (pet.uuid().equals(data.activePetId())) {
+                activePets.refreshDisplay(player);
+            }
+            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.7F, 1.2F);
+            player.sendMessage(message("customize.applied").replaceText(builder -> builder.matchLiteral("%variant%").replacement(PetDefinition.variantDisplay(key))));
+            renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
         }
     }
 

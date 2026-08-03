@@ -18,6 +18,7 @@ public final class PetTests {
         maxLevel();
         versionCompare();
         textureVariants();
+        variantUnlocking();
 
         System.out.println();
         System.out.println("Passed: " + passed + "   Failed: " + failed);
@@ -115,6 +116,27 @@ public final class PetTests {
         eq("panda at 100 max skin", panda.textureFor(100, null), "MAX_TEX");
         eq("panda no variants", panda.hasVariants(), false);
         eq("randomVariant null when none", panda.randomVariant(new java.util.Random(1)), null);
+    }
+
+    private static void variantUnlocking() {
+        final OwnedPet pet = OwnedPet.create("axolotl", 1);
+        eq("particles default on", pet.particlesEnabled(), true);
+        pet.setParticlesEnabled(false);
+        eq("particles toggled off", pet.particlesEnabled(), false);
+        eq("no variant initially", pet.variant(), null);
+        pet.setVariant("wild");
+        eq("variant set", pet.variant(), "wild");
+        eq("active variant auto-unlocked", pet.isVariantUnlocked("wild"), true);
+        eq("other variant locked", pet.isVariantUnlocked("gold"), false);
+        eq("unlock new returns true", pet.unlockVariant("gold"), true);
+        eq("unlock again returns false", pet.unlockVariant("gold"), false);
+        eq("case-insensitive unlock check", pet.isVariantUnlocked("GOLD"), true);
+        eq("unlocked count is 2", pet.unlockedVariants().size(), 2);
+        pet.setUnlockedVariants(java.util.List.of("lucy", "cyan"));
+        eq("restore re-adds active", pet.isVariantUnlocked("wild"), true);
+        eq("restore added lucy", pet.isVariantUnlocked("lucy"), true);
+        eq("restore cleared gold", pet.isVariantUnlocked("gold"), false);
+        eq("restored count is 3", pet.unlockedVariants().size(), 3);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

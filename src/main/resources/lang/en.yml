@@ -118,3 +118,8 @@ module:
   click-disable: "Click to disable."
   waiting-plugin: "Enabled in modules.yml, waiting for the required plugin."
   icon: "Icon: %material%"
+
+customize:
+  unlocked: "<light_purple>New skin unlocked:</light_purple> <aqua>%variant%</aqua><gray>! Sneak + right-click your pet to wear it.</gray>"
+  locked: "<red>That skin is locked. Find and scrap one to unlock it.</red>"
+  applied: "<green>Skin changed to </green><aqua>%variant%</aqua><green>.</green>"

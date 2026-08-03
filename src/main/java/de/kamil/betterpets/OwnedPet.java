@@ -4,6 +4,10 @@ import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
 
 public final class OwnedPet {
@@ -16,6 +20,8 @@ public final class OwnedPet {
     private long lastTotemMillis;
     private String customName;
     private String variant;
+    private final Set<String> unlockedVariants = new LinkedHashSet<>();
+    private boolean particlesEnabled = true;
     private ItemStack[] storageContents;
 
     public OwnedPet(final UUID uuid, final String definitionId, final int level, final int exp, final int nextLevelExp, final long lastTotemMillis) {
@@ -88,8 +94,54 @@ public final class OwnedPet {
         return variant;
     }
 
+    /** Sets the active cosmetic variant and unlocks it (the worn skin is always unlocked). */
     public void setVariant(final String variant) {
-        this.variant = variant == null || variant.isBlank() ? null : variant.toLowerCase(java.util.Locale.ROOT);
+        if (variant == null || variant.isBlank()) {
+            this.variant = null;
+            return;
+        }
+        this.variant = variant.toLowerCase(Locale.ROOT);
+        unlockedVariants.add(this.variant);
+    }
+
+    /** The set of cosmetic variants this pet has unlocked (via rolls or scrapping duplicates). */
+    public Set<String> unlockedVariants() {
+        return Collections.unmodifiableSet(unlockedVariants);
+    }
+
+    public boolean isVariantUnlocked(final String key) {
+        return key != null && unlockedVariants.contains(key.toLowerCase(Locale.ROOT));
+    }
+
+    /** Unlocks a variant without changing the active skin. Returns true if it was newly added. */
+    public boolean unlockVariant(final String key) {
+        if (key == null || key.isBlank()) {
+            return false;
+        }
+        return unlockedVariants.add(key.toLowerCase(Locale.ROOT));
+    }
+
+    /** Bulk restore of unlocked variants from storage. */
+    public void setUnlockedVariants(final Iterable<String> keys) {
+        unlockedVariants.clear();
+        if (keys != null) {
+            for (final String key : keys) {
+                if (key != null && !key.isBlank()) {
+                    unlockedVariants.add(key.toLowerCase(Locale.ROOT));
+                }
+            }
+        }
+        if (variant != null) {
+            unlockedVariants.add(variant);
+        }
+    }
+
+    public boolean particlesEnabled() {
+        return particlesEnabled;
+    }
+
+    public void setParticlesEnabled(final boolean particlesEnabled) {
+        this.particlesEnabled = particlesEnabled;
     }
 
     public ItemStack[] storageContents() {

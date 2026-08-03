@@ -775,6 +775,11 @@ public final class ActivePetManager {
         return isDragon(id) || id.equals("phoenix") || id.equals("shadow_dragon") || id.equals("griffin");
     }
 
+    /** Public view of {@link #isFlyablePet}: whether a pet has a mount right-click action. */
+    public boolean isFlyable(final String id) {
+        return isFlyablePet(id);
+    }
+
     /** Pets that respond to right-click (Alpaca storage, flyable mounts) and thus keep a clickable hitbox. */
     private boolean isInteractivePet(final String id) {
         return id.equals("alpaca") || isFlyablePet(id);
@@ -902,15 +907,17 @@ public final class ActivePetManager {
                 follow(player, active);
             }
             final boolean petVisible = data.visible();
-            if (petVisible && ride != null && tick % 4L == 0L) {
+            // Cosmetic particles obey the per-pet toggle from the Customize menu.
+            final boolean particles = petVisible && pet.particlesEnabled();
+            if (particles && ride != null && tick % 4L == 0L) {
                 spawnDragonTrail(player, pet);
-            } else if (petVisible && ride == null && isDragon(pet.definitionId()) && tick % 6L == 0L) {
+            } else if (particles && ride == null && isDragon(pet.definitionId()) && tick % 6L == 0L) {
                 spawnPetWalkTrail(player, pet, active);
             }
-            if (petVisible && pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
+            if (particles && pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
                 spawnUnicornGlitter(player);
             }
-            if (petVisible && ride == null && tick % 8L == 0L) {
+            if (particles && ride == null && tick % 8L == 0L) {
                 spawnAmbientPetParticle(pet, active);
             }
             if (active.modelHandle() != null) {

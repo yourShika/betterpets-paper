@@ -108,3 +108,8 @@ module:
   click-disable: "Klick zum Deaktivieren."
   waiting-plugin: "In modules.yml aktiv, wartet auf das benoetigte Plugin."
   icon: "Symbol: %material%"
+
+customize:
+  unlocked: "<light_purple>Neuer Skin freigeschaltet:</light_purple> <aqua>%variant%</aqua><gray>! Sneak + Rechtsklick auf dein Pet, um ihn zu tragen.</gray>"
+  locked: "<red>Dieser Skin ist gesperrt. Finde und verwerte einen, um ihn freizuschalten.</red>"
+  applied: "<green>Skin gewechselt zu </green><aqua>%variant%</aqua><green>.</green>"

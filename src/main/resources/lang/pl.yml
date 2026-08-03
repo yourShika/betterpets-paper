@@ -108,3 +108,8 @@ module:
   click-disable: "Kliknij, aby wylaczyc."
   waiting-plugin: "Aktywne w modules.yml, oczekiwanie na wymagany plugin."
   icon: "Ikona: %material%"
+
+customize:
+  unlocked: "<light_purple>Odblokowano nowy skin:</light_purple> <aqua>%variant%</aqua><gray>! Skradanie + PPM na zwierzaka, aby go zalozyc.</gray>"
+  locked: "<red>Ten skin jest zablokowany. Znajdz i rozloz jeden, aby go odblokowac.</red>"
+  applied: "<green>Zmieniono skin na </green><aqua>%variant%</aqua><green>.</green>"

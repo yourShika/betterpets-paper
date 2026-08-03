@@ -80,6 +80,8 @@ public final class PetStorage {
                             );
                             owned.setCustomName(pet.getString("name", null));
                             owned.setVariant(pet.getString("variant", null));
+                            owned.setUnlockedVariants(pet.getStringList("unlocked-variants"));
+                            owned.setParticlesEnabled(pet.getBoolean("particles", true));
                             data.pets().add(owned);
                         } catch (final RuntimeException petException) {
                             // One broken pet must not drop the whole player's data.
@@ -145,6 +147,8 @@ public final class PetStorage {
                 config.set(petPath + ".last-totem", pet.lastTotemMillis());
                 config.set(petPath + ".name", pet.hasCustomName() ? pet.customName() : null);
                 config.set(petPath + ".variant", pet.variant());
+                config.set(petPath + ".unlocked-variants", pet.unlockedVariants().isEmpty() ? null : new java.util.ArrayList<>(pet.unlockedVariants()));
+                config.set(petPath + ".particles", pet.particlesEnabled() ? null : false);
                 config.set(petPath + ".storage-bytes", Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(serializableStorageContents(pet))));
                 config.set(petPath + ".storage", null);
             }

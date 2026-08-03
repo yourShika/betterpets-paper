@@ -85,6 +85,39 @@ final class PetDetailMenuHolder implements InventoryHolder {
     }
 }
 
+/** Right-click customization for one owned pet: particle toggle and skin variant picker. */
+final class CustomizeMenuHolder implements InventoryHolder {
+    private final java.util.UUID petUuid;
+    private int page;
+    private Inventory inventory;
+
+    CustomizeMenuHolder(final java.util.UUID petUuid, final int page) {
+        this.petUuid = petUuid;
+        this.page = page;
+    }
+
+    java.util.UUID petUuid() {
+        return petUuid;
+    }
+
+    int page() {
+        return page;
+    }
+
+    void setPage(final int page) {
+        this.page = page;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
 /** Paginated gallery of a single pet's cosmetic variants, opened from the catalogue detail view. */
 final class VariantMenuHolder implements InventoryHolder {
     private final String petId;
