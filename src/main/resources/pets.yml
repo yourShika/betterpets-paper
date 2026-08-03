@@ -778,8 +778,9 @@ pets:
     weight: 5
     lore:
       - "Sly Trader"
-      - "Cheaper villager trades and a small"
-      - "chance to buy from villagers for free."
+      - "Cheaper villager trades, and a chance to"
+      - "pickpocket the sold item or some emeralds"
+      - "(full refund only at level 100)."
       - "Mythical pet"
       - "Click to add to your pet list."
   bee:

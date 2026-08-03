@@ -138,7 +138,7 @@ public final class PetAbilities {
             lvl -> lvl == 50 ? List.of("Mount flight", "Dragon Breath trail") : List.of());
         put(m, "ghast", "Explosion knockback resistance and Nether kill XP.",
             lvl -> Math.round(tier(lvl) * 5.0) + "% explosion resistance", NONE);
-        put(m, "goblin", "Cheaper villager trades and a small chance to buy from villagers for free.",
+        put(m, "goblin", "Cheaper villager trades and a chance to pickpocket the sold item or some emeralds (full refund only at level 100).",
             lvl -> "Hero " + Math.min(4, 1 + (tier(lvl) / 5)) + ", up to " + Math.round(Math.min(0.20, 0.03 + (tier(lvl) * 0.009)) * 100) + "% free-trade chance", NONE);
         put(m, "lich", "Steals life when you kill mobs.",
             lvl -> dec(2.0 + (tier(lvl) * 0.2)) + " health stolen per kill", NONE);

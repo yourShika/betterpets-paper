@@ -912,6 +912,12 @@ public final class ActivePetManager {
         return ThreadLocalRandom.current().nextDouble() < chance;
     }
 
+    /** The active Goblin's level, or 0 if the player has no active Goblin. */
+    public int goblinLevel(final Player player) {
+        final OwnedPet pet = activePet(player).orElse(null);
+        return pet != null && pet.definitionId().equals("goblin") ? pet.level() : 0;
+    }
+
     private void tick() {
         tick++;
         final int abilityInterval = Math.max(20, plugin.getConfig().getInt("ability-update-ticks", 100));

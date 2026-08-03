@@ -1597,40 +1597,60 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     /**
-     * If the buyer has an active Goblin, there is a very small chance it "steals back" the emeralds spent
-     * on the trade, refunding the exact emerald cost next tick so the purchase ends up free.
+     * If the buyer has an active Goblin, there is a small chance it pickpockets the villager: it snatches
+     * either a random few of the item the villager just sold, or a random number of emeralds. The emerald
+     * grab scales with level and only a level-100 Goblin can grab the full price back (so trades are not
+     * free — and never profitable — at lower levels).
      */
     private void maybeGoblinTradeRefund(final PlayerTradeEvent event) {
         if (event.isCancelled()) {
             return;
         }
         final Player player = event.getPlayer();
-        if (!activePets.tryGoblinTradeSave(player)) {
+        final int level = activePets.goblinLevel(player);
+        if (level <= 0 || !activePets.tryGoblinTradeSave(player)) {
             return;
         }
-        int emeralds = 0;
-        for (final ItemStack ingredient : event.getTrade().getIngredients()) {
+        final org.bukkit.inventory.MerchantRecipe recipe = event.getTrade();
+        final ItemStack result = recipe.getResult();
+        int paidEmeralds = 0;
+        for (final ItemStack ingredient : recipe.getIngredients()) {
             if (ingredient != null && ingredient.getType() == Material.EMERALD) {
-                emeralds += ingredient.getAmount();
+                paidEmeralds += ingredient.getAmount();
             }
         }
-        if (emeralds <= 0) {
+        final boolean canStealItem = result != null && !result.getType().isAir() && result.getType() != Material.EMERALD;
+
+        final ItemStack loot;
+        final String desc;
+        if (canStealItem && (paidEmeralds <= 0 || ThreadLocalRandom.current().nextBoolean())) {
+            // Snatch a small random stack of exactly what the villager just sold (book, tool, ...).
+            final int max = Math.max(1, Math.min(result.getMaxStackSize(), 1 + (level / 34)));
+            final int amount = 1 + ThreadLocalRandom.current().nextInt(max);
+            loot = result.clone();
+            loot.setAmount(amount);
+            desc = amount + "x " + result.getType().name().toLowerCase(Locale.ROOT).replace('_', ' ');
+        } else if (paidEmeralds > 0) {
+            // Random emeralds; only a level-100 Goblin can grab the whole price, lower levels a fraction.
+            final int cap = level >= 100 ? paidEmeralds : Math.max(1, (int) Math.round(paidEmeralds * (level / 100.0)));
+            final int amount = 1 + ThreadLocalRandom.current().nextInt(Math.max(1, cap));
+            loot = new ItemStack(Material.EMERALD, amount);
+            desc = amount + " emerald" + (amount == 1 ? "" : "s");
+        } else {
             return;
         }
-        final int refund = emeralds;
-        final String emeraldWord = refund + " emerald" + (refund == 1 ? "" : "s");
-        // Deferred a tick so the refund lands after the trade has removed the emeralds from the inventory.
+
+        // Deferred a tick so the loot lands after the trade has settled the player's inventory.
         Bukkit.getScheduler().runTask(this, () -> {
-            player.getInventory().addItem(new ItemStack(Material.EMERALD, refund)).values()
+            player.getInventory().addItem(loot).values()
                 .forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
             player.spawnParticle(Particle.HAPPY_VILLAGER, player.getLocation().add(0, 1.0, 0), 8, 0.3, 0.4, 0.3, 0.0);
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6F, 1.4F);
-            // Player-only notification: a chat message plus an action-bar flash.
             player.sendMessage(Component.text("[Goblin] ", NamedTextColor.DARK_PURPLE)
-                .append(Component.text("Your Goblin stole ", NamedTextColor.GREEN))
-                .append(Component.text(emeraldWord, NamedTextColor.GOLD))
-                .append(Component.text(" back from the villager!", NamedTextColor.GREEN)));
-            player.sendActionBar(Component.text("Your Goblin snatched back " + emeraldWord + "!", NamedTextColor.GREEN));
+                .append(Component.text("Your Goblin snatched ", NamedTextColor.GREEN))
+                .append(Component.text(desc, NamedTextColor.GOLD))
+                .append(Component.text(" from the villager!", NamedTextColor.GREEN)));
+            player.sendActionBar(Component.text("Your Goblin snatched " + desc + "!", NamedTextColor.GREEN));
         });
     }
 
