@@ -194,15 +194,15 @@ public final class PetAbilities {
             lvl -> "Absorption " + (1 + tier(lvl) / 8) + ", low-health shield", NONE);
         put(m, "sugar_glider", "Glide while airborne: slow falling, and steer forward while sneaking.",
             lvl -> "+" + dec(0.08 + tier(lvl) * 0.006) + " glide push", NONE);
-        put(m, "lion", "More attack damage and a roar that weakens and knocks back nearby foes.",
-            lvl -> "+" + dec(1.0 + tier(lvl) * 0.2) + " damage, periodic roar", NONE);
-        put(m, "cave_spider", "Hold sneak against a wall to climb it, and never take fall damage.",
+        put(m, "lion", "Rideable ground mount. More attack damage and a roar that weakens and knocks back nearby foes.",
+            lvl -> "+" + dec(1.0 + tier(lvl) * 0.2) + " damage, periodic roar, right-click to ride", NONE);
+        put(m, "cave_spider", "Face a wall to climb it (look down to descend); hold sneak to cling and turn. Never takes fall damage.",
             lvl -> "wall climb + safe fall", NONE);
         put(m, "snow_golem", "Pelts nearby foes with snowballs and keeps you from freezing.",
             lvl -> (1 + tier(lvl) / 5) + " snowballs / burst, no freezing", NONE);
         put(m, "arcane_fox", "Extra experience from the mobs you slay and the ores you mine.",
             lvl -> "+" + (2 + tier(lvl)) + " bonus XP", NONE);
-        put(m, "mechanist", "Reveals spawners through walls and points to the nearest structure.",
+        put(m, "mechanist", "Reveals nearby spawners through walls.",
             lvl -> dec(Math.min(24.0, 8.0 + tier(lvl) * 0.5)) + " block spawner reveal", NONE);
         put(m, "kraken", "In water, drags nearby foes to you and crushes them.",
             lvl -> dec(4.0 + tier(lvl) * 0.3) + " block pull, " + dec(1.0 + tier(lvl) * 0.2) + " damage", NONE);

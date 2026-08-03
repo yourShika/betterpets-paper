@@ -551,7 +551,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final OwnedPet pet = clickedPet.get();
             // Sneak + right-click always opens Customize; a plain right-click also opens it for pets with
             // no other right-click action (the Alpaca opens storage, flyable pets start their mount).
-            final boolean special = pet.definitionId().equals("alpaca") || activePets.isFlyable(pet.definitionId());
+            final boolean special = pet.definitionId().equals("alpaca")
+                || activePets.isFlyable(pet.definitionId())
+                || activePets.isGroundRideable(pet.definitionId());
             if (player.isSneaking() || !special) {
                 event.setCancelled(true);
                 openCustomizeMenu(player, pet);
@@ -932,6 +934,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.handleOreBonus(event.getPlayer(), event.getBlock());
         activePets.handleSquirrelForage(event.getPlayer(), event.getBlock());
         activePets.handleArcaneFoxMine(event.getPlayer(), event.getBlock());
+        activePets.handleMechanistBlockBreak(event.getPlayer(), event.getBlock());
     }
 
     @EventHandler(ignoreCancelled = true)

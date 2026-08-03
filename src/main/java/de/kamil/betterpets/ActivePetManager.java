@@ -640,6 +640,13 @@ public final class ActivePetManager {
         if (active == null) {
             return false;
         }
+        // Ground mounts (Lion) are ridden with a single right-click, no level gate, no flight.
+        if (isGroundRideable(active.pet().definitionId())) {
+            if (!rides.containsKey(player.getUniqueId())) {
+                startRide(player, active, true);
+            }
+            return true;
+        }
         if (!isFlyablePet(active.pet().definitionId())) {
             return true;
         }
@@ -662,7 +669,7 @@ public final class ActivePetManager {
             return true;
         }
         mountConfirms.remove(player.getUniqueId());
-        startRide(player, active);
+        startRide(player, active, false);
         return true;
     }
 
@@ -673,7 +680,7 @@ public final class ActivePetManager {
      * still collides with blocks, so the rider can no longer clip inside them. Steer by looking where you
      * want to go and holding forward; jump to climb, look down to dive, sneak to dismount.
      */
-    private void startRide(final Player player, final ActivePet active) {
+    private void startRide(final Player player, final ActivePet active, final boolean ground) {
         if (player.getGameMode() == GameMode.SPECTATOR) {
             return;
         }
@@ -695,14 +702,17 @@ public final class ActivePetManager {
         });
         if (!mount.addPassenger(player)) {
             mount.remove();
-            player.sendMessage(Component.text("Flight could not start here.", net.kyori.adventure.text.format.NamedTextColor.RED));
+            player.sendMessage(Component.text(ground ? "Cannot ride here." : "Flight could not start here.", net.kyori.adventure.text.format.NamedTextColor.RED));
             return;
         }
-        rides.put(player.getUniqueId(), new RideState(mount));
+        rides.put(player.getUniqueId(), new RideState(mount, ground));
         // Teleport the pet body tightly (1-tick interpolation) so it tracks the mount without lag.
         active.display().setTeleportDuration(1);
-        player.sendMessage(Component.text("Flight enabled. Look to steer, forward to fly, jump to climb, sneak to dismount.", net.kyori.adventure.text.format.NamedTextColor.GOLD));
-        plugin.getLogger().info("[Debug] " + player.getName() + " started flight with " + active.pet().definitionId() + ".");
+        player.sendMessage(Component.text(ground
+            ? "Riding enabled. Look to steer, forward to run, jump to hop, sneak to dismount."
+            : "Flight enabled. Look to steer, forward to fly, jump to climb, sneak to dismount.",
+            net.kyori.adventure.text.format.NamedTextColor.GOLD));
+        plugin.getLogger().info("[Debug] " + player.getName() + " started " + (ground ? "ride" : "flight") + " with " + active.pet().definitionId() + ".");
     }
 
     public Optional<OwnedPet> clickedActivePet(final Player player, final Entity clicked) {
@@ -780,9 +790,14 @@ public final class ActivePetManager {
         return isFlyablePet(id);
     }
 
-    /** Pets that respond to right-click (Alpaca storage, flyable mounts) and thus keep a clickable hitbox. */
+    /** Ground mounts (ridden on foot terrain, no flight). */
+    public boolean isGroundRideable(final String id) {
+        return id.equals("lion");
+    }
+
+    /** Pets that respond to right-click (Alpaca storage, mounts) and thus keep a clickable hitbox. */
     private boolean isInteractivePet(final String id) {
-        return id.equals("alpaca") || isFlyablePet(id);
+        return id.equals("alpaca") || isFlyablePet(id) || isGroundRideable(id);
     }
 
     /** Whether the player is currently seated on (flying) their pet. */
@@ -1031,6 +1046,10 @@ public final class ActivePetManager {
             stopRide(player, false);
             return;
         }
+        if (ride.ground()) {
+            driveGroundRide(player, ride);
+            return;
+        }
         final Location eye = player.getLocation();
         final Vector look = eye.getDirection();
         final Vector move = new Vector();
@@ -1073,6 +1092,108 @@ public final class ActivePetManager {
             && !tryMoveMount(mount, base, 0.0, move.getY(), 0.0, yaw)) {
             mount.setRotation(yaw, 0.0F);
         }
+    }
+
+    /**
+     * Ground-mount drive (Lion): horizontal movement from the rider's inputs, plus a simple gravity/jump
+     * simulation with 1-block step-up so it walks over terrain like a horse — but never flies.
+     */
+    private void driveGroundRide(final Player player, final RideState ride) {
+        final ArmorStand mount = ride.mount();
+        final World world = mount.getWorld();
+        final Location base = mount.getLocation();
+        final float yaw = player.getLocation().getYaw();
+
+        Vector flat = player.getLocation().getDirection();
+        flat.setY(0);
+        if (flat.lengthSquared() < 1.0e-4) {
+            flat = new Vector(0, 0, 1);
+        }
+        flat.normalize();
+        final Vector rightV = new Vector(-flat.getZ(), 0, flat.getX());
+        final Vector move = new Vector();
+        if (ride.forward()) {
+            move.add(flat);
+        }
+        if (ride.backward()) {
+            move.subtract(flat);
+        }
+        if (ride.right()) {
+            move.add(rightV);
+        }
+        if (ride.left()) {
+            move.subtract(rightV);
+        }
+        final double speed = Math.max(0.05, plugin.getConfig().getDouble("lion-ride-speed", 0.42));
+        if (move.lengthSquared() > 1.0e-4) {
+            move.normalize().multiply(speed);
+        }
+
+        final double curGround = findGroundY(world, base.getX(), base.getY(), base.getZ());
+        final boolean onGround = !Double.isNaN(curGround) && (base.getY() - curGround) < 0.12;
+        double vy = onGround ? 0.0 : ride.vy() - 0.08;
+        if (onGround && ride.jump()) {
+            vy = Math.max(0.1, plugin.getConfig().getDouble("lion-jump", 0.55));
+        }
+        if (vy < -1.6) {
+            vy = -1.6;
+        }
+
+        // Resolve horizontal movement: full step, else 1-block step-up, else slide along one axis.
+        double newX = base.getX();
+        double newZ = base.getZ();
+        double stepUp = 0.0;
+        if (move.getX() != 0.0 || move.getZ() != 0.0) {
+            if (isRiderSpaceFree(world, base.getX() + move.getX(), base.getY(), base.getZ() + move.getZ())) {
+                newX = base.getX() + move.getX();
+                newZ = base.getZ() + move.getZ();
+            } else if (isRiderSpaceFree(world, base.getX() + move.getX(), base.getY() + 1.0, base.getZ() + move.getZ())) {
+                newX = base.getX() + move.getX();
+                newZ = base.getZ() + move.getZ();
+                stepUp = 1.0;
+            } else if (isRiderSpaceFree(world, base.getX() + move.getX(), base.getY(), base.getZ())) {
+                newX = base.getX() + move.getX();
+            } else if (isRiderSpaceFree(world, base.getX(), base.getY(), base.getZ() + move.getZ())) {
+                newZ = base.getZ() + move.getZ();
+            }
+        }
+
+        double newY = base.getY() + (stepUp > 0.0 ? stepUp : vy);
+        final double groundY = findGroundY(world, newX, newY, newZ);
+        if (!Double.isNaN(groundY) && newY <= groundY + 0.001 && vy <= 0.0) {
+            newY = groundY;
+            vy = 0.0;
+        }
+        ride.setVy(vy);
+
+        final Location target = new Location(world, newX, newY, newZ, yaw, 0.0F);
+        if (isRiderSpaceFree(world, newX, newY, newZ)) {
+            mount.teleport(target);
+        } else {
+            mount.setRotation(yaw, 0.0F);
+        }
+    }
+
+    /** The block Y a rider standing near (x, feetY, z) would rest on, or NaN if there is no ground close below. */
+    private double findGroundY(final World world, final double x, final double feetY, final double z) {
+        final int bx = (int) Math.floor(x);
+        final int bz = (int) Math.floor(z);
+        final int startY = (int) Math.floor(feetY + 0.5);
+        for (int y = startY; y >= startY - 4; y--) {
+            if (world.getBlockAt(bx, y, bz).getType().isSolid()) {
+                return y + 1.0;
+            }
+        }
+        return Double.NaN;
+    }
+
+    /** True when the ~2-block-tall rider column at (x, feetY, z) is clear of solid blocks. */
+    private boolean isRiderSpaceFree(final World world, final double x, final double feetY, final double z) {
+        final int bx = (int) Math.floor(x);
+        final int bz = (int) Math.floor(z);
+        final int fy = (int) Math.floor(feetY);
+        return !world.getBlockAt(bx, fy, bz).getType().isSolid()
+            && !world.getBlockAt(bx, fy + 1, bz).getType().isSolid();
     }
 
     private boolean tryMoveMount(final ArmorStand mount, final Location base, final double dx, final double dy, final double dz, final float yaw) {
@@ -1121,7 +1242,10 @@ public final class ActivePetManager {
         if (mount.isDead() || active.display().isDead()) {
             return;
         }
-        final Location target = mount.getLocation().clone().add(0, plugin.getConfig().getDouble("flight-pet-offset", -0.4), 0);
+        final double offset = ride.ground()
+            ? plugin.getConfig().getDouble("lion-ride-offset", -0.1)
+            : plugin.getConfig().getDouble("flight-pet-offset", -0.4);
+        final Location target = mount.getLocation().clone().add(0, offset, 0);
         target.setYaw(mount.getYaw());
         target.setPitch(0.0F);
         active.display().teleport(target);
@@ -1979,27 +2103,71 @@ public final class ActivePetManager {
         }
     }
 
+    /** A visible protective-shield burst around the player (used by the Mimic's ward). */
+    private void spawnShieldEffect(final Player player) {
+        final Location center = player.getLocation().add(0, 1.0, 0);
+        final World world = center.getWorld();
+        if (world == null) {
+            return;
+        }
+        for (int i = 0; i < 20; i++) {
+            final double ang = (Math.PI * 2 * i) / 20;
+            world.spawnParticle(Particle.END_ROD, center.clone().add(Math.cos(ang) * 0.85, 0.0, Math.sin(ang) * 0.85), 1, 0.0, 0.0, 0.0, 0.0);
+            world.spawnParticle(Particle.END_ROD, center.clone().add(Math.cos(ang) * 0.55, 0.7, Math.sin(ang) * 0.55), 1, 0.0, 0.0, 0.0, 0.0);
+        }
+        world.spawnParticle(Particle.ENCHANTED_HIT, center, 12, 0.4, 0.5, 0.4, 0.1);
+        player.playSound(player.getLocation(), Sound.ITEM_SHIELD_BLOCK, 1.0F, 1.3F);
+    }
+
     // ---- Cave Spider: wall climb ----------------------------------------------------------------
 
-    /** Lets a Cave Spider owner scale a wall by holding sneak while facing it. */
+    /**
+     * Cave Spider climbing. When you are next to a wall: look at it to climb up (look down to descend),
+     * and hold sneak to cling in place so you can turn around without falling.
+     */
     private void handleSpiderClimb(final Player player) {
-        if (!player.isSneaking() || player.isFlying() || player.isInsideVehicle() || isRiding(player)) {
+        if (player.isFlying() || player.isInsideVehicle() || isRiding(player) || player.isOnGround()) {
             return;
         }
-        final Location loc = player.getLocation();
-        final Vector dir = loc.getDirection();
-        dir.setY(0);
-        if (dir.lengthSquared() < 0.01) {
-            return;
-        }
-        dir.normalize();
-        final Block front = loc.clone().add(0, 1, 0).add(dir.multiply(0.5)).getBlock();
-        if (!front.getType().isSolid()) {
+        if (!isAgainstWall(player.getLocation())) {
             return;
         }
         final Vector v = player.getVelocity();
-        player.setVelocity(new Vector(v.getX() * 0.4, 0.24, v.getZ() * 0.4));
+        if (player.isSneaking()) {
+            // Cling: freeze in place (no fall) so the player can freely look around / turn.
+            player.setVelocity(new Vector(v.getX() * 0.2, 0.0, v.getZ() * 0.2));
+            player.setFallDistance(0.0F);
+            return;
+        }
+        // Only climb while actually facing a wall; looking away lets the player drop off.
+        final Location loc = player.getLocation();
+        final Vector flat = loc.getDirection();
+        flat.setY(0);
+        if (flat.lengthSquared() < 0.01) {
+            return;
+        }
+        flat.normalize();
+        final Block front = loc.clone().add(0, 1, 0).add(flat.multiply(0.5)).getBlock();
+        if (!front.getType().isSolid()) {
+            return;
+        }
+        final double pitch = loc.getDirection().getY();
+        final double climb = pitch < -0.35 ? -0.15 : 0.22;
+        player.setVelocity(new Vector(v.getX() * 0.3, climb, v.getZ() * 0.3));
         player.setFallDistance(0.0F);
+    }
+
+    /** True when a solid block sits directly next to the player at foot or head height (any side). */
+    private boolean isAgainstWall(final Location loc) {
+        final int[][] sides = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (final int[] side : sides) {
+            for (int dy = 0; dy <= 1; dy++) {
+                if (loc.clone().add(side[0] * 0.5, dy, side[1] * 0.5).getBlock().getType().isSolid()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // ---- Sugar Glider: forward glide steering ---------------------------------------------------
@@ -2073,6 +2241,18 @@ public final class ActivePetManager {
         }
     }
 
+    /** Immediately drops the spawner glow at a just-broken block, so it never lingers after mining. */
+    public void handleMechanistBlockBreak(final Player player, final Block block) {
+        final Map<Long, org.bukkit.entity.BlockDisplay> glows = spawnerGlows.get(player.getUniqueId());
+        if (glows == null) {
+            return;
+        }
+        final org.bukkit.entity.BlockDisplay display = glows.remove(blockKey(block.getX(), block.getY(), block.getZ()));
+        if (display != null && !display.isDead()) {
+            display.remove();
+        }
+    }
+
     private void clearSpawnerGlow(final Player player) {
         final Map<Long, org.bukkit.entity.BlockDisplay> glows = spawnerGlows.remove(player.getUniqueId());
         if (glows != null) {
@@ -2082,52 +2262,6 @@ public final class ActivePetManager {
                 }
             }
         }
-    }
-
-    /** Shows the direction and distance to the nearest structure (vanilla OR datapack) in the action bar. */
-    private void mechanistStructureHint(final Player player) {
-        if (!plugin.getConfig().getBoolean("mechanist.structure-compass", true)) {
-            return;
-        }
-        try {
-            final int radiusChunks = Math.max(1, plugin.getConfig().getInt("mechanist.structure-scan-chunks", 64));
-            final Location origin = player.getLocation();
-            Location nearest = null;
-            String nearestName = null;
-            double bestSq = Double.MAX_VALUE;
-            // Iterate the whole Structure registry so datapack/custom structures are covered too.
-            for (final org.bukkit.generator.structure.Structure structure : org.bukkit.Registry.STRUCTURE) {
-                final org.bukkit.util.StructureSearchResult result =
-                    player.getWorld().locateNearestStructure(origin, structure, radiusChunks, false);
-                if (result == null) {
-                    continue;
-                }
-                final double distSq = result.getLocation().distanceSquared(origin);
-                if (distSq < bestSq) {
-                    bestSq = distSq;
-                    nearest = result.getLocation();
-                    final org.bukkit.NamespacedKey key = org.bukkit.Registry.STRUCTURE.getKey(structure);
-                    nearestName = key == null ? "structure" : key.getKey().replace('_', ' ');
-                }
-            }
-            if (nearest == null) {
-                return;
-            }
-            final int distance = (int) Math.round(Math.sqrt(bestSq));
-            player.sendActionBar(net.kyori.adventure.text.Component.text(
-                "⚙ " + nearestName + "  " + compassDirection(origin, nearest) + "  " + distance + "m",
-                net.kyori.adventure.text.format.NamedTextColor.AQUA));
-        } catch (final Throwable ignored) {
-            // Structure search API differences must never break the tick loop.
-        }
-    }
-
-    private String compassDirection(final Location from, final Location to) {
-        final double dx = to.getX() - from.getX();
-        final double dz = to.getZ() - from.getZ();
-        final double angle = Math.toDegrees(Math.atan2(-dx, dz));
-        final String[] dirs = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
-        return dirs[(int) Math.round(((angle % 360) + 360) % 360 / 45.0) % 8];
     }
 
     /** Per-pet dispatch context: the owner, the pet, and its cached level/ability tier. */
@@ -2428,16 +2562,27 @@ public final class ActivePetManager {
         }));
         periodicBehaviors.put("snow_golem", c -> {
             c.player().setFreezeTicks(0);
+            final ActivePet snowActive = activePets.get(c.player().getUniqueId());
+            final Location from = (snowActive != null && !snowActive.display().isDead())
+                ? snowActive.display().getLocation().clone().add(0, 0.6, 0)
+                : c.player().getEyeLocation();
             int shots = 1 + (c.tier() / 5);
-            for (final Entity nearby : c.player().getNearbyEntities(12.0, 8.0, 12.0)) {
+            boolean threw = false;
+            for (final Entity nearby : c.player().getNearbyEntities(14.0, 8.0, 14.0)) {
                 if (shots <= 0) {
                     break;
                 }
                 if (nearby instanceof LivingEntity foe && isHostile(nearby) && !foe.isDead()) {
-                    final org.bukkit.entity.Snowball ball = c.player().launchProjectile(org.bukkit.entity.Snowball.class);
-                    ball.setVelocity(foe.getEyeLocation().toVector().subtract(c.player().getEyeLocation().toVector()).normalize().multiply(1.6));
+                    final org.bukkit.entity.Snowball ball = from.getWorld().spawn(from, org.bukkit.entity.Snowball.class);
+                    ball.setShooter(c.player());
+                    ball.setVelocity(foe.getEyeLocation().toVector().subtract(from.toVector()).normalize().multiply(1.4));
+                    from.getWorld().spawnParticle(Particle.SNOWFLAKE, from, 6, 0.15, 0.15, 0.15, 0.02);
+                    threw = true;
                     shots--;
                 }
+            }
+            if (threw) {
+                from.getWorld().playSound(from, Sound.ENTITY_SNOW_GOLEM_SHOOT, 0.9F, 1.2F);
             }
         });
         periodicBehaviors.put("kraken", c -> {
@@ -2453,8 +2598,6 @@ public final class ActivePetManager {
                 c.player().getWorld().spawnParticle(Particle.BUBBLE_COLUMN_UP, c.player().getLocation(), 12, 0.6, 0.3, 0.6, 0.02);
             }
         });
-        periodicBehaviors.put("mechanist", c -> mechanistStructureHint(c.player()));
-
         hitBehaviors.put("scorpion", (c, victim) -> {
             victim.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60 + (c.tier() * 6), Math.min(2, c.tier() / 8), true, false, true));
             victim.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40 + (c.tier() * 4), 0, true, false, true));
@@ -2488,7 +2631,7 @@ public final class ActivePetManager {
             if (ThreadLocalRandom.current().nextDouble() < Math.min(0.5, 0.15 + (c.tier() * 0.02))) {
                 c.player().addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 40, 2, true, false, true));
                 applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 1, 60);
-                c.player().getWorld().spawnParticle(Particle.CRIT, c.player().getLocation().add(0, 1, 0), 8, 0.3, 0.5, 0.3, 0.1);
+                spawnShieldEffect(c.player());
             }
         });
         defenseBehaviors.put("guardian_angel", (c, damager) -> {
@@ -3045,18 +3188,33 @@ public final class ActivePetManager {
 
     private static final class RideState {
         private final ArmorStand mount;
+        private final boolean ground;
         private boolean forward;
         private boolean backward;
         private boolean left;
         private boolean right;
         private boolean jump;
+        private double vy;
 
-        private RideState(final ArmorStand mount) {
+        private RideState(final ArmorStand mount, final boolean ground) {
             this.mount = mount;
+            this.ground = ground;
         }
 
         private ArmorStand mount() {
             return mount;
+        }
+
+        private boolean ground() {
+            return ground;
+        }
+
+        private double vy() {
+            return vy;
+        }
+
+        private void setVy(final double vy) {
+            this.vy = vy;
         }
 
         private void input(final Input input) {

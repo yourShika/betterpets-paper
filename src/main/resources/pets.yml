@@ -1082,6 +1082,8 @@ pets:
       - "Pride of the Savanna"
       - "More attack damage and a roar that"
       - "weakens and knocks back nearby foes."
+      - "Right-click to ride it across land;"
+      - "jump to hop, sneak to dismount."
       - "Legendary pet"
       - "Click to add to your pet list."
   cave_spider:

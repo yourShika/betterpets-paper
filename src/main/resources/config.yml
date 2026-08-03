@@ -61,13 +61,14 @@ firefly:
 ferret:
   max-glowing-ores: 24
 
-# Mechanist tech sense. Always reveals nearby spawners through walls; an optional
-# action-bar compass points to the nearest structure (vanilla OR datapack, since
-# it scans the whole structure registry). Disable the compass if you notice lag,
-# or lower the scan radius (in chunks).
-mechanist:
-  structure-compass: true
-  structure-scan-chunks: 64
+# Mechanist tech sense reveals nearby (trial) spawners through walls for the owner.
+# (The structure compass was removed in v1.15.2: locating every registered structure
+# on the main thread caused server freezes.)
+
+# Lion ground mount: right-click to ride (no level requirement, terrain only, no flight),
+# forward to run, jump to hop over 1-block steps, sneak to dismount.
+lion-ride-speed: 0.42
+lion-jump: 0.55
 
 
 # ═══ 4) XP & BOOSTERS ═══════════════════════════════════════════════════════
