@@ -213,6 +213,20 @@ public final class PetAbilities {
             lvl -> (140 + tier(lvl) * 6) + " tick freeze on attackers", NONE);
         put(m, "raccoon", "Hitting a mob has a chance to pickpocket a bonus drop.",
             lvl -> Math.round(Math.min(0.4, 0.1 + tier(lvl) * 0.015) * 100) + "% pickpocket chance", NONE);
+        put(m, "golem_mason", "Longer reach, and your held block stack auto-refills from your inventory.",
+            lvl -> "+" + dec(tier(lvl) * 0.05) + " reach + auto-refill", NONE);
+        put(m, "silk_moth", "A chance to mine glass, ice, ore and glowstone as if with Silk Touch.",
+            lvl -> Math.round(Math.min(0.5, 0.12 + tier(lvl) * 0.02) * 100) + "% Silk Touch chance", NONE);
+        put(m, "woodpecker", "Chopping one log fells the whole tree at once (uses axe durability).",
+            lvl -> "up to " + Math.min(48, 4 + tier(lvl) * 2) + " logs per tree", NONE);
+        put(m, "badger", "Breaking one ore chases the whole vein (uses pickaxe durability).",
+            lvl -> "up to " + Math.min(40, 3 + tier(lvl)) + " ore per vein", NONE);
+        put(m, "salamander", "A chance for mined ores to drop already smelted into ingots.",
+            lvl -> Math.round(Math.min(0.8, 0.25 + tier(lvl) * 0.03) * 100) + "% auto-smelt chance", NONE);
+        put(m, "magpie", "Draws in nearby XP orbs and grants a small luck bonus.",
+            lvl -> "+" + (tier(lvl) * 2) + " luck, XP orb magnet", NONE);
+        put(m, "scarecrow", "Harvested crops auto-replant, nearby crops grow faster, with bonus yield.",
+            lvl -> Math.round(Math.min(0.6, 0.15 + tier(lvl) * 0.02) * 100) + "% bonus crop yield", NONE);
         put(m, "panda", "More attack knockback, bamboo biome hero effect.",
             lvl -> "+" + Math.round(tier(lvl) * 5.0) + "% knockback", NONE);
         put(m, "penguin", "Speed in cold biomes, frosted ice trail, and makes nearby unopened containers glow.",

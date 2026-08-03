@@ -935,6 +935,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.handleSquirrelForage(event.getPlayer(), event.getBlock());
         activePets.handleArcaneFoxMine(event.getPlayer(), event.getBlock());
         activePets.handleMechanistBlockBreak(event.getPlayer(), event.getBlock());
+        activePets.handleSilkMoth(event);
+        activePets.handleSalamanderSmelt(event);
+        activePets.handleWoodpecker(event.getPlayer(), event.getBlock());
+        activePets.handleBadgerVein(event.getPlayer(), event.getBlock());
+        activePets.handleScarecrow(event.getPlayer(), event.getBlock());
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onGolemMasonPlace(final org.bukkit.event.block.BlockPlaceEvent event) {
+        activePets.handleGolemRefill(event);
     }
 
     @EventHandler(ignoreCancelled = true)

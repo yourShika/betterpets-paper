@@ -229,6 +229,24 @@ public final class ActivePetManager {
         Material.STRING, Material.BONE, Material.GUNPOWDER, Material.ARROW, Material.LEATHER,
         Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.ROTTEN_FLESH, Material.EMERALD
     );
+    // Salamander auto-smelt: ore block -> smelted drop.
+    private static final Map<Material, Material> SALAMANDER_SMELT = Map.of(
+        Material.IRON_ORE, Material.IRON_INGOT,
+        Material.DEEPSLATE_IRON_ORE, Material.IRON_INGOT,
+        Material.GOLD_ORE, Material.GOLD_INGOT,
+        Material.DEEPSLATE_GOLD_ORE, Material.GOLD_INGOT,
+        Material.NETHER_GOLD_ORE, Material.GOLD_INGOT,
+        Material.COPPER_ORE, Material.COPPER_INGOT,
+        Material.DEEPSLATE_COPPER_ORE, Material.COPPER_INGOT,
+        Material.ANCIENT_DEBRIS, Material.NETHERITE_SCRAP
+    );
+    // Scarecrow: crop block -> extra produce dropped on harvest.
+    private static final Map<Material, Material> SCARECROW_PRODUCE = Map.of(
+        Material.WHEAT, Material.WHEAT,
+        Material.CARROTS, Material.CARROT,
+        Material.POTATOES, Material.POTATO,
+        Material.BEETROOTS, Material.BEETROOT
+    );
     // Ferret ore tiers, unlocked progressively by level (coal at level 1, diamond/emerald at 80+).
     // Deliberately caps at diamond: netherite (ancient debris) x-ray would be too economy-breaking.
     private static final List<Set<Material>> FERRET_ORE_TIERS = List.of(
@@ -965,13 +983,6 @@ public final class ActivePetManager {
             } else if (spawnerGlows.containsKey(player.getUniqueId())) {
                 clearSpawnerGlow(player);
             }
-            if (ride == null) {
-                if (pet.definitionId().equals("cave_spider")) {
-                    handleSpiderClimb(player);
-                } else if (pet.definitionId().equals("sugar_glider")) {
-                    handleGliderSteer(player, pet);
-                }
-            }
             if (pet.definitionId().equals("shadow_dragon")) {
                 updateShadowBar(player, pet);
             } else {
@@ -1012,22 +1023,36 @@ public final class ActivePetManager {
 
     /** Runs every tick: drives each rider's mount and keeps the pet body pinned to it. */
     private void rideTick() {
-        if (rides.isEmpty()) {
-            return;
+        if (!rides.isEmpty()) {
+            for (final Map.Entry<UUID, RideState> entry : new java.util.ArrayList<>(rides.entrySet())) {
+                final Player player = Bukkit.getPlayer(entry.getKey());
+                if (player == null || !player.isOnline()) {
+                    continue;
+                }
+                final ActivePet active = activePets.get(entry.getKey());
+                if (active == null) {
+                    stopRide(player, false);
+                    continue;
+                }
+                driveRide(player, active, entry.getValue());
+                if (rides.containsKey(entry.getKey())) {
+                    repositionRidePet(active, entry.getValue());
+                }
+            }
         }
-        for (final Map.Entry<UUID, RideState> entry : new java.util.ArrayList<>(rides.entrySet())) {
-            final Player player = Bukkit.getPlayer(entry.getKey());
-            if (player == null || !player.isOnline()) {
+        // Movement abilities that need every-tick updates (the main tick runs only every few ticks).
+        for (final Player player : Bukkit.getOnlinePlayers()) {
+            if (rides.containsKey(player.getUniqueId())) {
                 continue;
             }
-            final ActivePet active = activePets.get(entry.getKey());
-            if (active == null) {
-                stopRide(player, false);
+            final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+            if (pet == null) {
                 continue;
             }
-            driveRide(player, active, entry.getValue());
-            if (rides.containsKey(entry.getKey())) {
-                repositionRidePet(active, entry.getValue());
+            if (pet.definitionId().equals("cave_spider")) {
+                handleSpiderClimb(player);
+            } else if (pet.definitionId().equals("sugar_glider")) {
+                handleGliderSteer(player, pet);
             }
         }
     }
@@ -2076,6 +2101,208 @@ public final class ActivePetManager {
         block.getWorld().spawnParticle(Particle.ENCHANT, block.getLocation().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3, 0.5);
     }
 
+    /** The player's active pet if it is of the given definition, else null. */
+    private OwnedPet activePetIfType(final Player player, final String id) {
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        return pet != null && pet.definitionId().equals(id) ? pet : null;
+    }
+
+    // ---- Silk Moth: Silk-Touch chance -----------------------------------------------------------
+
+    public void handleSilkMoth(final org.bukkit.event.block.BlockBreakEvent event) {
+        final OwnedPet pet = activePetIfType(event.getPlayer(), "silk_moth");
+        if (pet == null) {
+            return;
+        }
+        final Material type = event.getBlock().getType();
+        if (!isSilkTouchBlock(type)) {
+            return;
+        }
+        if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.5, 0.12 + (abilityTier(pet.level()) * 0.02))) {
+            return;
+        }
+        event.setDropItems(false);
+        final Location loc = event.getBlock().getLocation().add(0.5, 0.5, 0.5);
+        loc.getWorld().dropItemNaturally(loc, new ItemStack(type));
+        loc.getWorld().spawnParticle(Particle.CLOUD, loc, 3, 0.2, 0.2, 0.2, 0.0);
+    }
+
+    private boolean isSilkTouchBlock(final Material material) {
+        final String n = material.name();
+        return n.endsWith("GLASS") || n.endsWith("GLASS_PANE") || n.endsWith("_ORE")
+            || material == Material.ICE || material == Material.PACKED_ICE || material == Material.BLUE_ICE
+            || material == Material.GLOWSTONE || material == Material.GRASS_BLOCK || material == Material.SEA_LANTERN
+            || material == Material.MYCELIUM || material == Material.PODZOL;
+    }
+
+    // ---- Salamander: auto-smelt -----------------------------------------------------------------
+
+    public void handleSalamanderSmelt(final org.bukkit.event.block.BlockBreakEvent event) {
+        final OwnedPet pet = activePetIfType(event.getPlayer(), "salamander");
+        if (pet == null) {
+            return;
+        }
+        final Material smelted = SALAMANDER_SMELT.get(event.getBlock().getType());
+        if (smelted == null) {
+            return;
+        }
+        if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.8, 0.25 + (abilityTier(pet.level()) * 0.03))) {
+            return;
+        }
+        event.setDropItems(false);
+        final Location loc = event.getBlock().getLocation().add(0.5, 0.5, 0.5);
+        loc.getWorld().dropItemNaturally(loc, new ItemStack(smelted));
+        loc.getWorld().spawnParticle(Particle.FLAME, loc, 8, 0.2, 0.2, 0.2, 0.02);
+    }
+
+    // ---- Woodpecker: tree feller ----------------------------------------------------------------
+
+    public void handleWoodpecker(final Player player, final Block origin) {
+        final OwnedPet pet = activePetIfType(player, "woodpecker");
+        if (pet == null || !org.bukkit.Tag.LOGS.isTagged(origin.getType()) || !isHoldingTool(player, "_AXE")) {
+            return;
+        }
+        final int max = Math.min(48, 4 + (abilityTier(pet.level()) * 2));
+        final int felled = veinBreak(player, origin, max, block -> org.bukkit.Tag.LOGS.isTagged(block.getType()));
+        if (felled > 0) {
+            player.getInventory().getItemInMainHand().damage(felled, player);
+        }
+    }
+
+    // ---- Badger: vein miner ---------------------------------------------------------------------
+
+    public void handleBadgerVein(final Player player, final Block origin) {
+        final OwnedPet pet = activePetIfType(player, "badger");
+        final Material type = origin.getType();
+        final boolean ore = type.name().endsWith("_ORE") || type == Material.ANCIENT_DEBRIS;
+        if (pet == null || !ore || !isHoldingTool(player, "_PICKAXE")) {
+            return;
+        }
+        final int max = Math.min(40, 3 + abilityTier(pet.level()));
+        final int mined = veinBreak(player, origin, max, block -> block.getType() == type);
+        if (mined > 0) {
+            player.getInventory().getItemInMainHand().damage(mined, player);
+        }
+    }
+
+    /**
+     * Breaks blocks connected to {@code origin} that match {@code match} (26-neighbour flood fill), up to
+     * {@code max}, using the held tool for drops. The origin block itself is left to the normal break event.
+     */
+    private int veinBreak(final Player player, final Block origin, final int max, final java.util.function.Predicate<Block> match) {
+        final Set<Long> visited = new HashSet<>();
+        final java.util.Deque<Block> queue = new java.util.ArrayDeque<>();
+        visited.add(blockKey(origin.getX(), origin.getY(), origin.getZ()));
+        queue.add(origin);
+        final ItemStack tool = player.getInventory().getItemInMainHand();
+        int broken = 0;
+        while (!queue.isEmpty() && broken < max) {
+            final Block current = queue.poll();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        if (dx == 0 && dy == 0 && dz == 0) {
+                            continue;
+                        }
+                        final Block next = current.getRelative(dx, dy, dz);
+                        final long key = blockKey(next.getX(), next.getY(), next.getZ());
+                        if (visited.contains(key) || !match.test(next)) {
+                            continue;
+                        }
+                        visited.add(key);
+                        next.breakNaturally(tool);
+                        queue.add(next);
+                        if (++broken >= max) {
+                            return broken;
+                        }
+                    }
+                }
+            }
+        }
+        return broken;
+    }
+
+    // ---- Scarecrow: green thumb -----------------------------------------------------------------
+
+    public void handleScarecrow(final Player player, final Block block) {
+        final OwnedPet pet = activePetIfType(player, "scarecrow");
+        if (pet == null || !SCARECROW_PRODUCE.containsKey(block.getType())) {
+            return;
+        }
+        if (!(block.getBlockData() instanceof org.bukkit.block.data.Ageable ageable) || ageable.getAge() < ageable.getMaximumAge()) {
+            return;
+        }
+        final Location loc = block.getLocation();
+        if (ThreadLocalRandom.current().nextDouble() < Math.min(0.6, 0.15 + (abilityTier(pet.level()) * 0.02))) {
+            loc.getWorld().dropItemNaturally(loc.clone().add(0.5, 0.5, 0.5), new ItemStack(SCARECROW_PRODUCE.get(block.getType())));
+        }
+        final Material cropType = block.getType();
+        // Replant next tick, once the harvest has resolved, if it still sits on farmland.
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            final Block b = loc.getBlock();
+            if (b.getType() == Material.AIR && b.getRelative(0, -1, 0).getType() == Material.FARMLAND) {
+                b.setType(cropType);
+            }
+        });
+    }
+
+    private void growNearbyCrops(final Player player, final int tier) {
+        final int radius = 4;
+        int advanced = 0;
+        final int cap = 4 + (tier / 4);
+        final Location base = player.getLocation();
+        for (int dx = -radius; dx <= radius && advanced < cap; dx++) {
+            for (int dz = -radius; dz <= radius && advanced < cap; dz++) {
+                for (int dy = -1; dy <= 1 && advanced < cap; dy++) {
+                    final Block b = base.clone().add(dx, dy, dz).getBlock();
+                    if (b.getBlockData() instanceof org.bukkit.block.data.Ageable crop
+                        && SCARECROW_PRODUCE.containsKey(b.getType()) && crop.getAge() < crop.getMaximumAge()
+                        && ThreadLocalRandom.current().nextDouble() < 0.5) {
+                        crop.setAge(crop.getAge() + 1);
+                        b.setBlockData(crop);
+                        b.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, b.getLocation().add(0.5, 0.5, 0.5), 3, 0.2, 0.2, 0.2, 0.0);
+                        advanced++;
+                    }
+                }
+            }
+        }
+    }
+
+    // ---- Golem Mason: auto-refill ---------------------------------------------------------------
+
+    public void handleGolemRefill(final org.bukkit.event.block.BlockPlaceEvent event) {
+        final Player player = event.getPlayer();
+        if (activePetIfType(player, "golem_mason") == null) {
+            return;
+        }
+        final org.bukkit.inventory.EquipmentSlot hand = event.getHand();
+        final ItemStack used = hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND
+            ? player.getInventory().getItemInOffHand() : player.getInventory().getItemInMainHand();
+        if (used == null || used.getAmount() > 1 || !used.getType().isBlock()) {
+            return;
+        }
+        final Material material = used.getType();
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            final org.bukkit.inventory.PlayerInventory inv = player.getInventory();
+            final ItemStack current = hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND ? inv.getItemInOffHand() : inv.getItemInMainHand();
+            if (current != null && current.getType() == material && current.getAmount() > 0) {
+                return;
+            }
+            for (int i = 0; i < inv.getStorageContents().length; i++) {
+                final ItemStack stack = inv.getItem(i);
+                if (stack != null && stack.getType() == material && stack.getAmount() > 0) {
+                    if (hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND) {
+                        inv.setItemInOffHand(stack);
+                    } else {
+                        inv.setItemInMainHand(stack);
+                    }
+                    inv.setItem(i, null);
+                    return;
+                }
+            }
+        });
+    }
+
     // ---- Water Serpent: master angler -----------------------------------------------------------
 
     /** Speeds up bites while casting and rolls a bonus catch when a Water Serpent owner reels one in. */
@@ -2129,32 +2356,35 @@ public final class ActivePetManager {
         if (player.isFlying() || player.isInsideVehicle() || isRiding(player) || player.isOnGround()) {
             return;
         }
-        if (!isAgainstWall(player.getLocation())) {
-            return;
-        }
-        final Vector v = player.getVelocity();
-        if (player.isSneaking()) {
-            // Cling: freeze in place (no fall) so the player can freely look around / turn.
-            player.setVelocity(new Vector(v.getX() * 0.2, 0.0, v.getZ() * 0.2));
-            player.setFallDistance(0.0F);
-            return;
-        }
-        // Only climb while actually facing a wall; looking away lets the player drop off.
         final Location loc = player.getLocation();
+        // Cling: hold perfectly still against any wall so the player can look around / turn freely.
+        if (player.isSneaking()) {
+            if (isAgainstWall(loc)) {
+                player.setVelocity(new Vector(0.0, 0.0, 0.0));
+                player.setFallDistance(0.0F);
+            }
+            return;
+        }
         final Vector flat = loc.getDirection();
         flat.setY(0);
         if (flat.lengthSquared() < 0.01) {
             return;
         }
         flat.normalize();
-        final Block front = loc.clone().add(0, 1, 0).add(flat.multiply(0.5)).getBlock();
-        if (!front.getType().isSolid()) {
-            return;
+        final Vector step = flat.clone().multiply(0.6);
+        final Block headFront = loc.clone().add(0, 1.2, 0).add(step).getBlock();
+        final Block feetFront = loc.clone().add(0, 0.2, 0).add(step).getBlock();
+        final Vector v = player.getVelocity();
+        if (headFront.getType().isSolid()) {
+            // Wall in front at head height: climb up, or descend when looking down.
+            final double climb = loc.getDirection().getY() < -0.35 ? -0.15 : 0.24;
+            player.setVelocity(new Vector(v.getX() * 0.3, climb, v.getZ() * 0.3));
+            player.setFallDistance(0.0F);
+        } else if (feetFront.getType().isSolid()) {
+            // Reached the top edge (wall only at feet height now): hop up and forward onto the ledge.
+            player.setVelocity(new Vector(flat.getX() * 0.28, 0.45, flat.getZ() * 0.28));
+            player.setFallDistance(0.0F);
         }
-        final double pitch = loc.getDirection().getY();
-        final double climb = pitch < -0.35 ? -0.15 : 0.22;
-        player.setVelocity(new Vector(v.getX() * 0.3, climb, v.getZ() * 0.3));
-        player.setFallDistance(0.0F);
     }
 
     /** True when a solid block sits directly next to the player at foot or head height (any side). */
@@ -2648,6 +2878,21 @@ public final class ActivePetManager {
                 attacker.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60 + (c.tier() * 6), 1, true, false, true));
             }
         });
+
+        // ---- Build / collect pets (v1.16.1) --------------------------------------------------------
+        passiveBehaviors.put("golem_mason", c -> setTarget(c.player(), Attribute.ENTITY_INTERACTION_RANGE, 3.0 + (c.tier() * 0.05)));
+        passiveBehaviors.put("magpie", c -> setTarget(c.player(), Attribute.LUCK, c.tier() * 2.0));
+        periodicBehaviors.put("magpie", c -> {
+            for (final Entity nearby : c.player().getNearbyEntities(12.0, 8.0, 12.0)) {
+                if (nearby instanceof org.bukkit.entity.ExperienceOrb orb) {
+                    final Vector pull = c.player().getLocation().add(0, 1, 0).toVector().subtract(orb.getLocation().toVector());
+                    if (pull.lengthSquared() > 0.5) {
+                        orb.setVelocity(pull.normalize().multiply(0.5));
+                    }
+                }
+            }
+        });
+        periodicBehaviors.put("scarecrow", c -> growNearbyCrops(c.player(), c.tier()));
     }
 
     private void applyPassive(final Player player, final OwnedPet pet) {

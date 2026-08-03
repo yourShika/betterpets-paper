@@ -1199,3 +1199,87 @@ pets:
       - "bonus drop from it."
       - "Rare pet"
       - "Click to add to your pet list."
+  golem_mason:
+    name: "Golem Mason"
+    color: "gray"
+    rarity: "Epic"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMmFkODE5MDExMzU2NDA3N2JjMjgyYzU0NGM2M2NjNGI1MjE5OTJkZTZjMjAyYmJkZThlMGFmMzc5MTc2NjM1YyJ9fX0="
+    weight: 4
+    lore:
+      - "Master Builder"
+      - "Longer reach, and your held block stack"
+      - "auto-refills from your inventory."
+      - "Epic pet"
+      - "Click to add to your pet list."
+  silk_moth:
+    name: "Silk Moth"
+    color: "light_purple"
+    rarity: "Legendary"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYmMwY2FlNzA2OGNkM2EwMjg2ZTc3MTc0YzZmMDRhN2M4YmEyNmJiN2Q2M2QxYWI2NTYyNWU3OWUwZWQzYjRiYyJ9fX0="
+    weight: 3
+    lore:
+      - "Silk Weaver"
+      - "A chance to mine blocks as if with"
+      - "Silk Touch (glass, ice, ore, glowstone)."
+      - "Legendary pet"
+      - "Click to add to your pet list."
+  woodpecker:
+    name: "Woodpecker"
+    color: "red"
+    rarity: "Legendary"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYzA2YmMwNzlhMzg5MzU5ZTA0ZmEzMzRjNjJjZTMwZDk5NDAzOWFlOTAxY2NlNWE2MDFkYWViYjQ3OWExNTY5MiJ9fX0="
+    weight: 3
+    lore:
+      - "Timberfall"
+      - "Chopping one log fells the whole"
+      - "tree at once (uses axe durability)."
+      - "Legendary pet"
+      - "Click to add to your pet list."
+  badger:
+    name: "Badger"
+    color: "gray"
+    rarity: "Mythical"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzEzMWEyMGVhYmQ2NDlkYTM4ZTE5MDUyNmZlZDVjZjI2Yzc0YmY0M2QyZGRkZmYzZjg4M2E0YmRkYyJ9fX0="
+    weight: 2
+    lore:
+      - "Vein Miner"
+      - "Breaking one ore chases the whole"
+      - "vein (uses pickaxe durability)."
+      - "Mythical pet"
+      - "Click to add to your pet list."
+  salamander:
+    name: "Salamander"
+    color: "gold"
+    rarity: "Epic"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYmEzYmIyZjdiZTAxZmRhZGFlZGVlOGNkNDZiYzU2YmViODU4NGQ5ZmJmNTUxNWI4NTNiNDU3MzcwYzYyMDA4OSJ9fX0="
+    weight: 4
+    lore:
+      - "Ember Forge"
+      - "A chance for mined ores to drop"
+      - "already smelted into ingots."
+      - "Epic pet"
+      - "Click to add to your pet list."
+  magpie:
+    name: "Magpie"
+    color: "blue"
+    rarity: "Rare"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWFmOGQwZWE2NmZhYjVhODM5MGI3ZmVkMjQ3ZGMyYjRmNWU3NDMxYWQyNGZlYmI0NmIyOWQ4YmZhN2ZlMzAyMyJ9fX0="
+    weight: 6
+    lore:
+      - "Collector's Eye"
+      - "Draws in nearby XP orbs and grants"
+      - "a small luck bonus."
+      - "Rare pet"
+      - "Click to add to your pet list."
+  scarecrow:
+    name: "Scarecrow"
+    color: "yellow"
+    rarity: "Epic"
+    texture: "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMzc2MmFjOWNlYTZhNTQ3ZjEyYjZmYWU4Y2ZmMWY1N2NlZjE0ODkzM2JhYzNhYzg0YjE2NjgwZmUyOWNjYTk4MCJ9fX0="
+    weight: 4
+    lore:
+      - "Green Thumb"
+      - "Harvested crops auto-replant, nearby"
+      - "crops grow faster, with bonus yield."
+      - "Epic pet"
+      - "Click to add to your pet list."
