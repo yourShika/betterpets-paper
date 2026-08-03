@@ -17,7 +17,7 @@ messages:
   converted: "Converted %pet% back to an item."
   no-active-pet: "You do not have an active pet."
   no-space: "Your inventory is full, so the item was dropped."
-  usage-give: "Usage: /pets give <pet|all> [level] [player]"
+  usage-give: "Usage: /pets give <pet|all> [level] [player] [variant]"
   usage-xpboost: "Usage: /pets xpboost give <x2-x5> <time> [player]"
   usage-set-name: "Usage: /pets set name <name> (your pet must be summoned)."
   unknown-pet: "Unknown pet: %pet%"

@@ -30,8 +30,10 @@ public final class PetItemFactory {
     private final NamespacedKey petLevelKey;
     private final NamespacedKey petExpKey;
     private final NamespacedKey petNameKey;
+    private final NamespacedKey petVariantKey;
     private final NamespacedKey boosterTierKey;
     private final NamespacedKey boosterMinutesKey;
+    private final java.util.Random random = new java.util.Random();
 
     public PetItemFactory(final JavaPlugin plugin) {
         this.petIdKey = new NamespacedKey(plugin, "pet_id");
@@ -39,6 +41,7 @@ public final class PetItemFactory {
         this.petLevelKey = new NamespacedKey(plugin, "pet_level");
         this.petExpKey = new NamespacedKey(plugin, "pet_exp");
         this.petNameKey = new NamespacedKey(plugin, "pet_name");
+        this.petVariantKey = new NamespacedKey(plugin, "pet_variant");
         this.boosterTierKey = new NamespacedKey(plugin, "booster_tier");
         this.boosterMinutesKey = new NamespacedKey(plugin, "booster_minutes");
     }
@@ -86,7 +89,17 @@ public final class PetItemFactory {
     }
 
     public ItemStack discoveryItem(final PetDefinition definition, final int level) {
-        return petItem(definition, OwnedPet.create(definition.id(), level), false, true);
+        // Roll a cosmetic variant so the loot/discovery item already shows (and later grants) the exact skin.
+        return discoveryItem(definition, level, definition.randomVariant(random));
+    }
+
+    /** Builds a discovery item for a specific variant (null = definition has none / roll skipped). */
+    public ItemStack discoveryItem(final PetDefinition definition, final int level, final String variant) {
+        final OwnedPet pet = OwnedPet.create(definition.id(), level);
+        if (variant != null) {
+            pet.setVariant(variant);
+        }
+        return petItem(definition, pet, false, true);
     }
 
     public ItemStack discoveryItem(final PetDefinition definition, final OwnedPet pet) {
@@ -169,6 +182,15 @@ public final class PetItemFactory {
         return exp == null ? 0 : Math.max(0, exp);
     }
 
+    /** The cosmetic variant stored on a discovery/give pet item, or empty if none. */
+    public Optional<String> petVariant(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return Optional.empty();
+        }
+        final String variant = item.getItemMeta().getPersistentDataContainer().get(petVariantKey, PersistentDataType.STRING);
+        return variant == null || variant.isBlank() ? Optional.empty() : Optional.of(variant);
+    }
+
     public Optional<String> petCustomName(final ItemStack item) {
         if (item == null || !item.hasItemMeta()) {
             return Optional.empty();
@@ -182,6 +204,20 @@ public final class PetItemFactory {
         final ItemMeta meta = item.getItemMeta();
         meta.displayName(name.decoration(TextDecoration.ITALIC, false));
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /** A display-only head showing one specific cosmetic variant of a pet (used in the variant gallery). */
+    public ItemStack variantIcon(final PetDefinition definition, final String variant) {
+        final ItemStack item = new ItemStack(Material.PLAYER_HEAD);
+        final SkullMeta meta = (SkullMeta) item.getItemMeta();
+        meta.displayName(Component.text(PetDefinition.variantDisplay(variant), definition.rarityColor())
+            .decoration(TextDecoration.ITALIC, false));
+        meta.lore(List.of(
+            Component.text(definition.name() + " variant", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
+        ));
+        applyPetIdentity(meta, definition, 1, variant);
         item.setItemMeta(meta);
         return item;
     }
@@ -230,6 +266,9 @@ public final class PetItemFactory {
             if (discovery) {
                 meta.getPersistentDataContainer().set(petLevelKey, PersistentDataType.INTEGER, pet.level());
                 meta.getPersistentDataContainer().set(petExpKey, PersistentDataType.INTEGER, pet.exp());
+                if (pet.variant() != null) {
+                    meta.getPersistentDataContainer().set(petVariantKey, PersistentDataType.STRING, pet.variant());
+                }
                 if (pet.hasCustomName()) {
                     meta.getPersistentDataContainer().set(petNameKey, PersistentDataType.STRING, pet.customName());
                 }

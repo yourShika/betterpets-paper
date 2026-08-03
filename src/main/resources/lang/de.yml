@@ -18,7 +18,7 @@ messages:
   converted: "%pet% wurde wieder in einen Gegenstand umgewandelt."
   no-active-pet: "Du hast kein aktives Pet."
   no-space: "Dein Inventar ist voll, deshalb wurde der Gegenstand fallen gelassen."
-  usage-give: "Verwendung: /pets give <pet|all> [level] [spieler]"
+  usage-give: "Verwendung: /pets give <pet|all> [level] [spieler] [variant]"
   usage-xpboost: "Verwendung: /pets xpboost give <x2-x5> <zeit> [spieler]"
   usage-set-name: "Verwendung: /pets set name <name> (dein Pet muss beschworen sein)."
   unknown-pet: "Unbekanntes Pet: %pet%"

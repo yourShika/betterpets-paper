@@ -18,7 +18,7 @@ messages:
   converted: "Zamieniono %pet% z powrotem na przedmiot."
   no-active-pet: "Nie masz aktywnego zwierzaka."
   no-space: "Twój ekwipunek jest pelny, wiec przedmiot zostal upuszczony."
-  usage-give: "Uzycie: /pets give <pet|all> [poziom] [gracz]"
+  usage-give: "Uzycie: /pets give <pet|all> [poziom] [gracz] [variant]"
   usage-xpboost: "Uzycie: /pets xpboost give <x2-x5> <czas> [gracz]"
   usage-set-name: "Uzycie: /pets set name <nazwa> (zwierzak musi byc przywolany)."
   unknown-pet: "Nieznany zwierzak: %pet%"

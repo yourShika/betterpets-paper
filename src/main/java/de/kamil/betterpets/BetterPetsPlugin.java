@@ -322,6 +322,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handleInfoClick(event);
             } else if (event.getView().getTopInventory().getHolder() instanceof PetDetailMenuHolder detailHolder) {
                 handlePetDetailClick(event, detailHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof VariantMenuHolder variantHolder) {
+                handleVariantClick(event, variantHolder);
             }
             return;
         }
@@ -925,7 +927,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final InventoryHolder holder = event.getView().getTopInventory().getHolder();
         if (holder instanceof PetMenuHolder || holder instanceof ChanceMenuHolder || holder instanceof NotifyMenuHolder
             || holder instanceof XpMenuHolder || holder instanceof ModulesMenuHolder || holder instanceof InfoMenuHolder || holder instanceof PetDetailMenuHolder
-            || holder instanceof AlpacaStorageHolder || holder instanceof SlotMenuHolder || holder instanceof SlotConfigMenuHolder) {
+            || holder instanceof AlpacaStorageHolder || holder instanceof SlotMenuHolder || holder instanceof SlotConfigMenuHolder
+            || holder instanceof VariantMenuHolder) {
             return;
         }
         if (event.getSlotType() == InventoryType.SlotType.ARMOR) {
@@ -1217,7 +1220,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         itemFactory.petCustomName(item).ifPresent(pet::setCustomName);
         pet.recalculateNextLevelExp(petXpMultiplier());
         pet.setExp(itemFactory.petExp(item));
-        ensureVariant(pet);
+        // Keep the exact variant the loot/give item advertised; otherwise roll a fresh one.
+        final String itemVariant = itemFactory.petVariant(item).orElse(null);
+        if (itemVariant != null && definition.variants().containsKey(itemVariant.toLowerCase(Locale.ROOT))) {
+            pet.setVariant(itemVariant);
+        } else {
+            ensureVariant(pet);
+        }
         data.pets().add(pet);
         consumeOne(player, item);
         requestSave();
@@ -2438,7 +2447,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         int level = 1;
         boolean explicitLevel = false;
-        String targetName = null;
+        final java.util.List<String> stringArgs = new java.util.ArrayList<>();
         for (int i = 2; i < args.length; i++) {
             final Optional<Integer> parsedLevel = parseLevel(args[i]);
             if (parsedLevel.isPresent() && !explicitLevel) {
@@ -2446,13 +2455,31 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 explicitLevel = true;
                 continue;
             }
-            if (targetName == null) {
-                targetName = args[i];
-                continue;
-            }
+            stringArgs.add(args[i]);
+        }
+        if (stringArgs.size() > 2) {
             sender.sendMessage(message("messages.usage-give"));
             return;
         }
+
+        // Resolve the definition early so a string arg matching one of its variants is treated as the
+        // requested variant; the other string arg (if any) is the target player.
+        final String petIdArg = args[1].toLowerCase(Locale.ROOT);
+        final PetDefinition variantDefinition = petIdArg.equals("all") ? null : definitions.find(petIdArg).orElse(null);
+        String targetName = null;
+        String variantArg = null;
+        for (final String token : stringArgs) {
+            if (variantArg == null && variantDefinition != null
+                && variantDefinition.variants().containsKey(token.toLowerCase(Locale.ROOT))) {
+                variantArg = token.toLowerCase(Locale.ROOT);
+            } else if (targetName == null) {
+                targetName = token;
+            } else {
+                sender.sendMessage(message("messages.usage-give"));
+                return;
+            }
+        }
+        final String giftVariant = variantArg;
 
         final Player target;
         if (targetName != null) {
@@ -2489,12 +2516,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        giveOrDrop(target, itemFactory.discoveryItem(definition, giftLevel));
+        giveOrDrop(target, itemFactory.discoveryItem(definition, giftLevel, giftVariant));
+        final String givenName = giftVariant != null
+            ? PetDefinition.variantDisplay(giftVariant) + " " + definition.name()
+            : definition.name();
         sender.sendMessage(message("messages.test-give")
-            .replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name()))
+            .replaceText(builder -> builder.matchLiteral("%pet%").replacement(givenName))
             .replaceText(builder -> builder.matchLiteral("%level%").replacement(Integer.toString(giftLevel)))
             .replaceText(builder -> builder.matchLiteral("%player%").replacement(target.getName())));
-        getLogger().info(sender.getName() + " gave test pet item " + definition.id() + " level " + giftLevel + " to " + target.getName() + ".");
+        getLogger().info(sender.getName() + " gave test pet item " + definition.id()
+            + (giftVariant != null ? " variant " + giftVariant : "") + " level " + giftLevel + " to " + target.getName() + ".");
     }
 
     private void handleXpBoostCommand(final CommandSender sender, final String[] args) {
@@ -2745,6 +2776,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ));
         }
 
+        if (definition.hasVariants()) {
+            inventory.setItem(45, itemFactory.control(
+                Material.ITEM_FRAME,
+                Component.text("View Variants (" + definition.variants().size() + ")", NamedTextColor.LIGHT_PURPLE),
+                List.of(Component.text("Browse this pet's cosmetic skins.", NamedTextColor.GRAY))
+            ));
+        }
         inventory.setItem(49, itemFactory.control(
             Material.ARROW,
             Component.text("Back", NamedTextColor.YELLOW),
@@ -2763,10 +2801,84 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) {
             return;
         }
-        if (event.getRawSlot() == 49) {
+        if (event.getRawSlot() == 45) {
+            definitions.get(holder.petId()).filter(PetDefinition::hasVariants)
+                .ifPresent(definition -> openVariantMenu(player, definition, 0));
+        } else if (event.getRawSlot() == 49) {
             openInfoMenu(player);
         } else if (event.getRawSlot() == 53) {
             player.closeInventory();
+        }
+    }
+
+    private void openVariantMenu(final Player player, final PetDefinition definition, final int page) {
+        final VariantMenuHolder holder = new VariantMenuHolder(definition.id(), Math.max(0, page));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " Variants", definition.rarityColor()));
+        holder.setInventory(inventory);
+        renderVariantMenu(inventory, holder);
+        player.openInventory(inventory);
+    }
+
+    private void renderVariantMenu(final Inventory inventory, final VariantMenuHolder holder) {
+        inventory.clear();
+        final PetDefinition definition = definitions.get(holder.petId()).orElse(null);
+        if (definition == null) {
+            return;
+        }
+        final List<String> keys = new ArrayList<>(definition.variants().keySet());
+        final int perPage = 45;
+        final int pages = Math.max(1, (keys.size() + perPage - 1) / perPage);
+        if (holder.page() >= pages) {
+            holder.setPage(pages - 1);
+        }
+        final int start = holder.page() * perPage;
+        final int visible = Math.max(0, Math.min(perPage, keys.size() - start));
+        for (int i = 0; i < visible; i++) {
+            inventory.setItem(i, itemFactory.variantIcon(definition, keys.get(start + i)));
+        }
+        inventory.setItem(45, itemFactory.control(
+            Material.ARROW,
+            Component.text("Back", NamedTextColor.YELLOW),
+            List.of(Component.text("Return to pet details.", NamedTextColor.GRAY))
+        ));
+        if (holder.page() > 0) {
+            inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW,
+                Component.text("Previous Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+        }
+        if (holder.page() + 1 < pages) {
+            inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW,
+                Component.text("Next Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+        }
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+    }
+
+    private void handleVariantClick(final InventoryClickEvent event, final VariantMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        final int slot = event.getRawSlot();
+        if (slot == 45) {
+            definitions.get(holder.petId()).ifPresent(definition -> openPetDetailMenu(player, definition));
+            return;
+        }
+        if (slot == 49) {
+            player.closeInventory();
+            return;
+        }
+        if (slot == 48 || slot == 50) {
+            final PetDefinition definition = definitions.get(holder.petId()).orElse(null);
+            if (definition == null) {
+                return;
+            }
+            final int pages = Math.max(1, (definition.variants().size() + 44) / 45);
+            final int target = slot == 48 ? holder.page() - 1 : holder.page() + 1;
+            if (target >= 0 && target < pages) {
+                holder.setPage(target);
+                renderVariantMenu(event.getView().getTopInventory(), holder);
+            }
         }
     }
 

@@ -182,9 +182,8 @@ public final class PetAbilities {
             lvl -> Math.round(Math.min(0.6, 0.12 + (tier(lvl) * 0.02)) * 100) + "% bonus forage chance", NONE);
         put(m, "water_serpent", "Master angler: faster bites, double catches and sea luck while holding a rod.",
             lvl -> Math.round(Math.min(0.5, 0.1 + (tier(lvl) * 0.02)) * 100) + "% double catch, +" + (tier(lvl) * 3) + " luck", NONE);
-        put(m, "panda", "More attack knockback, bamboo biome hero effect. Enchanted skin at level 100.",
-            lvl -> "+" + Math.round(tier(lvl) * 5.0) + "% knockback",
-            lvl -> lvl == 100 ? List.of("Enchanted Panda skin") : List.of());
+        put(m, "panda", "More attack knockback, bamboo biome hero effect.",
+            lvl -> "+" + Math.round(tier(lvl) * 5.0) + "% knockback", NONE);
         put(m, "penguin", "Speed in cold biomes, frosted ice trail, and makes nearby unopened containers glow.",
             lvl -> "+" + dec(tier(lvl) * 0.00375) + " cold speed, " + Math.round(Math.min(24.0, 8.0 + (tier(lvl) * 0.5))) + " block container glow", NONE);
         put(m, "phoenix", "Fire Resistance, burns undead, revives you from death, rideable at level 50.",

@@ -85,6 +85,39 @@ final class PetDetailMenuHolder implements InventoryHolder {
     }
 }
 
+/** Paginated gallery of a single pet's cosmetic variants, opened from the catalogue detail view. */
+final class VariantMenuHolder implements InventoryHolder {
+    private final String petId;
+    private int page;
+    private Inventory inventory;
+
+    VariantMenuHolder(final String petId, final int page) {
+        this.petId = petId;
+        this.page = page;
+    }
+
+    String petId() {
+        return petId;
+    }
+
+    int page() {
+        return page;
+    }
+
+    void setPage(final int page) {
+        this.page = page;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
 final class ChanceMenuHolder implements InventoryHolder {
     private final UUID owner;
     private int page;
