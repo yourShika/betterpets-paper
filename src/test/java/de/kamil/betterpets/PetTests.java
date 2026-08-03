@@ -102,7 +102,7 @@ public final class PetTests {
     private static void textureVariants() {
         final java.util.Map<String, String> variants = java.util.Map.of("lucy", "LUCY_TEX", "wild", "WILD_TEX");
         final PetDefinition axolotl = new PetDefinition("axolotl", "Axolotl",
-            net.kyori.adventure.text.format.NamedTextColor.BLUE, "Rare", 8, "BASE_TEX", null, variants, java.util.List.of());
+            net.kyori.adventure.text.format.NamedTextColor.BLUE, "Rare", 8, "BASE_TEX", null, variants, java.util.List.of(), java.util.List.of());
         eq("variant texture chosen", axolotl.textureFor(1, "wild"), "WILD_TEX");
         eq("unknown variant falls back to base", axolotl.textureFor(1, "nope"), "BASE_TEX");
         eq("no variant -> base", axolotl.textureFor(50, null), "BASE_TEX");
@@ -111,7 +111,7 @@ public final class PetTests {
         eq("randomVariant in set", variants.containsKey(axolotl.randomVariant(new java.util.Random(1))), true);
 
         final PetDefinition panda = new PetDefinition("panda", "Panda",
-            net.kyori.adventure.text.format.NamedTextColor.WHITE, "Epic", 5, "BASE", "MAX_TEX", java.util.Map.of(), java.util.List.of());
+            net.kyori.adventure.text.format.NamedTextColor.WHITE, "Epic", 5, "BASE", "MAX_TEX", java.util.Map.of(), java.util.List.of(), java.util.List.of());
         eq("panda below 100 base", panda.textureFor(99, null), "BASE");
         eq("panda at 100 max skin", panda.textureFor(100, null), "MAX_TEX");
         eq("panda no variants", panda.hasVariants(), false);

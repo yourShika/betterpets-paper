@@ -62,6 +62,7 @@ public final class PetDefinitions {
                 pet.getString("texture", ""),
                 pet.getString("texture-max", null),
                 Map.copyOf(variants),
+                List.copyOf(pet.getStringList("aliases")),
                 List.copyOf(pet.getStringList("lore"))
             ));
         }
@@ -88,7 +89,9 @@ public final class PetDefinitions {
     public Optional<PetDefinition> find(final String input) {
         final String normalized = normalize(input);
         return definitions.values().stream()
-            .filter(definition -> normalize(definition.id()).equals(normalized) || normalize(definition.name()).equals(normalized))
+            .filter(definition -> normalize(definition.id()).equals(normalized)
+                || normalize(definition.name()).equals(normalized)
+                || definition.aliases().stream().anyMatch(alias -> normalize(alias).equals(normalized)))
             .findFirst();
     }
 

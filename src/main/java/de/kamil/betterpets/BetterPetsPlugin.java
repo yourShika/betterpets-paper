@@ -4054,13 +4054,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             if (args.length == 3 && args[0].equalsIgnoreCase("give")) {
                 final List<String> suggestions = new ArrayList<>(List.of("1", "10", "50", "100"));
                 suggestions.addAll(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList());
+                plugin.definitions.find(args[1]).ifPresent(def -> suggestions.addAll(def.variants().keySet()));
                 return suggestions;
             }
             if (args.length == 3 && args[0].equalsIgnoreCase("xpboost") && args[1].equalsIgnoreCase("give")) {
                 return List.of("x2", "x3", "x4", "x5");
             }
-            if (args.length == 4 && args[0].equalsIgnoreCase("give")) {
-                return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
+            if ((args.length == 4 || args.length == 5) && args[0].equalsIgnoreCase("give")) {
+                final List<String> suggestions = new ArrayList<>(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList());
+                plugin.definitions.find(args[1]).ifPresent(def -> suggestions.addAll(def.variants().keySet()));
+                return suggestions;
             }
             if (args.length == 4 && args[0].equalsIgnoreCase("xpboost") && args[1].equalsIgnoreCase("give")) {
                 return List.of("15m", "30m", "1h", "2h", "1d");

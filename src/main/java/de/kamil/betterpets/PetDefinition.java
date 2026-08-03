@@ -17,6 +17,7 @@ public record PetDefinition(
     String texture,
     String textureMax,
     Map<String, String> variants,
+    List<String> aliases,
     List<String> lore
 ) {
     /** Resolves the head texture for a specific pet: variant skin, then level-100 skin, then base. */
