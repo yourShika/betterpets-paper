@@ -917,6 +917,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.handleMoleBreak(event.getPlayer(), event.getBlock());
         activePets.handleOreBonus(event.getPlayer(), event.getBlock());
         activePets.handleSquirrelForage(event.getPlayer(), event.getBlock());
+        activePets.handleArcaneFoxMine(event.getPlayer(), event.getBlock());
     }
 
     @EventHandler(ignoreCancelled = true)

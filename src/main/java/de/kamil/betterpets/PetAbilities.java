@@ -182,6 +182,37 @@ public final class PetAbilities {
             lvl -> Math.round(Math.min(0.6, 0.12 + (tier(lvl) * 0.02)) * 100) + "% bonus forage chance", NONE);
         put(m, "water_serpent", "Master angler: faster bites, double catches and sea luck while holding a rod.",
             lvl -> Math.round(Math.min(0.5, 0.1 + (tier(lvl) * 0.02)) * 100) + "% double catch, +" + (tier(lvl) * 3) + " luck", NONE);
+        put(m, "scorpion", "Your melee hits poison and slow the target; venom scales with level.",
+            lvl -> "Poison " + (1 + tier(lvl) / 8) + " for " + (60 + tier(lvl) * 6) + " ticks", NONE);
+        put(m, "mantis", "Longer attack reach and a chance for a heavy bonus strike.",
+            lvl -> "+" + dec(tier(lvl) * 0.06) + " reach, " + Math.round(Math.min(0.5, 0.1 + tier(lvl) * 0.02) * 100) + "% bonus strike", NONE);
+        put(m, "panther", "Attacking out of a sneak lands a backstab for bonus damage.",
+            lvl -> "+" + dec(2.0 + tier(lvl) * 0.3) + " backstab damage", NONE);
+        put(m, "mimic", "A chance to ward off an incoming hit with Resistance and Absorption.",
+            lvl -> Math.round(Math.min(0.5, 0.15 + tier(lvl) * 0.02) * 100) + "% ward chance", NONE);
+        put(m, "guardian_angel", "Periodic Absorption and Regeneration, plus a shield when death is near.",
+            lvl -> "Absorption " + (1 + tier(lvl) / 8) + ", low-health shield", NONE);
+        put(m, "sugar_glider", "Glide while airborne: slow falling, and steer forward while sneaking.",
+            lvl -> "+" + dec(0.08 + tier(lvl) * 0.006) + " glide push", NONE);
+        put(m, "lion", "More attack damage and a roar that weakens and knocks back nearby foes.",
+            lvl -> "+" + dec(1.0 + tier(lvl) * 0.2) + " damage, periodic roar", NONE);
+        put(m, "cave_spider", "Hold sneak against a wall to climb it, and never take fall damage.",
+            lvl -> "wall climb + safe fall", NONE);
+        put(m, "snow_golem", "Pelts nearby foes with snowballs and keeps you from freezing.",
+            lvl -> (1 + tier(lvl) / 5) + " snowballs / burst, no freezing", NONE);
+        put(m, "arcane_fox", "Extra experience from the mobs you slay and the ores you mine.",
+            lvl -> "+" + (2 + tier(lvl)) + " bonus XP", NONE);
+        put(m, "mechanist", "Reveals spawners through walls and points to the nearest structure.",
+            lvl -> dec(Math.min(24.0, 8.0 + tier(lvl) * 0.5)) + " block spawner reveal", NONE);
+        put(m, "kraken", "In water, drags nearby foes to you and crushes them.",
+            lvl -> dec(4.0 + tier(lvl) * 0.3) + " block pull, " + dec(1.0 + tier(lvl) * 0.2) + " damage", NONE);
+        put(m, "griffin", "A rideable flying steed from level 50.",
+            lvl -> lvl >= 50 ? "flight unlocked" : "flight at level 50",
+            lvl -> lvl == 50 ? List.of("Mount flight") : List.of());
+        put(m, "yeti", "Freezes attackers and slows them; thrives in snowy biomes.",
+            lvl -> (140 + tier(lvl) * 6) + " tick freeze on attackers", NONE);
+        put(m, "raccoon", "Hitting a mob has a chance to pickpocket a bonus drop.",
+            lvl -> Math.round(Math.min(0.4, 0.1 + tier(lvl) * 0.015) * 100) + "% pickpocket chance", NONE);
         put(m, "panda", "More attack knockback, bamboo biome hero effect.",
             lvl -> "+" + Math.round(tier(lvl) * 5.0) + "% knockback", NONE);
         put(m, "penguin", "Speed in cold biomes, frosted ice trail, and makes nearby unopened containers glow.",

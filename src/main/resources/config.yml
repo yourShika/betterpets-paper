@@ -61,6 +61,14 @@ firefly:
 ferret:
   max-glowing-ores: 24
 
+# Mechanist tech sense. Always reveals nearby spawners through walls; an optional
+# action-bar compass points to the nearest structure (vanilla OR datapack, since
+# it scans the whole structure registry). Disable the compass if you notice lag,
+# or lower the scan radius (in chunks).
+mechanist:
+  structure-compass: true
+  structure-scan-chunks: 64
+
 
 # ═══ 4) XP & BOOSTERS ═══════════════════════════════════════════════════════
 # Global pet XP multiplier. Higher = pets level faster. Range 0.1 - 5.0.

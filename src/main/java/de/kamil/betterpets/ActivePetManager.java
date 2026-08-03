@@ -222,6 +222,13 @@ public final class ActivePetManager {
     private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> oreGlows = new HashMap<>();
     // Kangaroo double-jump cooldown: one mid-air dash per short window per owner.
     private final Map<UUID, Long> kangarooCooldowns = new HashMap<>();
+    // Mechanist spawner reveal: spawner blocks glow through walls via owner-only BlockDisplay proxies.
+    private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> spawnerGlows = new HashMap<>();
+    // Raccoon pickpocket loot pool (mostly common, the odd small valuable).
+    private static final List<Material> RACCOON_LOOT = List.of(
+        Material.STRING, Material.BONE, Material.GUNPOWDER, Material.ARROW, Material.LEATHER,
+        Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.ROTTEN_FLESH, Material.EMERALD
+    );
     // Ferret ore tiers, unlocked progressively by level (coal at level 1, diamond/emerald at 80+).
     // Deliberately caps at diamond: netherite (ancient debris) x-ray would be too economy-breaking.
     private static final List<Set<Material>> FERRET_ORE_TIERS = List.of(
@@ -301,6 +308,7 @@ public final class ActivePetManager {
         Bukkit.getOnlinePlayers().forEach(this::clearReveal);
         Bukkit.getOnlinePlayers().forEach(this::clearChestGlow);
         Bukkit.getOnlinePlayers().forEach(this::clearOreGlow);
+        Bukkit.getOnlinePlayers().forEach(this::clearSpawnerGlow);
         Bukkit.getOnlinePlayers().forEach(this::resetPlayerState);
         shadowBars.values().forEach(BossBar::removeAll);
         shadowBars.clear();
@@ -372,6 +380,7 @@ public final class ActivePetManager {
         clearReveal(player);
         clearChestGlow(player);
         clearOreGlow(player);
+        clearSpawnerGlow(player);
         clearShadowBar(player);
         final ActivePet active = activePets.remove(player.getUniqueId());
         if (active != null) {
@@ -763,7 +772,7 @@ public final class ActivePetManager {
     }
 
     private boolean isFlyablePet(final String id) {
-        return isDragon(id) || id.equals("phoenix") || id.equals("shadow_dragon");
+        return isDragon(id) || id.equals("phoenix") || id.equals("shadow_dragon") || id.equals("griffin");
     }
 
     /** Pets that respond to right-click (Alpaca storage, flyable mounts) and thus keep a clickable hitbox. */
@@ -926,6 +935,20 @@ public final class ActivePetManager {
                 }
             } else if (oreGlows.containsKey(player.getUniqueId())) {
                 clearOreGlow(player);
+            }
+            if (pet.definitionId().equals("mechanist")) {
+                if (tick % penguinInterval == 0L) {
+                    updateMechanistGlow(player, pet);
+                }
+            } else if (spawnerGlows.containsKey(player.getUniqueId())) {
+                clearSpawnerGlow(player);
+            }
+            if (ride == null) {
+                if (pet.definitionId().equals("cave_spider")) {
+                    handleSpiderClimb(player);
+                } else if (pet.definitionId().equals("sugar_glider")) {
+                    handleGliderSteer(player, pet);
+                }
             }
             if (pet.definitionId().equals("shadow_dragon")) {
                 updateShadowBar(player, pet);
@@ -1908,6 +1931,20 @@ public final class ActivePetManager {
         block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 0.5, 0.5), new ItemStack(drop));
     }
 
+    /** Grants an Arcane Fox owner bonus experience for mining an ore block. */
+    public void handleArcaneFoxMine(final Player player, final Block block) {
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null || !pet.definitionId().equals("arcane_fox")) {
+            return;
+        }
+        final Material type = block.getType();
+        if (!type.name().endsWith("_ORE") && type != Material.ANCIENT_DEBRIS) {
+            return;
+        }
+        player.giveExp(1 + (abilityTier(pet.level()) / 2));
+        block.getWorld().spawnParticle(Particle.ENCHANT, block.getLocation().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3, 0.5);
+    }
+
     // ---- Water Serpent: master angler -----------------------------------------------------------
 
     /** Speeds up bites while casting and rolls a bonus catch when a Water Serpent owner reels one in. */
@@ -1933,6 +1970,157 @@ public final class ActivePetManager {
                 player.getWorld().dropItemNaturally(player.getLocation(), caught.getItemStack().clone());
             }
         }
+    }
+
+    // ---- Cave Spider: wall climb ----------------------------------------------------------------
+
+    /** Lets a Cave Spider owner scale a wall by holding sneak while facing it. */
+    private void handleSpiderClimb(final Player player) {
+        if (!player.isSneaking() || player.isFlying() || player.isInsideVehicle() || isRiding(player)) {
+            return;
+        }
+        final Location loc = player.getLocation();
+        final Vector dir = loc.getDirection();
+        dir.setY(0);
+        if (dir.lengthSquared() < 0.01) {
+            return;
+        }
+        dir.normalize();
+        final Block front = loc.clone().add(0, 1, 0).add(dir.multiply(0.5)).getBlock();
+        if (!front.getType().isSolid()) {
+            return;
+        }
+        final Vector v = player.getVelocity();
+        player.setVelocity(new Vector(v.getX() * 0.4, 0.24, v.getZ() * 0.4));
+        player.setFallDistance(0.0F);
+    }
+
+    // ---- Sugar Glider: forward glide steering ---------------------------------------------------
+
+    private void handleGliderSteer(final Player player, final OwnedPet pet) {
+        if (player.isOnGround() || player.isFlying() || player.isInsideVehicle() || !player.isSneaking()) {
+            return;
+        }
+        final Vector v = player.getVelocity();
+        if (v.getY() > 0.1) {
+            return;
+        }
+        final Vector look = player.getLocation().getDirection();
+        look.setY(0);
+        if (look.lengthSquared() < 0.01) {
+            return;
+        }
+        final double push = 0.08 + (abilityTier(pet.level()) * 0.006);
+        look.normalize().multiply(push);
+        player.setVelocity(new Vector(v.getX() + look.getX(), Math.max(v.getY(), -0.1), v.getZ() + look.getZ()));
+        player.setFallDistance(0.0F);
+    }
+
+    // ---- Mechanist: spawner reveal + structure compass ------------------------------------------
+
+    /** Glows nearby spawners (and trial spawners) through walls for the owner, via BlockDisplay proxies. */
+    private void updateMechanistGlow(final Player player, final OwnedPet pet) {
+        final World world = player.getWorld();
+        final Location center = player.getLocation();
+        final double radius = Math.min(24.0, 8.0 + (abilityTier(pet.level()) * 0.5));
+        final double radiusSq = radius * radius;
+        final Set<Long> desired = new HashSet<>();
+        final Map<Long, org.bukkit.entity.BlockDisplay> playerGlows =
+            spawnerGlows.computeIfAbsent(player.getUniqueId(), ignored -> new HashMap<>());
+        final int chunkRadius = (int) Math.ceil(radius / 16.0);
+        final int baseX = center.getBlockX() >> 4;
+        final int baseZ = center.getBlockZ() >> 4;
+        for (int cx = baseX - chunkRadius; cx <= baseX + chunkRadius; cx++) {
+            for (int cz = baseZ - chunkRadius; cz <= baseZ + chunkRadius; cz++) {
+                if (!world.isChunkLoaded(cx, cz)) {
+                    continue;
+                }
+                for (final BlockState state : world.getChunkAt(cx, cz).getTileEntities(
+                    block -> block.getType() == Material.SPAWNER || block.getType() == Material.TRIAL_SPAWNER, false)) {
+                    if (state.getLocation().distanceSquared(center) > radiusSq) {
+                        continue;
+                    }
+                    final long key = blockKey(state);
+                    desired.add(key);
+                    final org.bukkit.entity.BlockDisplay existing = playerGlows.get(key);
+                    if (existing == null || existing.isDead()) {
+                        final org.bukkit.entity.BlockDisplay spawned = spawnChestGlow(player, state);
+                        if (spawned != null) {
+                            playerGlows.put(key, spawned);
+                        }
+                    }
+                }
+            }
+        }
+        playerGlows.entrySet().removeIf(entry -> {
+            if (!desired.contains(entry.getKey())) {
+                if (entry.getValue() != null && !entry.getValue().isDead()) {
+                    entry.getValue().remove();
+                }
+                return true;
+            }
+            return false;
+        });
+        if (playerGlows.isEmpty()) {
+            spawnerGlows.remove(player.getUniqueId());
+        }
+    }
+
+    private void clearSpawnerGlow(final Player player) {
+        final Map<Long, org.bukkit.entity.BlockDisplay> glows = spawnerGlows.remove(player.getUniqueId());
+        if (glows != null) {
+            for (final org.bukkit.entity.BlockDisplay display : glows.values()) {
+                if (display != null && !display.isDead()) {
+                    display.remove();
+                }
+            }
+        }
+    }
+
+    /** Shows the direction and distance to the nearest structure (vanilla OR datapack) in the action bar. */
+    private void mechanistStructureHint(final Player player) {
+        if (!plugin.getConfig().getBoolean("mechanist.structure-compass", true)) {
+            return;
+        }
+        try {
+            final int radiusChunks = Math.max(1, plugin.getConfig().getInt("mechanist.structure-scan-chunks", 64));
+            final Location origin = player.getLocation();
+            Location nearest = null;
+            String nearestName = null;
+            double bestSq = Double.MAX_VALUE;
+            // Iterate the whole Structure registry so datapack/custom structures are covered too.
+            for (final org.bukkit.generator.structure.Structure structure : org.bukkit.Registry.STRUCTURE) {
+                final org.bukkit.util.StructureSearchResult result =
+                    player.getWorld().locateNearestStructure(origin, structure, radiusChunks, false);
+                if (result == null) {
+                    continue;
+                }
+                final double distSq = result.getLocation().distanceSquared(origin);
+                if (distSq < bestSq) {
+                    bestSq = distSq;
+                    nearest = result.getLocation();
+                    final org.bukkit.NamespacedKey key = org.bukkit.Registry.STRUCTURE.getKey(structure);
+                    nearestName = key == null ? "structure" : key.getKey().replace('_', ' ');
+                }
+            }
+            if (nearest == null) {
+                return;
+            }
+            final int distance = (int) Math.round(Math.sqrt(bestSq));
+            player.sendActionBar(net.kyori.adventure.text.Component.text(
+                "⚙ " + nearestName + "  " + compassDirection(origin, nearest) + "  " + distance + "m",
+                net.kyori.adventure.text.format.NamedTextColor.AQUA));
+        } catch (final Throwable ignored) {
+            // Structure search API differences must never break the tick loop.
+        }
+    }
+
+    private String compassDirection(final Location from, final Location to) {
+        final double dx = to.getX() - from.getX();
+        final double dz = to.getZ() - from.getZ();
+        final double angle = Math.toDegrees(Math.atan2(-dx, dz));
+        final String[] dirs = {"N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+        return dirs[(int) Math.round(((angle % 360) + 360) % 360 / 45.0) % 8];
     }
 
     /** Per-pet dispatch context: the owner, the pet, and its cached level/ability tier. */
@@ -2206,6 +2394,108 @@ public final class ActivePetManager {
             if (isHostile(event.getEntity()) && ThreadLocalRandom.current().nextDouble() < chance) {
                 event.setCancelled(true);
                 spawnPlushieDistraction(c.player());
+            }
+        });
+
+        // ---- New pets (v1.14.0) --------------------------------------------------------------------
+        passiveBehaviors.put("mantis", c -> setTarget(c.player(), Attribute.ENTITY_INTERACTION_RANGE, 3.0 + (c.tier() * 0.06)));
+        passiveBehaviors.put("lion", c -> setTarget(c.player(), Attribute.ATTACK_DAMAGE, 1.0 + (c.tier() * 0.2)));
+        passiveBehaviors.put("cave_spider", c -> setTarget(c.player(), Attribute.SAFE_FALL_DISTANCE, 30.0));
+
+        periodicBehaviors.put("guardian_angel", c -> {
+            applyPetBuff(c.player(), PotionEffectType.ABSORPTION, Math.min(3, 1 + c.tier() / 8), 220);
+            applyPetBuff(c.player(), PotionEffectType.REGENERATION, 0);
+        });
+        periodicBehaviors.put("sugar_glider", c -> {
+            if (isAirborne(c.player())) {
+                applyPetBuff(c.player(), PotionEffectType.SLOW_FALLING, 0);
+            }
+        });
+        periodicBehaviors.put("lion", c -> affectNearby(c.player(), 6.0, true, foe -> {
+            foe.addPotionEffect(new PotionEffect(PotionEffectType.WEAKNESS, 100, 0, true, false, true));
+            foe.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 80, 0, true, false, true));
+            final Vector push = foe.getLocation().toVector().subtract(c.player().getLocation().toVector());
+            if (push.lengthSquared() > 0.01) {
+                foe.setVelocity(foe.getVelocity().add(push.normalize().multiply(0.4).setY(0.25)));
+            }
+        }));
+        periodicBehaviors.put("snow_golem", c -> {
+            c.player().setFreezeTicks(0);
+            int shots = 1 + (c.tier() / 5);
+            for (final Entity nearby : c.player().getNearbyEntities(12.0, 8.0, 12.0)) {
+                if (shots <= 0) {
+                    break;
+                }
+                if (nearby instanceof LivingEntity foe && isHostile(nearby) && !foe.isDead()) {
+                    final org.bukkit.entity.Snowball ball = c.player().launchProjectile(org.bukkit.entity.Snowball.class);
+                    ball.setVelocity(foe.getEyeLocation().toVector().subtract(c.player().getEyeLocation().toVector()).normalize().multiply(1.6));
+                    shots--;
+                }
+            }
+        });
+        periodicBehaviors.put("kraken", c -> {
+            if (isWetOrNearWater(c.player())) {
+                final double radius = 4.0 + (c.tier() * 0.3);
+                affectNearby(c.player(), radius, true, foe -> {
+                    final Vector pull = c.player().getLocation().toVector().subtract(foe.getLocation().toVector());
+                    if (pull.lengthSquared() > 0.01) {
+                        foe.setVelocity(foe.getVelocity().add(pull.normalize().multiply(0.45)));
+                    }
+                    foe.damage(1.0 + (c.tier() * 0.2), c.player());
+                });
+                c.player().getWorld().spawnParticle(Particle.BUBBLE_COLUMN_UP, c.player().getLocation(), 12, 0.6, 0.3, 0.6, 0.02);
+            }
+        });
+        periodicBehaviors.put("mechanist", c -> mechanistStructureHint(c.player()));
+
+        hitBehaviors.put("scorpion", (c, victim) -> {
+            victim.addPotionEffect(new PotionEffect(PotionEffectType.POISON, 60 + (c.tier() * 6), Math.min(2, c.tier() / 8), true, false, true));
+            victim.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 40 + (c.tier() * 4), 0, true, false, true));
+        });
+        hitBehaviors.put("mantis", (c, victim) -> {
+            if (ThreadLocalRandom.current().nextDouble() < Math.min(0.5, 0.1 + (c.tier() * 0.02))) {
+                victim.setNoDamageTicks(0);
+                victim.damage(2.0 + (c.tier() * 0.3));
+                c.player().getWorld().spawnParticle(Particle.CRIT, victim.getLocation().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0.1);
+            }
+        });
+        hitBehaviors.put("panther", (c, victim) -> {
+            if (c.player().isSneaking()) {
+                victim.setNoDamageTicks(0);
+                victim.damage(2.0 + (c.tier() * 0.3));
+                c.player().getWorld().spawnParticle(Particle.CRIT, victim.getLocation().add(0, 1, 0), 12, 0.3, 0.3, 0.3, 0.15);
+                c.player().playSound(c.player().getLocation(), Sound.ENTITY_PLAYER_ATTACK_CRIT, 1.0F, 0.8F);
+            }
+        });
+        hitBehaviors.put("raccoon", (c, victim) -> {
+            if (ThreadLocalRandom.current().nextDouble() < Math.min(0.4, 0.1 + (c.tier() * 0.015))) {
+                final Material loot = RACCOON_LOOT.get(ThreadLocalRandom.current().nextInt(RACCOON_LOOT.size()));
+                victim.getWorld().dropItemNaturally(victim.getLocation().add(0, 0.5, 0), new ItemStack(loot));
+                victim.getWorld().spawnParticle(Particle.HAPPY_VILLAGER, victim.getLocation().add(0, 1, 0), 5, 0.3, 0.3, 0.3, 0.0);
+            }
+        });
+
+        killBehaviors.put("arcane_fox", (c, killed) -> c.player().giveExp(2 + c.tier()));
+
+        defenseBehaviors.put("mimic", (c, damager) -> {
+            if (ThreadLocalRandom.current().nextDouble() < Math.min(0.5, 0.15 + (c.tier() * 0.02))) {
+                c.player().addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 40, 2, true, false, true));
+                applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 1, 60);
+                c.player().getWorld().spawnParticle(Particle.CRIT, c.player().getLocation().add(0, 1, 0), 8, 0.3, 0.5, 0.3, 0.1);
+            }
+        });
+        defenseBehaviors.put("guardian_angel", (c, damager) -> {
+            if (c.player().getHealth() <= 6.0) {
+                applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 3, 200);
+                c.player().addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, 1, true, false, true));
+                c.player().getWorld().spawnParticle(Particle.END_ROD, c.player().getLocation().add(0, 1, 0), 20, 0.4, 0.6, 0.4, 0.02);
+            }
+        });
+        defenseBehaviors.put("yeti", (c, damager) -> {
+            final LivingEntity attacker = resolveAttacker(c.player(), damager);
+            if (attacker != null) {
+                attacker.setFreezeTicks(Math.min(attacker.getMaxFreezeTicks(), 140 + (c.tier() * 6)));
+                attacker.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 60 + (c.tier() * 6), 1, true, false, true));
             }
         });
     }
