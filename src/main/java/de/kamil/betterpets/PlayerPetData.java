@@ -1,12 +1,21 @@
 package de.kamil.betterpets;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public final class PlayerPetData {
     private final List<OwnedPet> pets = new ArrayList<>();
+    // Per-player collection of unlocked cosmetic variants, keyed by pet definition id. Kept at the player
+    // level (not per owned pet) so a scrapped/collected skin stays yours even if you do not own the pet.
+    private final Map<String, Set<String>> unlockedVariants = new LinkedHashMap<>();
     private UUID activePet;
     private boolean visible = true;
     // When true, this player receives no discovery/booster broadcast messages or sounds.
@@ -111,6 +120,36 @@ public final class PlayerPetData {
 
     public void addTokens(final int amount) {
         this.tokens = Math.max(0, this.tokens + amount);
+    }
+
+    /** Unlocks a cosmetic variant for a pet definition (per player). Returns true if newly added. */
+    public boolean unlockVariant(final String petId, final String variant) {
+        if (petId == null || variant == null || variant.isBlank()) {
+            return false;
+        }
+        return unlockedVariants
+            .computeIfAbsent(petId.toLowerCase(Locale.ROOT), ignored -> new LinkedHashSet<>())
+            .add(variant.toLowerCase(Locale.ROOT));
+    }
+
+    public boolean isVariantUnlocked(final String petId, final String variant) {
+        if (petId == null || variant == null) {
+            return false;
+        }
+        final Set<String> set = unlockedVariants.get(petId.toLowerCase(Locale.ROOT));
+        return set != null && set.contains(variant.toLowerCase(Locale.ROOT));
+    }
+
+    public Set<String> unlockedVariants(final String petId) {
+        if (petId == null) {
+            return Set.of();
+        }
+        return Collections.unmodifiableSet(unlockedVariants.getOrDefault(petId.toLowerCase(Locale.ROOT), Set.of()));
+    }
+
+    /** All unlocked variants keyed by pet id (for persistence). */
+    public Map<String, Set<String>> unlockedVariantsByPet() {
+        return unlockedVariants;
     }
 
     public String slotFeaturedPet() {

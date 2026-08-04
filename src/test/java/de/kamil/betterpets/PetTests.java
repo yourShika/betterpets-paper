@@ -124,19 +124,19 @@ public final class PetTests {
         pet.setParticlesEnabled(false);
         eq("particles toggled off", pet.particlesEnabled(), false);
         eq("no variant initially", pet.variant(), null);
-        pet.setVariant("wild");
-        eq("variant set", pet.variant(), "wild");
-        eq("active variant auto-unlocked", pet.isVariantUnlocked("wild"), true);
-        eq("other variant locked", pet.isVariantUnlocked("gold"), false);
-        eq("unlock new returns true", pet.unlockVariant("gold"), true);
-        eq("unlock again returns false", pet.unlockVariant("gold"), false);
-        eq("case-insensitive unlock check", pet.isVariantUnlocked("GOLD"), true);
-        eq("unlocked count is 2", pet.unlockedVariants().size(), 2);
-        pet.setUnlockedVariants(java.util.List.of("lucy", "cyan"));
-        eq("restore re-adds active", pet.isVariantUnlocked("wild"), true);
-        eq("restore added lucy", pet.isVariantUnlocked("lucy"), true);
-        eq("restore cleared gold", pet.isVariantUnlocked("gold"), false);
-        eq("restored count is 3", pet.unlockedVariants().size(), 3);
+        pet.setVariant("Wild");
+        eq("variant set + lowercased", pet.variant(), "wild");
+
+        // Unlocked variants are now tracked per-player (independent of owning the pet).
+        final PlayerPetData data = new PlayerPetData();
+        eq("locked before unlock", data.isVariantUnlocked("axolotl", "wild"), false);
+        eq("unlock new returns true", data.unlockVariant("axolotl", "WILD"), true);
+        eq("unlock again returns false", data.unlockVariant("axolotl", "wild"), false);
+        eq("case-insensitive check", data.isVariantUnlocked("AXOLOTL", "Wild"), true);
+        eq("other pet not unlocked", data.isVariantUnlocked("panda", "wild"), false);
+        data.unlockVariant("axolotl", "gold");
+        eq("axolotl unlocked count is 2", data.unlockedVariants("axolotl").size(), 2);
+        eq("unknown pet has none", data.unlockedVariants("griffin").size(), 0);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

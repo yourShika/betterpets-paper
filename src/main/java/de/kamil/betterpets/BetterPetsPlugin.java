@@ -351,7 +351,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 if (!pet.uuid().equals(data.activePetId()) && activeAlpacaStorageLocked(player, data)) {
                     return;
                 }
-                ensureVariant(pet);
+                ensureVariant(data, pet);
                 data.setActivePet(pet.uuid());
                 activePets.spawn(player, pet);
                 requestSave();
@@ -1252,8 +1252,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final String itemVariant = itemFactory.petVariant(item).orElse(null);
         if (itemVariant != null && definition.variants().containsKey(itemVariant.toLowerCase(Locale.ROOT))) {
             pet.setVariant(itemVariant);
+            data.unlockVariant(pet.definitionId(), itemVariant);
         } else {
-            ensureVariant(pet);
+            ensureVariant(data, pet);
         }
         data.pets().add(pet);
         consumeOne(player, item);
@@ -1263,14 +1264,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         debug(player.getName() + " added pet " + definition.id() + " level " + pet.level() + " from item.");
     }
 
-    /** Rolls a cosmetic variant (e.g. an Axolotl style) for pets that support them but do not have one yet. */
-    private void ensureVariant(final OwnedPet pet) {
+    /** Rolls a cosmetic variant for a pet that supports them but has none yet, unlocking it for the player. */
+    private void ensureVariant(final PlayerPetData data, final OwnedPet pet) {
         if (pet == null || pet.variant() != null) {
             return;
         }
         definitions.get(pet.definitionId()).ifPresent(definition -> {
             if (definition.hasVariants()) {
-                pet.setVariant(definition.randomVariant(ThreadLocalRandom.current()));
+                final String rolled = definition.randomVariant(ThreadLocalRandom.current());
+                pet.setVariant(rolled);
+                data.unlockVariant(pet.definitionId(), rolled);
             }
         });
     }
@@ -1281,8 +1284,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         for (final Map.Entry<UUID, PlayerPetData> entry : storage.entries()) {
             for (final OwnedPet pet : entry.getValue().pets()) {
                 if (pet.variant() == null) {
-                    ensureVariant(pet);
+                    ensureVariant(entry.getValue(), pet);
                     changed = changed || pet.variant() != null;
+                } else {
+                    // Make sure the worn skin is always in the per-player unlocked collection.
+                    entry.getValue().unlockVariant(pet.definitionId(), pet.variant());
                 }
             }
         }
@@ -1993,7 +1999,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    /** Unlocks the item's variant on a matching owned pet; returns the display name if newly unlocked. */
+    /** Unlocks the scrapped item's variant for the player (regardless of ownership); returns the display name if new. */
     private String tryUnlockScrappedVariant(final PlayerPetData data, final ItemStack item) {
         final String petId = itemFactory.petId(item).orElse(null);
         final String variant = itemFactory.petVariant(item).orElse(null);
@@ -2004,13 +2010,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null || !definition.variants().containsKey(variant.toLowerCase(Locale.ROOT))) {
             return null;
         }
-        boolean unlocked = false;
-        for (final OwnedPet owned : data.pets()) {
-            if (owned.definitionId().equals(petId) && owned.unlockVariant(variant)) {
-                unlocked = true;
-            }
-        }
-        return unlocked ? PetDefinition.variantDisplay(variant) + " " + definition.name() : null;
+        return data.unlockVariant(petId, variant) ? PetDefinition.variantDisplay(variant) + " " + definition.name() : null;
     }
 
     void handleTokensCommand(final CommandSender sender, final String[] args) {
@@ -2987,6 +2987,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null) {
             return;
         }
+        // Safety: the currently-worn skin is always part of the player's unlocked collection.
+        if (pet.variant() != null) {
+            data.unlockVariant(pet.definitionId(), pet.variant());
+        }
         inventory.setItem(4, itemFactory.menuItem(definition, pet, pet.uuid().equals(data.activePetId())));
         inventory.setItem(0, itemFactory.control(
             pet.particlesEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
@@ -3002,7 +3006,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         for (int i = 0; i < CUSTOMIZE_PER_PAGE && start + i < keys.size(); i++) {
             final String key = keys.get(start + i);
             final int slot = 9 + i;
-            if (pet.isVariantUnlocked(key)) {
+            if (data.isVariantUnlocked(pet.definitionId(), key)) {
                 final ItemStack icon = itemFactory.variantIcon(definition, key);
                 final boolean active = key.equalsIgnoreCase(pet.variant());
                 icon.editMeta(meta -> {
@@ -3077,7 +3081,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 return;
             }
             final String key = keys.get(idx);
-            if (!pet.isVariantUnlocked(key)) {
+            if (!data.isVariantUnlocked(pet.definitionId(), key)) {
                 player.sendMessage(message("customize.locked"));
                 player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
                 return;

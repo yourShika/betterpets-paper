@@ -80,12 +80,28 @@ public final class PetStorage {
                             );
                             owned.setCustomName(pet.getString("name", null));
                             owned.setVariant(pet.getString("variant", null));
-                            owned.setUnlockedVariants(pet.getStringList("unlocked-variants"));
                             owned.setParticlesEnabled(pet.getBoolean("particles", true));
                             data.pets().add(owned);
+                            // Migrate legacy per-pet unlocked variants into the per-player collection.
+                            for (final String legacy : pet.getStringList("unlocked-variants")) {
+                                data.unlockVariant(definition, legacy);
+                            }
+                            if (owned.variant() != null) {
+                                data.unlockVariant(definition, owned.variant());
+                            }
                         } catch (final RuntimeException petException) {
                             // One broken pet must not drop the whole player's data.
                             plugin.getLogger().warning("Skipping corrupted pet " + petUuidText + " for " + uuidText + ": " + petException.getMessage());
+                        }
+                    }
+                }
+
+                // Per-player unlocked-variant collection (petId -> list of variant keys).
+                final ConfigurationSection unlocked = section.getConfigurationSection("unlocked-variants");
+                if (unlocked != null) {
+                    for (final String petId : unlocked.getKeys(false)) {
+                        for (final String variant : unlocked.getStringList(petId)) {
+                            data.unlockVariant(petId, variant);
                         }
                     }
                 }
@@ -137,6 +153,11 @@ public final class PetStorage {
             config.set(base + ".active", data.activePetId() == null ? null : data.activePetId().toString());
             config.set(base + ".booster-tier", data.boosterTier());
             config.set(base + ".booster-remaining-millis", data.boosterRemainingMillis());
+            for (final Map.Entry<String, java.util.Set<String>> unlocked : data.unlockedVariantsByPet().entrySet()) {
+                if (!unlocked.getValue().isEmpty()) {
+                    config.set(base + ".unlocked-variants." + unlocked.getKey(), new java.util.ArrayList<>(unlocked.getValue()));
+                }
+            }
 
             for (final OwnedPet pet : data.pets()) {
                 final String petPath = base + ".pets." + pet.uuid();
@@ -147,7 +168,6 @@ public final class PetStorage {
                 config.set(petPath + ".last-totem", pet.lastTotemMillis());
                 config.set(petPath + ".name", pet.hasCustomName() ? pet.customName() : null);
                 config.set(petPath + ".variant", pet.variant());
-                config.set(petPath + ".unlocked-variants", pet.unlockedVariants().isEmpty() ? null : new java.util.ArrayList<>(pet.unlockedVariants()));
                 config.set(petPath + ".particles", pet.particlesEnabled() ? null : false);
                 config.set(petPath + ".storage-bytes", Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(serializableStorageContents(pet))));
                 config.set(petPath + ".storage", null);
