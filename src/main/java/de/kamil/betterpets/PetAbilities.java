@@ -217,8 +217,8 @@ public final class PetAbilities {
             lvl -> "+" + dec(tier(lvl) * 0.05) + " reach + auto-refill", NONE);
         put(m, "silk_moth", "A chance to mine glass, ice, ore and glowstone as if with Silk Touch.",
             lvl -> Math.round(Math.min(0.5, 0.12 + tier(lvl) * 0.02) * 100) + "% Silk Touch chance", NONE);
-        put(m, "woodpecker", "Chopping one log fells the whole tree at once (uses axe durability).",
-            lvl -> "up to " + Math.min(48, 4 + tier(lvl) * 2) + " logs per tree", NONE);
+        put(m, "woodpecker", "Chopping one log fells the whole natural tree at once (not player-placed logs; uses axe durability).",
+            lvl -> lvl >= 100 ? "whole tree, any size" : "up to " + Math.min(48, 4 + tier(lvl) * 2) + " logs", NONE);
         put(m, "badger", "Breaking one ore chases the whole vein (uses pickaxe durability).",
             lvl -> "up to " + Math.min(40, 3 + tier(lvl)) + " ore per vein", NONE);
         put(m, "salamander", "A chance for mined ores to drop already smelted into ingots.",

@@ -229,15 +229,18 @@ public final class ActivePetManager {
         Material.STRING, Material.BONE, Material.GUNPOWDER, Material.ARROW, Material.LEATHER,
         Material.IRON_NUGGET, Material.GOLD_NUGGET, Material.ROTTEN_FLESH, Material.EMERALD
     );
-    // Salamander auto-smelt: ore block -> smelted drop.
-    private static final Map<Material, Material> SALAMANDER_SMELT = Map.of(
-        Material.IRON_ORE, Material.IRON_INGOT,
-        Material.DEEPSLATE_IRON_ORE, Material.IRON_INGOT,
-        Material.GOLD_ORE, Material.GOLD_INGOT,
-        Material.DEEPSLATE_GOLD_ORE, Material.GOLD_INGOT,
-        Material.NETHER_GOLD_ORE, Material.GOLD_INGOT,
-        Material.COPPER_ORE, Material.COPPER_INGOT,
-        Material.DEEPSLATE_COPPER_ORE, Material.COPPER_INGOT,
+    // Salamander auto-smelt: ore blocks it acts on (their real drops, incl. Fortune, are smelted).
+    private static final Set<Material> SALAMANDER_ORES = Set.of(
+        Material.IRON_ORE, Material.DEEPSLATE_IRON_ORE,
+        Material.GOLD_ORE, Material.DEEPSLATE_GOLD_ORE,
+        Material.COPPER_ORE, Material.DEEPSLATE_COPPER_ORE,
+        Material.ANCIENT_DEBRIS
+    );
+    // Salamander: a raw drop -> its smelted form (so Fortune's extra raw drops all get smelted).
+    private static final Map<Material, Material> SALAMANDER_RAW_SMELT = Map.of(
+        Material.RAW_IRON, Material.IRON_INGOT,
+        Material.RAW_GOLD, Material.GOLD_INGOT,
+        Material.RAW_COPPER, Material.COPPER_INGOT,
         Material.ANCIENT_DEBRIS, Material.NETHERITE_SCRAP
     );
     // Scarecrow: crop block -> extra produce dropped on harvest.
@@ -2144,20 +2147,27 @@ public final class ActivePetManager {
     // ---- Salamander: auto-smelt -----------------------------------------------------------------
 
     public void handleSalamanderSmelt(final org.bukkit.event.block.BlockBreakEvent event) {
-        final OwnedPet pet = activePetIfType(event.getPlayer(), "salamander");
-        if (pet == null) {
-            return;
-        }
-        final Material smelted = SALAMANDER_SMELT.get(event.getBlock().getType());
-        if (smelted == null) {
+        final Player player = event.getPlayer();
+        final OwnedPet pet = activePetIfType(player, "salamander");
+        final Block block = event.getBlock();
+        if (pet == null || !SALAMANDER_ORES.contains(block.getType())) {
             return;
         }
         if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.8, 0.25 + (abilityTier(pet.level()) * 0.03))) {
             return;
         }
+        // Use the block's real drops for the held tool, so Fortune (and Silk Touch) still apply, then
+        // smelt each raw drop into its ingot. Non-raw drops (e.g. Silk-Touched ore) fall through unchanged.
+        final java.util.Collection<ItemStack> drops = block.getDrops(player.getInventory().getItemInMainHand(), player);
+        if (drops.isEmpty()) {
+            return;
+        }
         event.setDropItems(false);
-        final Location loc = event.getBlock().getLocation().add(0.5, 0.5, 0.5);
-        loc.getWorld().dropItemNaturally(loc, new ItemStack(smelted));
+        final Location loc = block.getLocation().add(0.5, 0.5, 0.5);
+        for (final ItemStack drop : drops) {
+            final Material smelted = SALAMANDER_RAW_SMELT.get(drop.getType());
+            loc.getWorld().dropItemNaturally(loc, smelted != null ? new ItemStack(smelted, drop.getAmount()) : drop);
+        }
         loc.getWorld().spawnParticle(Particle.FLAME, loc, 8, 0.2, 0.2, 0.2, 0.02);
     }
 
@@ -2168,10 +2178,56 @@ public final class ActivePetManager {
         if (pet == null || !org.bukkit.Tag.LOGS.isTagged(origin.getType()) || !isHoldingTool(player, "_AXE")) {
             return;
         }
-        final int max = Math.min(48, 4 + (abilityTier(pet.level()) * 2));
-        final int felled = veinBreak(player, origin, max, block -> org.bukkit.Tag.LOGS.isTagged(block.getType()));
+        // At level 100 there is no size cap; below it scales with level.
+        final int cap = pet.level() >= 100 ? 2048 : Math.min(48, 4 + (abilityTier(pet.level()) * 2));
+        final int scanLimit = Math.min(4096, cap + 512);
+
+        // Flood-fill the connected logs and confirm it is a real tree: natural trees have NON-persistent
+        // leaves attached, while player-placed logs (houses etc.) do not, so those are left untouched.
+        final Set<Long> visited = new HashSet<>();
+        final java.util.Deque<Block> queue = new java.util.ArrayDeque<>();
+        final java.util.List<Block> logs = new java.util.ArrayList<>();
+        visited.add(blockKey(origin.getX(), origin.getY(), origin.getZ()));
+        queue.add(origin);
+        boolean hasNaturalLeaves = false;
+        while (!queue.isEmpty() && logs.size() < scanLimit) {
+            final Block current = queue.poll();
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        if (dx == 0 && dy == 0 && dz == 0) {
+                            continue;
+                        }
+                        final Block next = current.getRelative(dx, dy, dz);
+                        if (!hasNaturalLeaves && next.getBlockData() instanceof org.bukkit.block.data.type.Leaves leaves
+                            && !leaves.isPersistent()) {
+                            hasNaturalLeaves = true;
+                        }
+                        if (!org.bukkit.Tag.LOGS.isTagged(next.getType())) {
+                            continue;
+                        }
+                        final long key = blockKey(next.getX(), next.getY(), next.getZ());
+                        if (visited.add(key)) {
+                            logs.add(next);
+                            queue.add(next);
+                        }
+                    }
+                }
+            }
+        }
+        if (!hasNaturalLeaves) {
+            return;
+        }
+        final ItemStack tool = player.getInventory().getItemInMainHand();
+        int felled = 0;
+        for (final Block log : logs) {
+            log.breakNaturally(tool);
+            if (++felled >= cap) {
+                break;
+            }
+        }
         if (felled > 0) {
-            player.getInventory().getItemInMainHand().damage(felled, player);
+            tool.damage(felled, player);
         }
     }
 
@@ -2886,7 +2942,12 @@ public final class ActivePetManager {
         });
 
         // ---- Build / collect pets (v1.16.1) --------------------------------------------------------
-        passiveBehaviors.put("golem_mason", c -> setTarget(c.player(), Attribute.ENTITY_INTERACTION_RANGE, 3.0 + (c.tier() * 0.05)));
+        passiveBehaviors.put("golem_mason", c -> {
+            // Block reach (placing/breaking) uses BLOCK_INTERACTION_RANGE (base 4.5); ENTITY_INTERACTION_RANGE
+            // only affects hitting entities, which is why building reach was not extending before.
+            setTarget(c.player(), Attribute.BLOCK_INTERACTION_RANGE, 4.5 + (c.tier() * 0.08));
+            setTarget(c.player(), Attribute.ENTITY_INTERACTION_RANGE, 3.0 + (c.tier() * 0.05));
+        });
         passiveBehaviors.put("magpie", c -> setTarget(c.player(), Attribute.LUCK, c.tier() * 2.0));
         periodicBehaviors.put("magpie", c -> {
             for (final Entity nearby : c.player().getNearbyEntities(12.0, 8.0, 12.0)) {
