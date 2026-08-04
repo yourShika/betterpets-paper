@@ -111,5 +111,6 @@ module:
 
 customize:
   unlocked: "<light_purple>Odblokowano nowy skin:</light_purple> <aqua>%variant%</aqua><gray>! Skradanie + PPM na zwierzaka, aby go zalozyc.</gray>"
+  already: "<gray>Masz juz skin </gray><aqua>%variant%</aqua><gray>.</gray>"
   locked: "<red>Ten skin jest zablokowany. Znajdz i rozloz jeden, aby go odblokowac.</red>"
   applied: "<green>Zmieniono skin na </green><aqua>%variant%</aqua><green>.</green>"

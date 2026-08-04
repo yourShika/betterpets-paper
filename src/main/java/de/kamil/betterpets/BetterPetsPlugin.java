@@ -1987,27 +1987,49 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final int gained = value * held.getAmount();
         final String name = itemFactory.petId(held).flatMap(definitions::get).map(PetDefinition::name).orElse("pet");
-        final String unlockedName = tryUnlockScrappedVariant(data, held);
+        final Component unlockMessage = scrapUnlockMessage(data, held);
         player.getInventory().setItemInMainHand(null);
         data.addTokens(gained);
         requestSave();
         player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.8F, 1.4F);
         player.sendMessage(lang.component("tokens.scrapped",
             "%pet%", name, "%tokens%", Integer.toString(gained), "%total%", Integer.toString(data.tokens())));
-        if (unlockedName != null) {
-            player.sendMessage(lang.component("customize.unlocked", "%variant%", unlockedName));
+        if (unlockMessage != null) {
+            player.sendMessage(unlockMessage);
         }
+    }
+
+    /**
+     * Builds the skin-collection feedback for a single scrapped pet item: unlocks the variant for the player
+     * (regardless of ownership) and returns "unlocked" if it was new, "already have it" otherwise, or null
+     * when the pet has no variants / the item carries no variant tag (logged for diagnosis).
+     */
+    private Component scrapUnlockMessage(final PlayerPetData data, final ItemStack item) {
+        final String petId = itemFactory.petId(item).orElse(null);
+        final PetDefinition definition = petId == null ? null : definitions.get(petId).orElse(null);
+        if (definition == null || !definition.hasVariants()) {
+            return null;
+        }
+        final String variant = itemFactory.resolveVariant(item, definition).orElse(null);
+        if (variant == null || !definition.variants().containsKey(variant.toLowerCase(Locale.ROOT))) {
+            debug("Scrap: " + petId + " item had no resolvable variant (no tag and no matching head texture).");
+            return null;
+        }
+        final String display = PetDefinition.variantDisplay(variant) + " " + definition.name();
+        final boolean isNew = data.unlockVariant(petId, variant);
+        debug("Scrap: " + petId + " variant " + variant + " -> " + (isNew ? "unlocked" : "already owned"));
+        return lang.component(isNew ? "customize.unlocked" : "customize.already", "%variant%", display);
     }
 
     /** Unlocks the scrapped item's variant for the player (regardless of ownership); returns the display name if new. */
     private String tryUnlockScrappedVariant(final PlayerPetData data, final ItemStack item) {
         final String petId = itemFactory.petId(item).orElse(null);
-        final String variant = itemFactory.petVariant(item).orElse(null);
-        if (petId == null || variant == null) {
+        final PetDefinition definition = petId == null ? null : definitions.get(petId).orElse(null);
+        if (definition == null) {
             return null;
         }
-        final PetDefinition definition = definitions.get(petId).orElse(null);
-        if (definition == null || !definition.variants().containsKey(variant.toLowerCase(Locale.ROOT))) {
+        final String variant = itemFactory.resolveVariant(item, definition).orElse(null);
+        if (variant == null || !definition.variants().containsKey(variant.toLowerCase(Locale.ROOT))) {
             return null;
         }
         return data.unlockVariant(petId, variant) ? PetDefinition.variantDisplay(variant) + " " + definition.name() : null;
@@ -2895,16 +2917,17 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final VariantMenuHolder holder = new VariantMenuHolder(definition.id(), Math.max(0, page));
         final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " Variants", definition.rarityColor()));
         holder.setInventory(inventory);
-        renderVariantMenu(inventory, holder);
+        renderVariantMenu(inventory, holder, player);
         player.openInventory(inventory);
     }
 
-    private void renderVariantMenu(final Inventory inventory, final VariantMenuHolder holder) {
+    private void renderVariantMenu(final Inventory inventory, final VariantMenuHolder holder, final Player player) {
         inventory.clear();
         final PetDefinition definition = definitions.get(holder.petId()).orElse(null);
         if (definition == null) {
             return;
         }
+        final PlayerPetData data = storage.data(player.getUniqueId());
         final List<String> keys = new ArrayList<>(definition.variants().keySet());
         final int perPage = 45;
         final int pages = Math.max(1, (keys.size() + perPage - 1) / perPage);
@@ -2914,7 +2937,20 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final int start = holder.page() * perPage;
         final int visible = Math.max(0, Math.min(perPage, keys.size() - start));
         for (int i = 0; i < visible; i++) {
-            inventory.setItem(i, itemFactory.variantIcon(definition, keys.get(start + i)));
+            final String key = keys.get(start + i);
+            final ItemStack icon = itemFactory.variantIcon(definition, key);
+            final boolean collected = data.isVariantUnlocked(definition.id(), key);
+            icon.editMeta(meta -> {
+                if (collected) {
+                    meta.setEnchantmentGlintOverride(true);
+                }
+                final List<Component> lore = new ArrayList<>(meta.lore() == null ? List.of() : meta.lore());
+                lore.add((collected
+                    ? Component.text("✔ Collected", NamedTextColor.GREEN)
+                    : Component.text("Not collected yet", NamedTextColor.DARK_GRAY)).decoration(TextDecoration.ITALIC, false));
+                meta.lore(lore);
+            });
+            inventory.setItem(i, icon);
         }
         inventory.setItem(45, itemFactory.control(
             Material.ARROW,
@@ -2957,7 +2993,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final int target = slot == 48 ? holder.page() - 1 : holder.page() + 1;
             if (target >= 0 && target < pages) {
                 holder.setPage(target);
-                renderVariantMenu(event.getView().getTopInventory(), holder);
+                renderVariantMenu(event.getView().getTopInventory(), holder, player);
             }
         }
     }

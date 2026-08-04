@@ -111,5 +111,6 @@ module:
 
 customize:
   unlocked: "<light_purple>Neuer Skin freigeschaltet:</light_purple> <aqua>%variant%</aqua><gray>! Sneak + Rechtsklick auf dein Pet, um ihn zu tragen.</gray>"
+  already: "<gray>Du besitzt den </gray><aqua>%variant%</aqua><gray>-Skin bereits.</gray>"
   locked: "<red>Dieser Skin ist gesperrt. Finde und verwerte einen, um ihn freizuschalten.</red>"
   applied: "<green>Skin gewechselt zu </green><aqua>%variant%</aqua><green>.</green>"

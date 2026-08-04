@@ -191,6 +191,35 @@ public final class PetItemFactory {
         return variant == null || variant.isBlank() ? Optional.empty() : Optional.of(variant);
     }
 
+    /**
+     * Resolves a pet item's variant: first the stored tag, then (fallback) by matching the head's texture
+     * against the definition's variant textures. The fallback recovers the skin from older items that carry
+     * the variant head but not the tag, so scrapping them still collects the right skin.
+     */
+    public Optional<String> resolveVariant(final ItemStack item, final PetDefinition definition) {
+        final Optional<String> tagged = petVariant(item);
+        if (tagged.isPresent() || definition == null || !definition.hasVariants()
+            || item == null || !(item.getItemMeta() instanceof SkullMeta skull)) {
+            return tagged;
+        }
+        final PlayerProfile profile = skull.getPlayerProfile();
+        if (profile == null) {
+            return Optional.empty();
+        }
+        for (final ProfileProperty property : profile.getProperties()) {
+            if (!"textures".equals(property.getName())) {
+                continue;
+            }
+            final String texture = property.getValue();
+            for (final java.util.Map.Entry<String, String> entry : definition.variants().entrySet()) {
+                if (entry.getValue().equals(texture)) {
+                    return Optional.of(entry.getKey());
+                }
+            }
+        }
+        return Optional.empty();
+    }
+
     public Optional<String> petCustomName(final ItemStack item) {
         if (item == null || !item.hasItemMeta()) {
             return Optional.empty();
