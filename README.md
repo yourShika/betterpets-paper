@@ -1,5 +1,9 @@
 # 🐾 Better Pets Paper
 
+<!-- ai-disclaimer -->
+> ⚠️ **Disclaimer:** This project — its code and its project artwork — was created with the help of AI. The plugin itself is tested by real people, and bugs and issues are actively fixed.
+
+
 > A full **Paper plugin rewrite** of the original Better Pets datapack.
 
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
