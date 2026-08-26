@@ -21,6 +21,7 @@ public final class PetTests {
         variantUnlocking();
         fusionStars();
         starAbilityScaling();
+        ascensionTracks();
 
         System.out.println();
         System.out.println("Passed: " + passed + "   Failed: " + failed);
@@ -164,6 +165,16 @@ public final class PetTests {
         eq("stars change a scaling ability", base.equals(boosted), false);
         eq("bonus resets after the call", PetAbilities.value("reaper", 100), base);
         eq("tier bonus not persisted", PetAbilities.tier(100), 20);
+    }
+
+    private static void ascensionTracks() {
+        eq("warrior pet", Ascension.track("tiger"), Ascension.Track.WARRIOR);
+        eq("guardian pet", Ascension.track("turtle"), Ascension.Track.GUARDIAN);
+        eq("gatherer pet", Ascension.track("woodpecker"), Ascension.Track.GATHERER);
+        eq("runner pet", Ascension.track("kangaroo"), Ascension.Track.RUNNER);
+        eq("aquatic pet", Ascension.track("water_serpent"), Ascension.Track.AQUATIC);
+        eq("mystic pet", Ascension.track("owl"), Ascension.Track.MYSTIC);
+        eq("unknown defaults to mystic", Ascension.track("does_not_exist"), Ascension.Track.MYSTIC);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

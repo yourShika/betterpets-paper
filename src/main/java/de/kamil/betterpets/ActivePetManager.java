@@ -920,6 +920,71 @@ public final class ActivePetManager {
         return storage.data(player.getUniqueId()).activePet().map(OwnedPet::stars).orElse(0);
     }
 
+    /** The active pet's ascension track, or null if the player has no active pet. */
+    public Ascension.Track activeTrack(final Player player) {
+        return storage.data(player.getUniqueId()).activePet().map(pet -> Ascension.track(pet.definitionId())).orElse(null);
+    }
+
+    /** Applies the periodic ascension-track buffs (Runner/Mystic/Aquatic) for a starred active pet. */
+    private void applyAscensionTrackBuffs(final Player player, final OwnedPet pet) {
+        final int stars = pet.stars();
+        if (stars <= 0) {
+            return;
+        }
+        switch (Ascension.track(pet.definitionId())) {
+            case RUNNER -> {
+                if (stars >= 3) {
+                    applyPetBuff(player, PotionEffectType.SPEED, 0);
+                }
+            }
+            case MYSTIC -> {
+                applyPetBuff(player, PotionEffectType.LUCK, Math.min(2, (stars - 1) / 2));
+                if (stars >= 4) {
+                    applyPetBuff(player, PotionEffectType.REGENERATION, 0);
+                }
+            }
+            case AQUATIC -> {
+                if (stars >= 3) {
+                    applyPetBuff(player, PotionEffectType.WATER_BREATHING, 0);
+                    applyPetBuff(player, PotionEffectType.DOLPHINS_GRACE, 0);
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    /** Gatherer track: a starred gatherer pet has a per-star chance to double a broken block's drops. */
+    public void handleGathererBonus(final Player player, final Block block) {
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null || pet.stars() <= 0 || Ascension.track(pet.definitionId()) != Ascension.Track.GATHERER) {
+            return;
+        }
+        if (ThreadLocalRandom.current().nextDouble() >= pet.stars() * 0.06) {
+            return;
+        }
+        final Location loc = block.getLocation().add(0.5, 0.5, 0.5);
+        for (final ItemStack drop : block.getDrops(player.getInventory().getItemInMainHand(), player)) {
+            loc.getWorld().dropItemNaturally(loc, drop);
+        }
+    }
+
+    /** Aquatic track: a starred aquatic pet has a per-star chance to double a fishing catch. */
+    public void handleAquaticFishBonus(final org.bukkit.event.player.PlayerFishEvent event) {
+        if (event.getState() != org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_FISH
+            || !(event.getCaught() instanceof Item caught)) {
+            return;
+        }
+        final Player player = event.getPlayer();
+        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
+        if (pet == null || pet.stars() <= 0 || Ascension.track(pet.definitionId()) != Ascension.Track.AQUATIC) {
+            return;
+        }
+        if (ThreadLocalRandom.current().nextDouble() < pet.stars() * 0.08) {
+            player.getWorld().dropItemNaturally(player.getLocation(), caught.getItemStack().clone());
+        }
+    }
+
     /** The active Goblin's level, or 0 if the player has no active Goblin. */
     public int goblinLevel(final Player player) {
         final OwnedPet pet = activePet(player).orElse(null);
@@ -3016,6 +3081,7 @@ public final class ActivePetManager {
         if (behavior != null) {
             behavior.run(ctx(player, pet));
         }
+        applyAscensionTrackBuffs(player, pet);
     }
 
     private int abilityTier(final int level) {

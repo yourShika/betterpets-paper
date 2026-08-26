@@ -824,11 +824,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final Player player = damagingPlayer(event.getDamager());
         if (player != null) {
             activePets.applyHitAbility(player, victim);
-            // Universal ascension perk: every star adds +2% outgoing damage, so even pets whose ability
-            // does not scale (e.g. Woodpecker) still benefit at ★5.
+            // Warrior-track ascension: +3% outgoing damage per star.
             final int stars = activePets.activeStars(player);
-            if (stars > 0) {
-                event.setDamage(event.getDamage() * (1.0 + stars * 0.02));
+            if (stars > 0 && activePets.activeTrack(player) == Ascension.Track.WARRIOR) {
+                event.setDamage(event.getDamage() * (1.0 + stars * 0.03));
             }
         }
         if (event.getEntity() instanceof Player damagedPlayer) {
@@ -932,6 +931,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (event.getCause() == EntityDamageEvent.DamageCause.VOID) {
             return;
         }
+        // Ascension: Guardian pets soften all incoming damage; Runner pets soften fall damage.
+        final int defenseStars = activePets.activeStars(player);
+        if (defenseStars > 0) {
+            final Ascension.Track track = activePets.activeTrack(player);
+            if (track == Ascension.Track.GUARDIAN) {
+                event.setDamage(event.getDamage() * Math.max(0.5, 1.0 - defenseStars * 0.03));
+            } else if (track == Ascension.Track.RUNNER && event.getCause() == EntityDamageEvent.DamageCause.FALL) {
+                event.setDamage(event.getDamage() * Math.max(0.0, 1.0 - defenseStars * 0.18));
+            }
+        }
         // Absorption soaks damage before health does, so a hit fully covered by absorption is not lethal
         // and must not trigger (and waste) the Phoenix revive.
         if (player.getHealth() + player.getAbsorptionAmount() - event.getFinalDamage() > 0.0) {
@@ -954,6 +963,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.handleWoodpecker(event.getPlayer(), event.getBlock());
         activePets.handleBadgerVein(event.getPlayer(), event.getBlock());
         activePets.handleScarecrow(event.getPlayer(), event.getBlock());
+        activePets.handleGathererBonus(event.getPlayer(), event.getBlock());
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -1506,6 +1516,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerFish(final PlayerFishEvent event) {
         activePets.handleWaterSerpentFish(event);
+        activePets.handleAquaticFishBonus(event);
         if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH || !petSourceEnabled("fishing")) {
             return;
         }
@@ -2955,9 +2966,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ));
         }
 
+        final Ascension.Track ascTrack = Ascension.track(definition.id());
         inventory.setItem(8, itemFactory.control(Material.NETHER_STAR,
             Component.text("★ Ascension", NamedTextColor.GOLD),
-            List.of(Component.text("Ability at level 100:", NamedTextColor.DARK_GRAY),
+            List.of(Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(ascTrack.display(), NamedTextColor.AQUA)),
+                Component.text(ascTrack.perk(), NamedTextColor.GRAY),
+                Component.empty(),
+                Component.text("Ability at level 100:", NamedTextColor.DARK_GRAY),
                 Component.text("☆☆☆☆☆ ", NamedTextColor.GRAY).append(Component.text(PetAbilities.value(definition.id(), 100, 0), NamedTextColor.YELLOW)),
                 Component.text("★★★★★ ", NamedTextColor.WHITE).append(Component.text(PetAbilities.value(definition.id(), 100, OwnedPet.MAX_STARS), NamedTextColor.GOLD)),
                 Component.empty(),
@@ -3393,6 +3408,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         for (int i = 0; i < inventory.getSize(); i++) {
             inventory.setItem(i, ((i + i / 9) % 2 == 0) ? black : purple);
         }
+        final Ascension.Track track = Ascension.track(definition.id());
         inventory.setItem(13, itemFactory.menuItem(definition, pet, pet.uuid().equals(data.activePetId())));
         final int[] slots = {28, 29, 30, 31, 32};
         for (int n = 1; n <= OwnedPet.MAX_STARS; n++) {
@@ -3403,7 +3419,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 List.of(
                     reached ? Component.text("✔ Reached", NamedTextColor.GREEN) : Component.text("Locked", NamedTextColor.GRAY),
                     Component.text("Ability: ", NamedTextColor.GRAY).append(Component.text(PetAbilities.value(definition.id(), pet.level(), n), NamedTextColor.YELLOW)),
-                    Component.text("Combat: +" + (n * 2) + "% damage", NamedTextColor.GRAY),
+                    Component.text(track.display() + " perk active", NamedTextColor.AQUA),
                     Component.text("Leveling: +" + (n * 10) + "% pet XP", NamedTextColor.GRAY)));
             if (pet.stars() == n) {
                 node.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
@@ -3416,10 +3432,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         inventory.setItem(4, itemFactory.control(Material.NETHER_STAR,
             Texts.gradient("★ Ascension", net.kyori.adventure.text.format.TextColor.color(0xFFD54F), net.kyori.adventure.text.format.TextColor.color(0xFFFFFF)),
             List.of(
+                Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
+                Component.text(track.perk(), NamedTextColor.WHITE),
+                Component.empty(),
                 Component.text("Current: ", NamedTextColor.GRAY).append(Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars()),
                     pet.stars() >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD)),
                 Component.text(progress, NamedTextColor.GRAY),
                 Component.empty(),
+                Component.text("Each star also strengthens this pet's ability & +10% XP.", NamedTextColor.DARK_GRAY),
                 Component.text("Scrap duplicates of this pet to ascend it.", NamedTextColor.GRAY))));
         inventory.setItem(49, itemFactory.control(Material.BARRIER,
             Component.text("Back", NamedTextColor.RED), List.of(Component.text("Return to Customize.", NamedTextColor.GRAY))));
