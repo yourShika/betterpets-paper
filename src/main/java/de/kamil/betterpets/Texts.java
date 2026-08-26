@@ -31,6 +31,21 @@ public final class Texts {
         return builder.build().decoration(TextDecoration.ITALIC, false);
     }
 
+    /** A per-character rainbow across {@code text}, non-italic. */
+    public static Component rainbow(final String text) {
+        if (text == null || text.isEmpty()) {
+            return Component.empty();
+        }
+        final int length = text.length();
+        final TextComponent.Builder builder = Component.text();
+        for (int i = 0; i < length; i++) {
+            final float hue = (float) i / Math.max(1, length);
+            final int rgb = java.awt.Color.HSBtoRGB(hue, 0.85F, 1.0F) & 0xFFFFFF;
+            builder.append(Component.text(text.charAt(i)).color(TextColor.color(rgb)));
+        }
+        return builder.build().decoration(TextDecoration.ITALIC, false);
+    }
+
     /** A bold gold-gradient GUI/menu title. */
     public static Component menuTitle(final String text) {
         return gradient(text, TITLE_FROM, TITLE_TO).decorate(TextDecoration.BOLD);

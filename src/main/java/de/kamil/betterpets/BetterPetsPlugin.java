@@ -3188,16 +3188,25 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final Material material;
         if (category.equals("particle")) {
             final Cosmetics.ParticleColor pc = Cosmetics.particleColor(id);
-            material = shopDye(id);
-            name = Component.text(pc == null ? id : pc.display(), NamedTextColor.AQUA);
+            if (pc != null && pc.kind() == Cosmetics.ParticleColor.Kind.RAINBOW) {
+                material = Material.NETHER_STAR;
+                name = Texts.rainbow(pc.display());
+            } else if (pc != null && pc.kind() == Cosmetics.ParticleColor.Kind.TRANSITION) {
+                material = Material.FIREWORK_STAR;
+                name = Component.text(pc.display(), NamedTextColor.AQUA);
+            } else {
+                material = shopDye(id);
+                name = Component.text(pc == null ? id : pc.display(), NamedTextColor.AQUA);
+            }
         } else if (category.equals("trail")) {
             final Cosmetics.Trail t = Cosmetics.trail(id);
             material = Material.FIREWORK_STAR;
             name = Component.text(t == null ? id : t.display(), NamedTextColor.LIGHT_PURPLE);
         } else {
             final Cosmetics.NametagStyle ns = Cosmetics.nametagStyle(id);
-            material = Material.NAME_TAG;
-            name = ns == null ? Component.text(id) : Texts.gradient(ns.display(), ns.from(), ns.to());
+            material = ns != null && ns.rainbow() ? Material.NETHER_STAR : Material.NAME_TAG;
+            name = ns == null ? Component.text(id)
+                : ns.rainbow() ? Texts.rainbow(ns.display()) : Texts.gradient(ns.display(), ns.from(), ns.to());
         }
         final List<Component> lore = new ArrayList<>();
         if (owned) {
@@ -3215,18 +3224,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private Material shopDye(final String colorId) {
         return switch (colorId) {
-            case "red" -> Material.RED_DYE;
-            case "orange" -> Material.ORANGE_DYE;
-            case "yellow" -> Material.YELLOW_DYE;
-            case "lime" -> Material.LIME_DYE;
+            case "red", "crimson" -> Material.RED_DYE;
+            case "orange", "amber" -> Material.ORANGE_DYE;
+            case "yellow", "gold" -> Material.YELLOW_DYE;
+            case "lime", "mint", "emerald" -> Material.LIME_DYE;
             case "green" -> Material.GREEN_DYE;
-            case "aqua" -> Material.CYAN_DYE;
+            case "aqua", "teal" -> Material.CYAN_DYE;
+            case "cyan", "sky" -> Material.LIGHT_BLUE_DYE;
             case "blue" -> Material.BLUE_DYE;
-            case "purple" -> Material.PURPLE_DYE;
+            case "purple", "indigo", "violet" -> Material.PURPLE_DYE;
             case "magenta" -> Material.MAGENTA_DYE;
-            case "pink" -> Material.PINK_DYE;
+            case "pink", "rose" -> Material.PINK_DYE;
+            case "brown" -> Material.BROWN_DYE;
+            case "gray" -> Material.GRAY_DYE;
             case "black" -> Material.BLACK_DYE;
-            default -> Material.WHITE_DYE;
+            case "white" -> Material.WHITE_DYE;
+            default -> Material.GLOWSTONE_DUST;
         };
     }
 

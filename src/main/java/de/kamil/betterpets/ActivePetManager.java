@@ -1413,7 +1413,14 @@ public final class ActivePetManager {
         // A bought aura colour overrides the pet's default ambient particle.
         final Cosmetics.ParticleColor aura = Cosmetics.particleColor(pet.particleColor());
         if (aura != null) {
-            world.spawnParticle(Particle.DUST, loc, 6, 0.25, 0.3, 0.25, 0.0, new Particle.DustOptions(aura.color(), 1.1F));
+            switch (aura.kind()) {
+                case TRANSITION -> world.spawnParticle(Particle.DUST_COLOR_TRANSITION, loc, 6, 0.25, 0.3, 0.25, 0.0,
+                    new Particle.DustTransition(aura.from(), aura.to(), 1.1F));
+                case RAINBOW -> world.spawnParticle(Particle.DUST, loc, 6, 0.25, 0.3, 0.25, 0.0,
+                    new Particle.DustOptions(Cosmetics.hueColor((tick % 100L) / 100.0F), 1.1F));
+                default -> world.spawnParticle(Particle.DUST, loc, 6, 0.25, 0.3, 0.25, 0.0,
+                    new Particle.DustOptions(aura.from(), 1.1F));
+            }
             return;
         }
         switch (pet.definitionId()) {
@@ -1615,9 +1622,9 @@ public final class ActivePetManager {
     private Component petNickname(final PetDefinition definition, final OwnedPet pet) {
         final String name = pet.hasCustomName() ? pet.customName() : definition.name();
         final Cosmetics.NametagStyle style = Cosmetics.nametagStyle(pet.nametagStyle());
-        final Component namePart = style != null
-            ? Texts.gradient(name, style.from(), style.to())
-            : Component.text(name, definition.rarityColor()).decoration(TextDecoration.ITALIC, false);
+        final Component namePart = style == null
+            ? Component.text(name, definition.rarityColor()).decoration(TextDecoration.ITALIC, false)
+            : style.rainbow() ? Texts.rainbow(name) : Texts.gradient(name, style.from(), style.to());
         return Component.text("[Lvl " + pet.level() + "] ", definition.rarityColor())
             .decoration(TextDecoration.ITALIC, false)
             .append(namePart)

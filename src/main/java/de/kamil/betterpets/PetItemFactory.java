@@ -355,9 +355,9 @@ public final class PetItemFactory {
     private Component title(final PetDefinition definition, final OwnedPet pet) {
         final String name = pet != null && pet.hasCustomName() ? pet.customName() : definition.name();
         final Cosmetics.NametagStyle style = pet == null ? null : Cosmetics.nametagStyle(pet.nametagStyle());
-        final Component namePart = style != null
-            ? Texts.gradient(name, style.from(), style.to())
-            : Component.text(name, definition.rarityColor()).decoration(TextDecoration.ITALIC, false);
+        final Component namePart = style == null
+            ? Component.text(name, definition.rarityColor()).decoration(TextDecoration.ITALIC, false)
+            : style.rainbow() ? Texts.rainbow(name) : Texts.gradient(name, style.from(), style.to());
         return Component.text("[Lvl " + (pet == null ? 1 : pet.level()) + "] ", definition.rarityColor())
             .decoration(TextDecoration.ITALIC, false)
             .append(namePart)
