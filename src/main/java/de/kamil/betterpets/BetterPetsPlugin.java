@@ -2948,16 +2948,17 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final List<Component> starLore = new ArrayList<>();
-        starLore.add(Component.text("Fuse duplicates of this pet:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
-        starLore.add(Component.text("1 duplicate = 1 star (max ★5).", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.text("Every star strengthens THIS pet's", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.text("own ability — not a generic bonus:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
         starLore.add(Component.empty());
-        for (int s = 1; s <= OwnedPet.MAX_STARS; s++) {
-            final NamedTextColor color = s >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD;
-            starLore.add(Component.text("★".repeat(s), color)
-                .append(Component.text("  +" + s + " ability tier" + (s == 1 ? "" : "s") + ", +" + (s * 10) + "% pet XP"
-                    + (s >= OwnedPet.MAX_STARS ? " (white star)" : ""), NamedTextColor.GRAY))
-                .decoration(TextDecoration.ITALIC, false));
-        }
+        starLore.add(Component.text("Ability at level 100:", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.text("☆☆☆☆☆ ", NamedTextColor.GRAY)
+            .append(Component.text(PetAbilities.value(definition.id(), 100, 0), NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.text("★★★★★ ", NamedTextColor.WHITE)
+            .append(Component.text(PetAbilities.value(definition.id(), 100, OwnedPet.MAX_STARS), NamedTextColor.GOLD)).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.empty());
+        starLore.add(Component.text("Each star: +1 ability tier & +10% pet XP.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.text("Fuse duplicates: 1 = 1 star, ★5 (white) at 5.", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
         inventory.setItem(8, itemFactory.control(Material.NETHER_STAR,
             Component.text("★ Ascension", NamedTextColor.GOLD), starLore));
 

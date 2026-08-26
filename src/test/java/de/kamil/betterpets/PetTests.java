@@ -20,6 +20,7 @@ public final class PetTests {
         textureVariants();
         variantUnlocking();
         fusionStars();
+        starAbilityScaling();
 
         System.out.println();
         System.out.println("Passed: " + passed + "   Failed: " + failed);
@@ -155,6 +156,14 @@ public final class PetTests {
         eq("addPoint at max = no star", pet.addFusionPoint(), false);
         eq("still 5 stars", pet.stars(), 5);
         eq("points capped at 5", pet.fusionPoints(), 5);
+    }
+
+    private static void starAbilityScaling() {
+        final String base = PetAbilities.value("reaper", 100, 0);
+        final String boosted = PetAbilities.value("reaper", 100, 5);
+        eq("stars change a scaling ability", base.equals(boosted), false);
+        eq("bonus resets after the call", PetAbilities.value("reaper", 100), base);
+        eq("tier bonus not persisted", PetAbilities.tier(100), 20);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

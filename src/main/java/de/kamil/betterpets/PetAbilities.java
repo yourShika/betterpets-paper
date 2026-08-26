@@ -24,12 +24,21 @@ public final class PetAbilities {
 
     private static final IntFunction<List<String>> NONE = level -> List.of();
     private static final Map<String, Info> REGISTRY = build();
+    // Temporary tier bonus (ascension stars) applied while computing a catalogue value with stars.
+    private static final ThreadLocal<Integer> STAR_TIER_BONUS = ThreadLocal.withInitial(() -> 0);
 
     private PetAbilities() {
     }
 
-    /** Ability tier (1..20) for a pet level. Single source of truth for all pet scaling. */
+    /**
+     * Ability tier for a pet level (1..20), plus any active ascension-star bonus. This is the single
+     * source of truth for all pet scaling, so every ability grows with the pet's stars automatically.
+     */
     public static int tier(final int level) {
+        return baseTier(level) + STAR_TIER_BONUS.get();
+    }
+
+    private static int baseTier(final int level) {
         final int capped = Math.max(1, Math.min(100, level));
         if (capped <= 7) {
             return 1;
@@ -65,6 +74,16 @@ public final class PetAbilities {
     public static String value(final String id, final int level) {
         final Info info = REGISTRY.get(id);
         return info == null ? "Scales with its listed milestones" : info.value().apply(level);
+    }
+
+    /** The value string computed as if the pet had {@code starTierBonus} extra ability tiers (for the catalogue). */
+    public static String value(final String id, final int level, final int starTierBonus) {
+        STAR_TIER_BONUS.set(Math.max(0, starTierBonus));
+        try {
+            return value(id, level);
+        } finally {
+            STAR_TIER_BONUS.set(0);
+        }
     }
 
     public static List<String> milestones(final String id, final int level) {
