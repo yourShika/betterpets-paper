@@ -278,6 +278,13 @@ public final class PetItemFactory {
             lore.add(Component.text("Progress", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.text("Level: ", NamedTextColor.GRAY).append(Component.text(pet.level() + " / 100", NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
             lore.add(Component.text("EXP: ", NamedTextColor.GRAY).append(Component.text(pet.level() >= 100 ? "MAXED" : pet.exp() + " / " + pet.nextLevelExp(), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
+            final Component starLine = Component.text("Stars: ", NamedTextColor.GRAY)
+                .append(pet.stars() >= OwnedPet.MAX_STARS
+                    ? Component.text("★★★★★ MAX", NamedTextColor.WHITE)
+                    : Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars())
+                        + "  " + pet.fusionPoints() + " / " + pet.pointsForNextStar(), NamedTextColor.GOLD))
+                .decoration(TextDecoration.ITALIC, false);
+            lore.add(starLine);
             lore.add(Component.empty());
             lore.add(Component.text(active ? "Currently active" : "Click to summon", active ? NamedTextColor.GREEN : NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
         } else {
@@ -347,8 +354,20 @@ public final class PetItemFactory {
 
     private Component title(final PetDefinition definition, final OwnedPet pet) {
         final String name = pet != null && pet.hasCustomName() ? pet.customName() : definition.name();
-        return Component.text("[Lvl " + (pet == null ? 1 : pet.level()) + "] " + name, definition.rarityColor())
+        Component title = Component.text("[Lvl " + (pet == null ? 1 : pet.level()) + "] " + name, definition.rarityColor())
             .decoration(TextDecoration.ITALIC, false);
+        title = title.append(starSuffix(pet));
+        return title;
+    }
+
+    /** The ★ star suffix for an ascended pet: gold for ★1-4, white at max (★5), empty when unascended. */
+    public Component starSuffix(final OwnedPet pet) {
+        final int stars = pet == null ? 0 : pet.stars();
+        if (stars <= 0) {
+            return Component.empty();
+        }
+        final NamedTextColor color = stars >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD;
+        return Component.text(" " + "★".repeat(stars), color).decoration(TextDecoration.ITALIC, false);
     }
 
     private static String formatPercent(final double value) {

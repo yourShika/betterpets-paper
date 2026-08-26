@@ -1588,7 +1588,8 @@ public final class ActivePetManager {
     private Component petNickname(final PetDefinition definition, final OwnedPet pet) {
         final String name = pet.hasCustomName() ? pet.customName() : definition.name();
         return Component.text("[Lvl " + pet.level() + "] " + name, definition.rarityColor())
-            .decoration(TextDecoration.ITALIC, false);
+            .decoration(TextDecoration.ITALIC, false)
+            .append(itemFactory.starSuffix(pet));
     }
 
     private void applyPeriodicAbilities(final Player player, final OwnedPet pet) {
@@ -2582,7 +2583,10 @@ public final class ActivePetManager {
 
     private AbilityCtx ctx(final Player player, final OwnedPet pet) {
         final int level = pet.level();
-        return new AbilityCtx(player, pet, level, PetAbilities.tier(level));
+        // Each ascension star adds a bonus ability tier, so the pet's abilities grow stronger even at max
+        // level. Formulas with Math.min caps naturally keep this from getting out of hand.
+        final int tier = PetAbilities.tier(level) + pet.stars();
+        return new AbilityCtx(player, pet, level, tier);
     }
 
     /**

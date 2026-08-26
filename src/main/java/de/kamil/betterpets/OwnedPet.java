@@ -18,7 +18,13 @@ public final class OwnedPet {
     private String customName;
     private String variant;
     private boolean particlesEnabled = true;
+    // Ascension: fusion points accumulated from same-pet duplicates, which drive the ★ star tier (0..5).
+    private int fusionPoints;
     private ItemStack[] storageContents;
+
+    /** Cumulative fusion points required for each star (index = star). ★5 is the cap. */
+    private static final int[] STAR_THRESHOLDS = {0, 1, 3, 6, 10, 15};
+    public static final int MAX_STARS = 5;
 
     public OwnedPet(final UUID uuid, final String definitionId, final int level, final int exp, final int nextLevelExp, final long lastTotemMillis) {
         this(uuid, definitionId, level, exp, nextLevelExp, lastTotemMillis, new ItemStack[STORAGE_SIZE]);
@@ -93,6 +99,38 @@ public final class OwnedPet {
     /** Sets the active (worn) cosmetic variant. Unlocking is tracked per-player in PlayerPetData. */
     public void setVariant(final String variant) {
         this.variant = variant == null || variant.isBlank() ? null : variant.toLowerCase(Locale.ROOT);
+    }
+
+    /** The pet's star tier (0..5), derived from accumulated fusion points. */
+    public int stars() {
+        int stars = 0;
+        for (int s = 1; s <= MAX_STARS; s++) {
+            if (fusionPoints >= STAR_THRESHOLDS[s]) {
+                stars = s;
+            }
+        }
+        return stars;
+    }
+
+    public int fusionPoints() {
+        return fusionPoints;
+    }
+
+    public void setFusionPoints(final int points) {
+        this.fusionPoints = Math.max(0, Math.min(STAR_THRESHOLDS[MAX_STARS], points));
+    }
+
+    /** Adds one fusion point (from a same-pet duplicate). Returns true if a new star was reached. */
+    public boolean addFusionPoint() {
+        final int before = stars();
+        setFusionPoints(fusionPoints + 1);
+        return stars() > before;
+    }
+
+    /** Total fusion points needed for the next star, or -1 when already at ★5. */
+    public int pointsForNextStar() {
+        final int stars = stars();
+        return stars >= MAX_STARS ? -1 : STAR_THRESHOLDS[stars + 1];
     }
 
     public boolean particlesEnabled() {

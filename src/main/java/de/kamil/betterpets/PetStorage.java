@@ -81,6 +81,7 @@ public final class PetStorage {
                             owned.setCustomName(pet.getString("name", null));
                             owned.setVariant(pet.getString("variant", null));
                             owned.setParticlesEnabled(pet.getBoolean("particles", true));
+                            owned.setFusionPoints(pet.getInt("fusion-points", 0));
                             data.pets().add(owned);
                             // Migrate legacy per-pet unlocked variants into the per-player collection.
                             for (final String legacy : pet.getStringList("unlocked-variants")) {
@@ -169,6 +170,7 @@ public final class PetStorage {
                 config.set(petPath + ".name", pet.hasCustomName() ? pet.customName() : null);
                 config.set(petPath + ".variant", pet.variant());
                 config.set(petPath + ".particles", pet.particlesEnabled() ? null : false);
+                config.set(petPath + ".fusion-points", pet.fusionPoints() == 0 ? null : pet.fusionPoints());
                 config.set(petPath + ".storage-bytes", Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(serializableStorageContents(pet))));
                 config.set(petPath + ".storage", null);
             }

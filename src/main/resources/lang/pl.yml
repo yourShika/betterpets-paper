@@ -114,3 +114,8 @@ customize:
   already: "<gray>Masz juz skin </gray><aqua>%variant%</aqua><gray>.</gray>"
   locked: "<red>Ten skin jest zablokowany. Znajdz i rozloz jeden, aby go odblokowac.</red>"
   applied: "<green>Zmieniono skin na </green><aqua>%variant%</aqua><green>.</green>"
+
+fusion:
+  star-up: "<gold>✦ Twoj </gold><yellow>%pet%</yellow><gold> awansowal na </gold><white><bold>%stars%</bold></white><gold>!</gold>"
+  star-up-multi: "<gold>✦ Awans: </gold><yellow>%pets%</yellow><gold>!</gold>"
+  progress: "<gray>Fuzja %pet%: </gray><aqua>%points%/%next%</aqua><gray> do nastepnej gwiazdki ✦</gray>"

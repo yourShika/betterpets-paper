@@ -114,3 +114,8 @@ customize:
   already: "<gray>Du besitzt den </gray><aqua>%variant%</aqua><gray>-Skin bereits.</gray>"
   locked: "<red>Dieser Skin ist gesperrt. Finde und verwerte einen, um ihn freizuschalten.</red>"
   applied: "<green>Skin gewechselt zu </green><aqua>%variant%</aqua><green>.</green>"
+
+fusion:
+  star-up: "<gold>✦ Dein </gold><yellow>%pet%</yellow><gold> ist auf </gold><white><bold>%stars%</bold></white><gold> aufgestiegen!</gold>"
+  star-up-multi: "<gold>✦ Aufgestiegen: </gold><yellow>%pets%</yellow><gold>!</gold>"
+  progress: "<gray>%pet%-Fusion: </gray><aqua>%points%/%next%</aqua><gray> bis zum nächsten Stern ✦</gray>"

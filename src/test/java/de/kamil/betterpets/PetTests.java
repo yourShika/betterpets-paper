@@ -19,6 +19,7 @@ public final class PetTests {
         versionCompare();
         textureVariants();
         variantUnlocking();
+        fusionStars();
 
         System.out.println();
         System.out.println("Passed: " + passed + "   Failed: " + failed);
@@ -137,6 +138,24 @@ public final class PetTests {
         data.unlockVariant("axolotl", "gold");
         eq("axolotl unlocked count is 2", data.unlockedVariants("axolotl").size(), 2);
         eq("unknown pet has none", data.unlockedVariants("griffin").size(), 0);
+    }
+
+    private static void fusionStars() {
+        final OwnedPet pet = OwnedPet.create("axolotl", 1);
+        eq("no stars initially", pet.stars(), 0);
+        eq("next star at 1 point", pet.pointsForNextStar(), 1);
+        eq("first point -> star up", pet.addFusionPoint(), true);
+        eq("now 1 star", pet.stars(), 1);
+        eq("next star at 3 points", pet.pointsForNextStar(), 3);
+        eq("2nd point no star yet", pet.addFusionPoint(), false);
+        eq("3rd point -> star 2", pet.addFusionPoint(), true);
+        eq("now 2 stars", pet.stars(), 2);
+        pet.setFusionPoints(15);
+        eq("15 points = 5 stars", pet.stars(), 5);
+        eq("no next star at max", pet.pointsForNextStar(), -1);
+        eq("addPoint at max = no star", pet.addFusionPoint(), false);
+        eq("still 5 stars", pet.stars(), 5);
+        eq("points capped at 15", pet.fusionPoints(), 15);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

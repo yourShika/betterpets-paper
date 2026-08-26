@@ -794,7 +794,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             // writes the whole storage file on every single XP gain.
             // An active Pet XP Booster multiplies only the pet's gained XP (never the player's own XP).
             final PlayerPetData boosterData = storage.data(player.getUniqueId());
-            final int effectiveAmount = boosterData.hasActiveBooster() ? amount * boosterData.boosterTier() : amount;
+            int effectiveAmount = boosterData.hasActiveBooster() ? amount * boosterData.boosterTier() : amount;
+            // Each ascension star speeds up leveling by +10% XP gained.
+            if (pet.stars() > 0) {
+                effectiveAmount = (int) Math.round(effectiveAmount * (1.0 + pet.stars() * 0.10));
+            }
             final boolean leveled = pet.addExp(effectiveAmount, petXpMultiplier());
             if (leveled) {
                 activePets.refreshDisplay(player);
@@ -1949,6 +1953,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             int count = 0;
             int gained = 0;
             final java.util.LinkedHashSet<String> unlocked = new java.util.LinkedHashSet<>();
+            final java.util.LinkedHashSet<String> starUps = new java.util.LinkedHashSet<>();
             final ItemStack[] contents = player.getInventory().getStorageContents();
             for (int i = 0; i < contents.length; i++) {
                 final ItemStack item = contents[i];
@@ -1959,6 +1964,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 final String unlockedName = tryUnlockScrappedVariant(data, item);
                 if (unlockedName != null) {
                     unlocked.add(unlockedName);
+                }
+                final String itemPetId = itemFactory.petId(item).orElse(null);
+                if (fuseDuplicates(data, itemPetId, item.getAmount())) {
+                    definitions.get(itemPetId).ifPresent(def -> starUps.add(def.name()));
                 }
                 gained += value * item.getAmount();
                 count += item.getAmount();
@@ -1976,6 +1985,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             if (!unlocked.isEmpty()) {
                 player.sendMessage(lang.component("customize.unlocked", "%variant%", String.join(", ", unlocked)));
             }
+            if (!starUps.isEmpty()) {
+                activePets.refreshDisplay(player);
+                player.sendMessage(lang.component("fusion.star-up-multi", "%pets%", String.join(", ", starUps)));
+            }
             return;
         }
 
@@ -1988,6 +2001,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final int gained = value * held.getAmount();
         final String name = itemFactory.petId(held).flatMap(definitions::get).map(PetDefinition::name).orElse("pet");
         final Component unlockMessage = scrapUnlockMessage(data, held);
+        final Component fusionMessage = fusionMessage(player, data, held, held.getAmount());
         player.getInventory().setItemInMainHand(null);
         data.addTokens(gained);
         requestSave();
@@ -1996,6 +2010,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             "%pet%", name, "%tokens%", Integer.toString(gained), "%total%", Integer.toString(data.tokens())));
         if (unlockMessage != null) {
             player.sendMessage(unlockMessage);
+        }
+        if (fusionMessage != null) {
+            player.sendMessage(fusionMessage);
         }
     }
 
@@ -2019,6 +2036,55 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final boolean isNew = data.unlockVariant(petId, variant);
         debug("Scrap: " + petId + " variant " + variant + " -> " + (isNew ? "unlocked" : "already owned"));
         return lang.component(isNew ? "customize.unlocked" : "customize.already", "%variant%", display);
+    }
+
+    /** Adds {@code count} fusion points to the player's owned pet of that type. Returns true if a star was gained. */
+    private boolean fuseDuplicates(final PlayerPetData data, final String petId, final int count) {
+        if (petId == null || count <= 0) {
+            return false;
+        }
+        final OwnedPet owned = data.pets().stream().filter(pet -> pet.definitionId().equals(petId)).findFirst().orElse(null);
+        if (owned == null) {
+            return false;
+        }
+        boolean starUp = false;
+        for (int i = 0; i < count; i++) {
+            if (owned.addFusionPoint()) {
+                starUp = true;
+            }
+        }
+        return starUp;
+    }
+
+    /** Applies fusion for a single scrapped stack and returns the star-up or progress message (or null). */
+    private Component fusionMessage(final Player player, final PlayerPetData data, final ItemStack item, final int count) {
+        final String petId = itemFactory.petId(item).orElse(null);
+        if (petId == null) {
+            return null;
+        }
+        final OwnedPet owned = data.pets().stream().filter(pet -> pet.definitionId().equals(petId)).findFirst().orElse(null);
+        if (owned == null) {
+            return null;
+        }
+        boolean starUp = false;
+        for (int i = 0; i < Math.max(1, count); i++) {
+            if (owned.addFusionPoint()) {
+                starUp = true;
+            }
+        }
+        final String name = definitions.get(petId).map(PetDefinition::name).orElse(petId);
+        if (owned.uuid().equals(data.activePetId())) {
+            activePets.refreshDisplay(player);
+        }
+        if (starUp) {
+            player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0F, 1.2F);
+            return lang.component("fusion.star-up", "%pet%", name, "%stars%", "★".repeat(owned.stars()));
+        }
+        if (owned.pointsForNextStar() > 0) {
+            return lang.component("fusion.progress", "%pet%", name,
+                "%points%", Integer.toString(owned.fusionPoints()), "%next%", Integer.toString(owned.pointsForNextStar()));
+        }
+        return null;
     }
 
     /** Unlocks the scrapped item's variant for the player (regardless of ownership); returns the display name if new. */

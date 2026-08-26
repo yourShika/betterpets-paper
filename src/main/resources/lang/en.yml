@@ -124,3 +124,8 @@ customize:
   already: "<gray>You already own the </gray><aqua>%variant%</aqua><gray> skin.</gray>"
   locked: "<red>That skin is locked. Find and scrap one to unlock it.</red>"
   applied: "<green>Skin changed to </green><aqua>%variant%</aqua><green>.</green>"
+
+fusion:
+  star-up: "<gold>✦ Your </gold><yellow>%pet%</yellow><gold> ascended to </gold><white><bold>%stars%</bold></white><gold>!</gold>"
+  star-up-multi: "<gold>✦ Ascended: </gold><yellow>%pets%</yellow><gold>!</gold>"
+  progress: "<gray>%pet% fusion: </gray><aqua>%points%/%next%</aqua><gray> to the next star ✦</gray>"
