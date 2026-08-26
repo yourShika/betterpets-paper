@@ -26,8 +26,8 @@ public final class OwnedPet {
     private int fusionPoints;
     private ItemStack[] storageContents;
 
-    /** Cumulative fusion points required for each star (index = star). ★5 is the cap. */
-    private static final int[] STAR_THRESHOLDS = {0, 1, 3, 6, 10, 15};
+    /** Cumulative fusion points (duplicates) required for each star: 1 per star, ★5 at 5. */
+    private static final int[] STAR_THRESHOLDS = {0, 1, 2, 3, 4, 5};
     public static final int MAX_STARS = 5;
 
     public OwnedPet(final UUID uuid, final String definitionId, final int level, final int exp, final int nextLevelExp, final long lastTotemMillis) {

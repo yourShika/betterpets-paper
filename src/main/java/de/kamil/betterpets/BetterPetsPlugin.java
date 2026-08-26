@@ -2947,6 +2947,20 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ));
         }
 
+        final List<Component> starLore = new ArrayList<>();
+        starLore.add(Component.text("Fuse duplicates of this pet:", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.text("1 duplicate = 1 star (max ★5).", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false));
+        starLore.add(Component.empty());
+        for (int s = 1; s <= OwnedPet.MAX_STARS; s++) {
+            final NamedTextColor color = s >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD;
+            starLore.add(Component.text("★".repeat(s), color)
+                .append(Component.text("  +" + s + " ability tier" + (s == 1 ? "" : "s") + ", +" + (s * 10) + "% pet XP"
+                    + (s >= OwnedPet.MAX_STARS ? " (white star)" : ""), NamedTextColor.GRAY))
+                .decoration(TextDecoration.ITALIC, false));
+        }
+        inventory.setItem(8, itemFactory.control(Material.NETHER_STAR,
+            Component.text("★ Ascension", NamedTextColor.GOLD), starLore));
+
         if (definition.hasVariants()) {
             inventory.setItem(45, itemFactory.control(
                 Material.ITEM_FRAME,
@@ -3361,6 +3375,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private static final int CUSTOMIZE_PER_PAGE = 36;
 
+    private void fillCustomizeBorder(final Inventory inventory) {
+        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        for (int i = 0; i < 9; i++) {
+            inventory.setItem(i, filler);
+        }
+        for (int i = 45; i < 54; i++) {
+            inventory.setItem(i, filler);
+        }
+    }
+
     private void renderCustomizeMenu(final Inventory inventory, final CustomizeMenuHolder holder, final Player player) {
         inventory.clear();
         final PlayerPetData data = storage.data(player.getUniqueId());
@@ -3380,22 +3404,23 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (pet.variant() != null) {
             data.unlockVariant(pet.definitionId(), pet.variant());
         }
+        fillCustomizeBorder(inventory);
         inventory.setItem(4, itemFactory.menuItem(definition, pet, pet.uuid().equals(data.activePetId())));
         inventory.setItem(0, itemFactory.control(
             pet.particlesEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
-            Component.text("Particles: " + (pet.particlesEnabled() ? "ON" : "OFF"), pet.particlesEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY),
-            List.of(Component.text("Click to toggle this pet's ambient particles.", NamedTextColor.GRAY))));
-        inventory.setItem(1, itemFactory.control(shopDye(pet.particleColor() == null ? "aqua" : pet.particleColor()),
+            Component.text("Particles: " + (pet.particlesEnabled() ? "ON" : "OFF"), pet.particlesEnabled() ? NamedTextColor.GREEN : NamedTextColor.RED),
+            List.of(Component.text("Toggle this pet's ambient particles.", NamedTextColor.GRAY))));
+        inventory.setItem(2, itemFactory.control(shopDye(pet.particleColor() == null ? "aqua" : pet.particleColor()),
             Component.text("Particle Colour", NamedTextColor.AQUA),
-            List.of(Component.text("Current: " + cosmeticDisplay(Cosmetics.CAT_PARTICLE, pet.particleColor()), NamedTextColor.GRAY),
+            List.of(Component.text("Current: ", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_PARTICLE, pet.particleColor()), NamedTextColor.WHITE)),
                 Component.text("Click to choose an aura colour.", NamedTextColor.YELLOW))));
-        inventory.setItem(2, itemFactory.control(Material.FIREWORK_STAR,
+        inventory.setItem(6, itemFactory.control(Material.FIREWORK_STAR,
             Component.text("Trail", NamedTextColor.LIGHT_PURPLE),
-            List.of(Component.text("Current: " + cosmeticDisplay(Cosmetics.CAT_TRAIL, pet.trail()), NamedTextColor.GRAY),
+            List.of(Component.text("Current: ", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_TRAIL, pet.trail()), NamedTextColor.WHITE)),
                 Component.text("Click to choose a movement trail.", NamedTextColor.YELLOW))));
-        inventory.setItem(3, itemFactory.control(Material.NAME_TAG,
+        inventory.setItem(8, itemFactory.control(Material.NAME_TAG,
             Component.text("Nametag Style", NamedTextColor.YELLOW),
-            List.of(Component.text("Current: " + cosmeticDisplay(Cosmetics.CAT_NAMETAG, pet.nametagStyle()), NamedTextColor.GRAY),
+            List.of(Component.text("Current: ", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_NAMETAG, pet.nametagStyle()), NamedTextColor.WHITE)),
                 Component.text("Click to choose a name colour.", NamedTextColor.YELLOW))));
 
         final List<String> keys = new ArrayList<>(definition.variants().keySet());
@@ -3463,6 +3488,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "trail" -> pet.trail();
             default -> pet.nametagStyle();
         };
+        fillCustomizeBorder(inventory);
+        final String title = category.equals("particle") ? "Particle Colour" : category.equals("trail") ? "Trail" : "Nametag Style";
+        inventory.setItem(4, itemFactory.control(
+            category.equals("particle") ? Material.BLAZE_POWDER : category.equals("trail") ? Material.FIREWORK_STAR : Material.NAME_TAG,
+            Component.text("Choose: " + title, NamedTextColor.AQUA),
+            List.of(Component.text("Owned options are selectable;", NamedTextColor.GRAY),
+                Component.text("locked ones are in /pets shop.", NamedTextColor.GRAY))));
         inventory.setItem(0, itemFactory.control(current == null ? Material.LIME_DYE : Material.GRAY_DYE,
             Component.text("None (default)", current == null ? NamedTextColor.GREEN : NamedTextColor.GRAY),
             List.of(Component.text("Click to clear this cosmetic.", NamedTextColor.GRAY))));
@@ -3531,8 +3563,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
             return;
         }
-        if (slot == 1 || slot == 2 || slot == 3) {
-            holder.setSection(slot == 1 ? "particle" : slot == 2 ? "trail" : "nametag");
+        if (slot == 2 || slot == 6 || slot == 8) {
+            holder.setSection(slot == 2 ? "particle" : slot == 6 ? "trail" : "nametag");
             holder.setPage(0);
             renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
             return;
