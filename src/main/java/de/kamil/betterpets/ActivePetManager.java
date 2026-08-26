@@ -915,6 +915,11 @@ public final class ActivePetManager {
         return ThreadLocalRandom.current().nextDouble() < chance;
     }
 
+    /** The active pet's ascension stars (0..5), or 0 if the player has no active pet. */
+    public int activeStars(final Player player) {
+        return storage.data(player.getUniqueId()).activePet().map(OwnedPet::stars).orElse(0);
+    }
+
     /** The active Goblin's level, or 0 if the player has no active Goblin. */
     public int goblinLevel(final Player player) {
         final OwnedPet pet = activePet(player).orElse(null);

@@ -128,6 +128,29 @@ final class CustomizeMenuHolder implements InventoryHolder {
     }
 }
 
+/** The galactic Ascension view for one owned pet: current stars, progress and per-star ability. */
+final class AscensionMenuHolder implements InventoryHolder {
+    private final java.util.UUID petUuid;
+    private Inventory inventory;
+
+    AscensionMenuHolder(final java.util.UUID petUuid) {
+        this.petUuid = petUuid;
+    }
+
+    java.util.UUID petUuid() {
+        return petUuid;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
 /** The token cosmetics shop, replacing the old slot machine. Category = main/particle/trail/nametag/booster. */
 final class ShopMenuHolder implements InventoryHolder {
     private String category;
