@@ -326,6 +326,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handleVariantClick(event, variantHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof CustomizeMenuHolder customizeHolder) {
                 handleCustomizeClick(event, customizeHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof ShopMenuHolder shopHolder) {
+                handleShopClick(event, shopHolder);
             }
             return;
         }
@@ -960,7 +962,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (holder instanceof PetMenuHolder || holder instanceof ChanceMenuHolder || holder instanceof NotifyMenuHolder
             || holder instanceof XpMenuHolder || holder instanceof ModulesMenuHolder || holder instanceof InfoMenuHolder || holder instanceof PetDetailMenuHolder
             || holder instanceof AlpacaStorageHolder || holder instanceof SlotMenuHolder || holder instanceof SlotConfigMenuHolder
-            || holder instanceof VariantMenuHolder || holder instanceof CustomizeMenuHolder) {
+            || holder instanceof VariantMenuHolder || holder instanceof CustomizeMenuHolder
+            || holder instanceof ShopMenuHolder) {
             return;
         }
         if (event.getSlotType() == InventoryType.SlotType.ARMOR) {
@@ -3064,6 +3067,273 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    // ===== Cosmetics Shop (replaces the slot machine) ==========================================
+
+    private static final int SHOP_PER_PAGE = 36;
+
+    private int shopPrice(final String key, final int def) {
+        return Math.max(1, getConfig().getInt("shop.price." + key, def));
+    }
+
+    public void openShopMenu(final Player player, final String category, final int page) {
+        if (!tokensEnabled()) {
+            player.sendMessage(message("tokens.disabled"));
+            return;
+        }
+        final ShopMenuHolder holder = new ShopMenuHolder(category, Math.max(0, page));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Pet Shop"));
+        holder.setInventory(inventory);
+        renderShopMenu(inventory, holder, player);
+        player.openInventory(inventory);
+    }
+
+    private void renderShopMenu(final Inventory inventory, final ShopMenuHolder holder, final Player player) {
+        inventory.clear();
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        inventory.setItem(4, itemFactory.control(Material.GOLD_INGOT,
+            Component.text("Tokens: " + data.tokens(), NamedTextColor.GOLD),
+            List.of(Component.text("Earn tokens by scrapping duplicate pets.", NamedTextColor.GRAY))));
+
+        switch (holder.category()) {
+            case "particle" -> renderShopList(inventory, holder, player, "particle");
+            case "trail" -> renderShopList(inventory, holder, player, "trail");
+            case "nametag" -> renderShopList(inventory, holder, player, "nametag");
+            case "booster" -> renderShopBoosters(inventory);
+            default -> {
+                inventory.setItem(20, itemFactory.control(shopDye("aqua"),
+                    Component.text("Particle Colours", NamedTextColor.AQUA),
+                    List.of(Component.text("Auras your pets can wear.", NamedTextColor.GRAY),
+                        Component.text(shopPrice("particle", 10) + " tokens each", NamedTextColor.GOLD))));
+                inventory.setItem(22, itemFactory.control(Material.FIREWORK_STAR,
+                    Component.text("Trails", NamedTextColor.LIGHT_PURPLE),
+                    List.of(Component.text("Particle trails as your pet moves.", NamedTextColor.GRAY),
+                        Component.text(shopPrice("trail", 15) + " tokens each", NamedTextColor.GOLD))));
+                inventory.setItem(24, itemFactory.control(Material.NAME_TAG,
+                    Component.text("Nametag Styles", NamedTextColor.YELLOW),
+                    List.of(Component.text("Coloured gradients for pet names.", NamedTextColor.GRAY),
+                        Component.text(shopPrice("nametag", 20) + " tokens each", NamedTextColor.GOLD))));
+                inventory.setItem(30, itemFactory.control(Material.EXPERIENCE_BOTTLE,
+                    Component.text("XP Boosters", NamedTextColor.GREEN),
+                    List.of(Component.text("Speed up your pet's leveling.", NamedTextColor.GRAY))));
+                inventory.setItem(32, itemFactory.control(Material.PLAYER_HEAD,
+                    Component.text("Pet Skins", NamedTextColor.DARK_AQUA),
+                    List.of(Component.text("Buy skins directly in a pet's", NamedTextColor.GRAY),
+                        Component.text("Customize menu (sneak + right-click).", NamedTextColor.GRAY))));
+            }
+        }
+        if (!holder.category().equals("main")) {
+            inventory.setItem(45, itemFactory.control(Material.ARROW,
+                Component.text("Back", NamedTextColor.YELLOW), List.of(Component.text("Return to the shop.", NamedTextColor.GRAY))));
+            final int pages = shopPageCount(holder.category());
+            if (holder.page() > 0) {
+                inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW,
+                    Component.text("Previous Page", NamedTextColor.YELLOW),
+                    List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+            }
+            if (holder.page() + 1 < pages) {
+                inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW,
+                    Component.text("Next Page", NamedTextColor.YELLOW),
+                    List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+            }
+        }
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+    }
+
+    private int shopPageCount(final String category) {
+        final int size = switch (category) {
+            case "particle" -> Cosmetics.particleColors().size();
+            case "trail" -> Cosmetics.trails().size();
+            case "nametag" -> Cosmetics.nametagStyles().size();
+            default -> 0;
+        };
+        return Math.max(1, (size + SHOP_PER_PAGE - 1) / SHOP_PER_PAGE);
+    }
+
+    private List<String> shopIds(final String category) {
+        return switch (category) {
+            case "particle" -> new ArrayList<>(Cosmetics.particleColors().keySet());
+            case "trail" -> new ArrayList<>(Cosmetics.trails().keySet());
+            case "nametag" -> new ArrayList<>(Cosmetics.nametagStyles().keySet());
+            default -> List.of();
+        };
+    }
+
+    private void renderShopList(final Inventory inventory, final ShopMenuHolder holder, final Player player, final String category) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final List<String> ids = shopIds(category);
+        final int price = shopPrice(category, category.equals("particle") ? 10 : category.equals("trail") ? 15 : 20);
+        final int start = holder.page() * SHOP_PER_PAGE;
+        for (int i = 0; i < SHOP_PER_PAGE && start + i < ids.size(); i++) {
+            final String id = ids.get(start + i);
+            final boolean owned = data.hasCosmetic(category, id);
+            inventory.setItem(9 + i, shopIcon(category, id, price, owned));
+        }
+    }
+
+    private void renderShopBoosters(final Inventory inventory) {
+        final int[] tiers = {2, 3, 4, 5};
+        final int[] slots = {19, 21, 23, 25};
+        for (int i = 0; i < tiers.length; i++) {
+            final int tier = tiers[i];
+            final int price = shopPrice("booster-x" + tier, 15 * (tier - 1));
+            inventory.setItem(slots[i], itemFactory.control(Material.EXPERIENCE_BOTTLE,
+                Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE),
+                List.of(Component.text("Duration: " + getConfig().getInt("shop.booster-minutes", 30) + "m", NamedTextColor.GRAY),
+                    Component.text("Click to buy: " + price + " tokens", NamedTextColor.GOLD))));
+        }
+    }
+
+    private ItemStack shopIcon(final String category, final String id, final int price, final boolean owned) {
+        final Component name;
+        final Material material;
+        if (category.equals("particle")) {
+            final Cosmetics.ParticleColor pc = Cosmetics.particleColor(id);
+            material = shopDye(id);
+            name = Component.text(pc == null ? id : pc.display(), NamedTextColor.AQUA);
+        } else if (category.equals("trail")) {
+            final Cosmetics.Trail t = Cosmetics.trail(id);
+            material = Material.FIREWORK_STAR;
+            name = Component.text(t == null ? id : t.display(), NamedTextColor.LIGHT_PURPLE);
+        } else {
+            final Cosmetics.NametagStyle ns = Cosmetics.nametagStyle(id);
+            material = Material.NAME_TAG;
+            name = ns == null ? Component.text(id) : Texts.gradient(ns.display(), ns.from(), ns.to());
+        }
+        final List<Component> lore = new ArrayList<>();
+        if (owned) {
+            lore.add(Component.text("✔ Owned", NamedTextColor.GREEN));
+            lore.add(Component.text("Select it in a pet's Customize menu.", NamedTextColor.GRAY));
+        } else {
+            lore.add(Component.text("Click to buy: " + price + " tokens", NamedTextColor.GOLD));
+        }
+        final ItemStack icon = itemFactory.control(material, name, lore);
+        if (owned) {
+            icon.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
+        }
+        return icon;
+    }
+
+    private Material shopDye(final String colorId) {
+        return switch (colorId) {
+            case "red" -> Material.RED_DYE;
+            case "orange" -> Material.ORANGE_DYE;
+            case "yellow" -> Material.YELLOW_DYE;
+            case "lime" -> Material.LIME_DYE;
+            case "green" -> Material.GREEN_DYE;
+            case "aqua" -> Material.CYAN_DYE;
+            case "blue" -> Material.BLUE_DYE;
+            case "purple" -> Material.PURPLE_DYE;
+            case "magenta" -> Material.MAGENTA_DYE;
+            case "pink" -> Material.PINK_DYE;
+            case "black" -> Material.BLACK_DYE;
+            default -> Material.WHITE_DYE;
+        };
+    }
+
+    private void handleShopClick(final InventoryClickEvent event, final ShopMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        final int slot = event.getRawSlot();
+        if (slot == 49) {
+            player.closeInventory();
+            return;
+        }
+        if (holder.category().equals("main")) {
+            final String target = switch (slot) {
+                case 20 -> "particle";
+                case 22 -> "trail";
+                case 24 -> "nametag";
+                case 30 -> "booster";
+                default -> null;
+            };
+            if (target != null) {
+                holder.setCategory(target);
+                holder.setPage(0);
+                renderShopMenu(event.getView().getTopInventory(), holder, player);
+            }
+            return;
+        }
+        if (slot == 45) {
+            holder.setCategory("main");
+            holder.setPage(0);
+            renderShopMenu(event.getView().getTopInventory(), holder, player);
+            return;
+        }
+        if (slot == 48 || slot == 50) {
+            final int pages = shopPageCount(holder.category());
+            final int targetPage = slot == 48 ? holder.page() - 1 : holder.page() + 1;
+            if (targetPage >= 0 && targetPage < pages) {
+                holder.setPage(targetPage);
+                renderShopMenu(event.getView().getTopInventory(), holder, player);
+            }
+            return;
+        }
+        if (holder.category().equals("booster")) {
+            final int idx = switch (slot) {
+                case 19 -> 0;
+                case 21 -> 1;
+                case 23 -> 2;
+                case 25 -> 3;
+                default -> -1;
+            };
+            if (idx >= 0) {
+                buyBooster(player, idx + 2);
+                renderShopMenu(event.getView().getTopInventory(), holder, player);
+            }
+            return;
+        }
+        if (slot >= 9 && slot < 45) {
+            final List<String> ids = shopIds(holder.category());
+            final int idx = holder.page() * SHOP_PER_PAGE + (slot - 9);
+            if (idx >= 0 && idx < ids.size()) {
+                buyCosmetic(player, holder.category(), ids.get(idx));
+                renderShopMenu(event.getView().getTopInventory(), holder, player);
+            }
+        }
+    }
+
+    private void buyCosmetic(final Player player, final String category, final String id) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final String display = switch (category) {
+            case "particle" -> Cosmetics.particleColor(id) != null ? Cosmetics.particleColor(id).display() : id;
+            case "trail" -> Cosmetics.trail(id) != null ? Cosmetics.trail(id).display() : id;
+            case "nametag" -> Cosmetics.nametagStyle(id) != null ? Cosmetics.nametagStyle(id).display() : id;
+            default -> id;
+        };
+        if (data.hasCosmetic(category, id)) {
+            player.sendMessage(lang.component("shop.already-owned", "%item%", display));
+            return;
+        }
+        final int price = shopPrice(category, category.equals("particle") ? 10 : category.equals("trail") ? 15 : 20);
+        if (data.tokens() < price) {
+            player.sendMessage(lang.component("shop.not-enough", "%price%", Integer.toString(price), "%total%", Integer.toString(data.tokens())));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
+            return;
+        }
+        data.setTokens(data.tokens() - price);
+        data.unlockCosmetic(category, id);
+        requestSave();
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.4F);
+        player.sendMessage(lang.component("shop.bought", "%item%", display, "%price%", Integer.toString(price)));
+    }
+
+    private void buyBooster(final Player player, final int tier) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final int price = shopPrice("booster-x" + tier, 15 * (tier - 1));
+        if (data.tokens() < price) {
+            player.sendMessage(lang.component("shop.not-enough", "%price%", Integer.toString(price), "%total%", Integer.toString(data.tokens())));
+            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
+            return;
+        }
+        data.setTokens(data.tokens() - price);
+        requestSave();
+        giveOrDrop(player, itemFactory.boosterItem(tier, getConfig().getInt("shop.booster-minutes", 30)));
+        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.4F);
+        player.sendMessage(lang.component("shop.bought", "%item%", "XP Booster x" + tier, "%price%", Integer.toString(price)));
+    }
+
     private void openCustomizeMenu(final Player player, final OwnedPet pet) {
         final PetDefinition definition = definitions.get(pet.definitionId()).orElse(null);
         if (definition == null) {
@@ -3089,6 +3359,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null) {
             return;
         }
+        if (!holder.section().equals("main")) {
+            renderCosmeticPicker(inventory, holder, player, pet, holder.section());
+            return;
+        }
         // Safety: the currently-worn skin is always part of the player's unlocked collection.
         if (pet.variant() != null) {
             data.unlockVariant(pet.definitionId(), pet.variant());
@@ -3098,12 +3372,25 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             pet.particlesEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
             Component.text("Particles: " + (pet.particlesEnabled() ? "ON" : "OFF"), pet.particlesEnabled() ? NamedTextColor.GREEN : NamedTextColor.GRAY),
             List.of(Component.text("Click to toggle this pet's ambient particles.", NamedTextColor.GRAY))));
+        inventory.setItem(1, itemFactory.control(shopDye(pet.particleColor() == null ? "aqua" : pet.particleColor()),
+            Component.text("Particle Colour", NamedTextColor.AQUA),
+            List.of(Component.text("Current: " + cosmeticDisplay(Cosmetics.CAT_PARTICLE, pet.particleColor()), NamedTextColor.GRAY),
+                Component.text("Click to choose an aura colour.", NamedTextColor.YELLOW))));
+        inventory.setItem(2, itemFactory.control(Material.FIREWORK_STAR,
+            Component.text("Trail", NamedTextColor.LIGHT_PURPLE),
+            List.of(Component.text("Current: " + cosmeticDisplay(Cosmetics.CAT_TRAIL, pet.trail()), NamedTextColor.GRAY),
+                Component.text("Click to choose a movement trail.", NamedTextColor.YELLOW))));
+        inventory.setItem(3, itemFactory.control(Material.NAME_TAG,
+            Component.text("Nametag Style", NamedTextColor.YELLOW),
+            List.of(Component.text("Current: " + cosmeticDisplay(Cosmetics.CAT_NAMETAG, pet.nametagStyle()), NamedTextColor.GRAY),
+                Component.text("Click to choose a name colour.", NamedTextColor.YELLOW))));
 
         final List<String> keys = new ArrayList<>(definition.variants().keySet());
         final int pages = Math.max(1, (keys.size() + CUSTOMIZE_PER_PAGE - 1) / CUSTOMIZE_PER_PAGE);
         if (holder.page() >= pages) {
             holder.setPage(pages - 1);
         }
+        final int skinPrice = shopPrice("skin", 12);
         final int start = holder.page() * CUSTOMIZE_PER_PAGE;
         for (int i = 0; i < CUSTOMIZE_PER_PAGE && start + i < keys.size(); i++) {
             final String key = keys.get(start + i);
@@ -3125,7 +3412,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             } else {
                 inventory.setItem(slot, itemFactory.control(Material.GRAY_STAINED_GLASS_PANE,
                     Component.text("Locked: " + PetDefinition.variantDisplay(key), NamedTextColor.DARK_GRAY),
-                    List.of(Component.text("Find and scrap this skin to unlock it.", NamedTextColor.GRAY))));
+                    List.of(Component.text("Find & scrap this skin, or", NamedTextColor.GRAY),
+                        Component.text("click to buy for " + skinPrice + " tokens.", NamedTextColor.GOLD))));
             }
         }
         if (holder.page() > 0) {
@@ -3136,6 +3424,65 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (holder.page() + 1 < pages) {
             inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW,
                 Component.text("Next Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+        }
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+    }
+
+    private String cosmeticDisplay(final String category, final String id) {
+        if (id == null) {
+            return "None";
+        }
+        return switch (category) {
+            case "particle" -> Cosmetics.particleColor(id) != null ? Cosmetics.particleColor(id).display() : id;
+            case "trail" -> Cosmetics.trail(id) != null ? Cosmetics.trail(id).display() : id;
+            case "nametag" -> Cosmetics.nametagStyle(id) != null ? Cosmetics.nametagStyle(id).display() : id;
+            default -> id;
+        };
+    }
+
+    /** Renders a per-pet cosmetic picker (particle / trail / nametag) showing owned selectable and locked options. */
+    private void renderCosmeticPicker(final Inventory inventory, final CustomizeMenuHolder holder, final Player player,
+                                      final OwnedPet pet, final String category) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final String current = switch (category) {
+            case "particle" -> pet.particleColor();
+            case "trail" -> pet.trail();
+            default -> pet.nametagStyle();
+        };
+        inventory.setItem(0, itemFactory.control(current == null ? Material.LIME_DYE : Material.GRAY_DYE,
+            Component.text("None (default)", current == null ? NamedTextColor.GREEN : NamedTextColor.GRAY),
+            List.of(Component.text("Click to clear this cosmetic.", NamedTextColor.GRAY))));
+        final List<String> ids = shopIds(category);
+        final int start = holder.page() * CUSTOMIZE_PER_PAGE;
+        for (int i = 0; i < CUSTOMIZE_PER_PAGE && start + i < ids.size(); i++) {
+            final String id = ids.get(start + i);
+            final int slot = 9 + i;
+            final boolean owned = data.hasCosmetic(category, id);
+            if (owned) {
+                final boolean active = id.equalsIgnoreCase(current);
+                final ItemStack icon = shopIcon(category, id, 0, true);
+                icon.editMeta(meta -> {
+                    meta.setEnchantmentGlintOverride(active);
+                    meta.lore(List.of((active ? Component.text("✓ Selected", NamedTextColor.GREEN)
+                        : Component.text("Click to apply.", NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false)));
+                });
+                inventory.setItem(slot, icon);
+            } else {
+                inventory.setItem(slot, itemFactory.control(Material.GRAY_STAINED_GLASS_PANE,
+                    Component.text("Locked: " + cosmeticDisplay(category, id), NamedTextColor.DARK_GRAY),
+                    List.of(Component.text("Buy it in /pets shop.", NamedTextColor.GRAY))));
+            }
+        }
+        inventory.setItem(45, itemFactory.control(Material.ARROW,
+            Component.text("Back", NamedTextColor.YELLOW), List.of(Component.text("Return to Customize.", NamedTextColor.GRAY))));
+        final int pages = Math.max(1, (ids.size() + CUSTOMIZE_PER_PAGE - 1) / CUSTOMIZE_PER_PAGE);
+        if (holder.page() > 0) {
+            inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW, Component.text("Previous Page", NamedTextColor.YELLOW),
+                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+        }
+        if (holder.page() + 1 < pages) {
+            inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW, Component.text("Next Page", NamedTextColor.YELLOW),
                 List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
         }
         inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
@@ -3157,14 +3504,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final int slot = event.getRawSlot();
+        if (slot == 49) {
+            player.closeInventory();
+            return;
+        }
+        if (!holder.section().equals("main")) {
+            handleCosmeticPickerClick(event, holder, player, pet, holder.section());
+            return;
+        }
         if (slot == 0) {
             pet.setParticlesEnabled(!pet.particlesEnabled());
             requestSave();
             renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
             return;
         }
-        if (slot == 49) {
-            player.closeInventory();
+        if (slot == 1 || slot == 2 || slot == 3) {
+            holder.setSection(slot == 1 ? "particle" : slot == 2 ? "trail" : "nametag");
+            holder.setPage(0);
+            renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
             return;
         }
         if (slot == 48 || slot == 50) {
@@ -3184,9 +3541,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
             final String key = keys.get(idx);
             if (!data.isVariantUnlocked(pet.definitionId(), key)) {
-                player.sendMessage(message("customize.locked"));
-                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
-                return;
+                // Buy the locked skin with tokens.
+                final int skinPrice = shopPrice("skin", 12);
+                if (!tokensEnabled() || data.tokens() < skinPrice) {
+                    player.sendMessage(lang.component("shop.not-enough", "%price%", Integer.toString(skinPrice), "%total%", Integer.toString(data.tokens())));
+                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
+                    return;
+                }
+                data.setTokens(data.tokens() - skinPrice);
+                data.unlockVariant(pet.definitionId(), key);
+                player.sendMessage(lang.component("shop.bought", "%item%", PetDefinition.variantDisplay(key) + " " + definition.name(), "%price%", Integer.toString(skinPrice)));
             }
             pet.setVariant(key);
             requestSave();
@@ -3197,6 +3561,59 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             player.sendMessage(message("customize.applied").replaceText(builder -> builder.matchLiteral("%variant%").replacement(PetDefinition.variantDisplay(key))));
             renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
         }
+    }
+
+    private void handleCosmeticPickerClick(final InventoryClickEvent event, final CustomizeMenuHolder holder, final Player player,
+                                           final OwnedPet pet, final String category) {
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        final int slot = event.getRawSlot();
+        if (slot == 45) {
+            holder.setSection("main");
+            holder.setPage(0);
+            renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
+            return;
+        }
+        final List<String> ids = shopIds(category);
+        if (slot == 48 || slot == 50) {
+            final int pages = Math.max(1, (ids.size() + CUSTOMIZE_PER_PAGE - 1) / CUSTOMIZE_PER_PAGE);
+            final int target = slot == 48 ? holder.page() - 1 : holder.page() + 1;
+            if (target >= 0 && target < pages) {
+                holder.setPage(target);
+                renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
+            }
+            return;
+        }
+        String selected = null;
+        if (slot == 0) {
+            selected = null;
+        } else if (slot >= 9 && slot < 45) {
+            final int idx = (holder.page() * CUSTOMIZE_PER_PAGE) + (slot - 9);
+            if (idx < 0 || idx >= ids.size()) {
+                return;
+            }
+            final String id = ids.get(idx);
+            if (!data.hasCosmetic(category, id)) {
+                player.sendMessage(message("customize.locked"));
+                player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
+                return;
+            }
+            selected = id;
+        } else {
+            return;
+        }
+        switch (category) {
+            case "particle" -> pet.setParticleColor(selected);
+            case "trail" -> pet.setTrail(selected);
+            case "nametag" -> pet.setNametagStyle(selected);
+            default -> {
+            }
+        }
+        requestSave();
+        if (pet.uuid().equals(data.activePetId())) {
+            activePets.refreshDisplay(player);
+        }
+        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.7F, 1.2F);
+        renderCustomizeMenu(event.getView().getTopInventory(), holder, player);
     }
 
     private void openChanceMenu(final Player player) {
@@ -3759,7 +4176,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         sender.sendMessage(Component.text("Better Pets Commands", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
         helpLine(sender, "/pets", "Open your pet menu", NamedTextColor.GOLD);
         helpLine(sender, "/pets scrap [all]", "Turn held (or all) duplicate pets into tokens", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets slots", "Spend tokens in the pet slot machine", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets shop", "Spend tokens on skins, auras, trails and boosters", NamedTextColor.YELLOW);
         helpLine(sender, "/pets tokens", "Show your pet token balance", NamedTextColor.YELLOW);
         helpLine(sender, "/pets tokens pass <player> <amount>", "Send tokens to another player", NamedTextColor.YELLOW);
         helpLine(sender, "/pets visible | invisible", "Show or hide your active pet", NamedTextColor.YELLOW);
@@ -4099,8 +4516,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 plugin.handleScrap(player, args);
                 return;
             }
-            if (args.length > 0 && (args[0].equalsIgnoreCase("slots") || args[0].equalsIgnoreCase("slot"))) {
-                plugin.openSlotMenu(player);
+            if (args.length > 0 && (args[0].equalsIgnoreCase("shop")
+                || args[0].equalsIgnoreCase("slots") || args[0].equalsIgnoreCase("slot"))) {
+                plugin.openShopMenu(player, "main", 0);
                 return;
             }
 
@@ -4131,7 +4549,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 suggestions.add("invisible");
                 suggestions.add("tokens");
                 suggestions.add("scrap");
-                suggestions.add("slots");
+                suggestions.add("shop");
                 suggestions.add("set");
                 suggestions.add("restore");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {

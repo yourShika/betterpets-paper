@@ -962,6 +962,9 @@ public final class ActivePetManager {
             if (particles && ride == null && tick % 8L == 0L) {
                 spawnAmbientPetParticle(pet, active);
             }
+            if (particles && pet.trail() != null && tick % 4L == 0L) {
+                spawnPetTrail(pet, active);
+            }
             if (active.modelHandle() != null) {
                 updateModelAnimation(player, active);
             }
@@ -1407,6 +1410,12 @@ public final class ActivePetManager {
         if (world == null) {
             return;
         }
+        // A bought aura colour overrides the pet's default ambient particle.
+        final Cosmetics.ParticleColor aura = Cosmetics.particleColor(pet.particleColor());
+        if (aura != null) {
+            world.spawnParticle(Particle.DUST, loc, 6, 0.25, 0.3, 0.25, 0.0, new Particle.DustOptions(aura.color(), 1.1F));
+            return;
+        }
         switch (pet.definitionId()) {
             // Epic
             case "dolphin" -> world.spawnParticle(Particle.BUBBLE_POP, loc, 6, 0.25, 0.3, 0.25, 0.0);
@@ -1448,6 +1457,24 @@ public final class ActivePetManager {
             case "ancient_elf" -> world.spawnParticle(Particle.ENCHANT, loc, 6, 0.3, 0.35, 0.3, 0.0);
             // Every Epic-and-above pet without a bespoke effect above still gets a rarity aura.
             default -> spawnRarityAura(world, loc, pet);
+        }
+    }
+
+    /** Spawns the pet's chosen movement trail particle at its feet. */
+    private void spawnPetTrail(final OwnedPet pet, final ActivePet active) {
+        final Cosmetics.Trail trail = Cosmetics.trail(pet.trail());
+        if (trail == null || active.display().isDead()) {
+            return;
+        }
+        final Location loc = active.display().getLocation().clone().add(0, 0.2, 0);
+        final World world = loc.getWorld();
+        if (world == null) {
+            return;
+        }
+        if (trail.particle() == Particle.NOTE) {
+            world.spawnParticle(Particle.NOTE, loc.add(0, 0.3, 0), 1, 0.2, 0.2, 0.2, 1.0);
+        } else {
+            world.spawnParticle(trail.particle(), loc, 3, 0.15, 0.1, 0.15, 0.01);
         }
     }
 
@@ -1587,8 +1614,13 @@ public final class ActivePetManager {
 
     private Component petNickname(final PetDefinition definition, final OwnedPet pet) {
         final String name = pet.hasCustomName() ? pet.customName() : definition.name();
-        return Component.text("[Lvl " + pet.level() + "] " + name, definition.rarityColor())
+        final Cosmetics.NametagStyle style = Cosmetics.nametagStyle(pet.nametagStyle());
+        final Component namePart = style != null
+            ? Texts.gradient(name, style.from(), style.to())
+            : Component.text(name, definition.rarityColor()).decoration(TextDecoration.ITALIC, false);
+        return Component.text("[Lvl " + pet.level() + "] ", definition.rarityColor())
             .decoration(TextDecoration.ITALIC, false)
+            .append(namePart)
             .append(itemFactory.starSuffix(pet));
     }
 

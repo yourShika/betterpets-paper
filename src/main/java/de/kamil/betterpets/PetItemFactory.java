@@ -354,10 +354,14 @@ public final class PetItemFactory {
 
     private Component title(final PetDefinition definition, final OwnedPet pet) {
         final String name = pet != null && pet.hasCustomName() ? pet.customName() : definition.name();
-        Component title = Component.text("[Lvl " + (pet == null ? 1 : pet.level()) + "] " + name, definition.rarityColor())
-            .decoration(TextDecoration.ITALIC, false);
-        title = title.append(starSuffix(pet));
-        return title;
+        final Cosmetics.NametagStyle style = pet == null ? null : Cosmetics.nametagStyle(pet.nametagStyle());
+        final Component namePart = style != null
+            ? Texts.gradient(name, style.from(), style.to())
+            : Component.text(name, definition.rarityColor()).decoration(TextDecoration.ITALIC, false);
+        return Component.text("[Lvl " + (pet == null ? 1 : pet.level()) + "] ", definition.rarityColor())
+            .decoration(TextDecoration.ITALIC, false)
+            .append(namePart)
+            .append(starSuffix(pet));
     }
 
     /** The ★ star suffix for an ascended pet: gold for ★1-4, white at max (★5), empty when unascended. */

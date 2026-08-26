@@ -82,6 +82,9 @@ public final class PetStorage {
                             owned.setVariant(pet.getString("variant", null));
                             owned.setParticlesEnabled(pet.getBoolean("particles", true));
                             owned.setFusionPoints(pet.getInt("fusion-points", 0));
+                            owned.setParticleColor(pet.getString("particle-color", null));
+                            owned.setTrail(pet.getString("trail", null));
+                            owned.setNametagStyle(pet.getString("nametag-style", null));
                             data.pets().add(owned);
                             // Migrate legacy per-pet unlocked variants into the per-player collection.
                             for (final String legacy : pet.getStringList("unlocked-variants")) {
@@ -103,6 +106,15 @@ public final class PetStorage {
                     for (final String petId : unlocked.getKeys(false)) {
                         for (final String variant : unlocked.getStringList(petId)) {
                             data.unlockVariant(petId, variant);
+                        }
+                    }
+                }
+                // Per-player unlocked cosmetics (category -> list of ids).
+                final ConfigurationSection cosmetics = section.getConfigurationSection("cosmetics");
+                if (cosmetics != null) {
+                    for (final String category : cosmetics.getKeys(false)) {
+                        for (final String id : cosmetics.getStringList(category)) {
+                            data.unlockCosmetic(category, id);
                         }
                     }
                 }
@@ -159,6 +171,11 @@ public final class PetStorage {
                     config.set(base + ".unlocked-variants." + unlocked.getKey(), new java.util.ArrayList<>(unlocked.getValue()));
                 }
             }
+            for (final Map.Entry<String, java.util.Set<String>> cosmetic : data.unlockedCosmeticsByCategory().entrySet()) {
+                if (!cosmetic.getValue().isEmpty()) {
+                    config.set(base + ".cosmetics." + cosmetic.getKey(), new java.util.ArrayList<>(cosmetic.getValue()));
+                }
+            }
 
             for (final OwnedPet pet : data.pets()) {
                 final String petPath = base + ".pets." + pet.uuid();
@@ -171,6 +188,9 @@ public final class PetStorage {
                 config.set(petPath + ".variant", pet.variant());
                 config.set(petPath + ".particles", pet.particlesEnabled() ? null : false);
                 config.set(petPath + ".fusion-points", pet.fusionPoints() == 0 ? null : pet.fusionPoints());
+                config.set(petPath + ".particle-color", pet.particleColor());
+                config.set(petPath + ".trail", pet.trail());
+                config.set(petPath + ".nametag-style", pet.nametagStyle());
                 config.set(petPath + ".storage-bytes", Base64.getEncoder().encodeToString(ItemStack.serializeItemsAsBytes(serializableStorageContents(pet))));
                 config.set(petPath + ".storage", null);
             }

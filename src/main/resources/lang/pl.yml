@@ -119,3 +119,8 @@ fusion:
   star-up: "<gold>✦ Twoj </gold><yellow>%pet%</yellow><gold> awansowal na </gold><white><bold>%stars%</bold></white><gold>!</gold>"
   star-up-multi: "<gold>✦ Awans: </gold><yellow>%pets%</yellow><gold>!</gold>"
   progress: "<gray>Fuzja %pet%: </gray><aqua>%points%/%next%</aqua><gray> do nastepnej gwiazdki ✦</gray>"
+
+shop:
+  bought: "<green>Kupiono: </green><aqua>%item%</aqua><green> za </green><gold>%price% tokenow</gold><green>.</green>"
+  already-owned: "<gray>Masz juz </gray><aqua>%item%</aqua><gray>.</gray>"
+  not-enough: "<red>Za malo tokenow: potrzeba </red><gold>%price%</gold><red>, masz </red><gold>%total%</gold><red>.</red>"

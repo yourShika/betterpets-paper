@@ -18,6 +18,10 @@ public final class OwnedPet {
     private String customName;
     private String variant;
     private boolean particlesEnabled = true;
+    // Chosen cosmetics (ids from Cosmetics, null = default). Must be unlocked by the player to apply.
+    private String particleColor;
+    private String trail;
+    private String nametagStyle;
     // Ascension: fusion points accumulated from same-pet duplicates, which drive the ★ star tier (0..5).
     private int fusionPoints;
     private ItemStack[] storageContents;
@@ -139,6 +143,34 @@ public final class OwnedPet {
 
     public void setParticlesEnabled(final boolean particlesEnabled) {
         this.particlesEnabled = particlesEnabled;
+    }
+
+    public String particleColor() {
+        return particleColor;
+    }
+
+    public void setParticleColor(final String particleColor) {
+        this.particleColor = normalizeCosmetic(particleColor);
+    }
+
+    public String trail() {
+        return trail;
+    }
+
+    public void setTrail(final String trail) {
+        this.trail = normalizeCosmetic(trail);
+    }
+
+    public String nametagStyle() {
+        return nametagStyle;
+    }
+
+    public void setNametagStyle(final String nametagStyle) {
+        this.nametagStyle = normalizeCosmetic(nametagStyle);
+    }
+
+    private static String normalizeCosmetic(final String value) {
+        return value == null || value.isBlank() ? null : value.toLowerCase(Locale.ROOT);
     }
 
     public ItemStack[] storageContents() {

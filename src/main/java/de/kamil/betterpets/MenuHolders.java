@@ -85,10 +85,12 @@ final class PetDetailMenuHolder implements InventoryHolder {
     }
 }
 
-/** Right-click customization for one owned pet: particle toggle and skin variant picker. */
+/** Right-click customization for one owned pet: particle toggle, skin variant picker, and cosmetics. */
 final class CustomizeMenuHolder implements InventoryHolder {
     private final java.util.UUID petUuid;
     private int page;
+    // Which sub-view is shown: "main", "particle", "trail" or "nametag".
+    private String section = "main";
     private Inventory inventory;
 
     CustomizeMenuHolder(final java.util.UUID petUuid, final int page) {
@@ -98,6 +100,51 @@ final class CustomizeMenuHolder implements InventoryHolder {
 
     java.util.UUID petUuid() {
         return petUuid;
+    }
+
+    int page() {
+        return page;
+    }
+
+    void setPage(final int page) {
+        this.page = page;
+    }
+
+    String section() {
+        return section;
+    }
+
+    void setSection(final String section) {
+        this.section = section == null ? "main" : section;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
+/** The token cosmetics shop, replacing the old slot machine. Category = main/particle/trail/nametag/booster. */
+final class ShopMenuHolder implements InventoryHolder {
+    private String category;
+    private int page;
+    private Inventory inventory;
+
+    ShopMenuHolder(final String category, final int page) {
+        this.category = category == null ? "main" : category;
+        this.page = page;
+    }
+
+    String category() {
+        return category;
+    }
+
+    void setCategory(final String category) {
+        this.category = category == null ? "main" : category;
     }
 
     int page() {

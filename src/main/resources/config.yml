@@ -85,10 +85,24 @@ xp-booster:
   broadcast-activations: true
 
 
-# ═══ 4b) TOKENS & SLOT MACHINE ══════════════════════════════════════════════
-# Turn duplicate/unwanted pets into "pet tokens" (/pets scrap or /pets scrap all)
-# and gamble them in a slot machine (/pets slots) for materials or, very rarely,
-# another pet.
+# ═══ 4b) TOKENS & COSMETICS SHOP ════════════════════════════════════════════
+# Duplicate pets, when scrapped (/pets scrap), grant tokens + a fusion star + the
+# skin, all at once. Spend tokens in the cosmetics shop (/pets shop) on aura
+# colours, trails, nametag styles, skins and XP boosters.
+shop:
+  # Minutes of duration for XP boosters bought in the shop.
+  booster-minutes: 30
+  # Token prices. booster-xN defaults to 15*(N-1) if omitted.
+  price:
+    particle: 10
+    trail: 15
+    nametag: 20
+    skin: 12
+    booster-x2: 20
+    booster-x3: 35
+    booster-x4: 55
+    booster-x5: 80
+
 tokens:
   enabled: true
   # Tokens earned when a pet of each rarity is scrapped.
