@@ -3410,39 +3410,57 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final Ascension.Track track = Ascension.track(definition.id());
         inventory.setItem(13, itemFactory.menuItem(definition, pet, pet.uuid().equals(data.activePetId())));
-        final int[] slots = {28, 29, 30, 31, 32};
+        // Five star stages, centred in the row.
+        final int[] slots = {29, 30, 31, 32, 33};
         for (int n = 1; n <= OwnedPet.MAX_STARS; n++) {
             final boolean reached = pet.stars() >= n;
+            final boolean current = pet.stars() == n;
             final NamedTextColor titleColor = n >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : reached ? NamedTextColor.GOLD : NamedTextColor.DARK_GRAY;
+            final List<Component> lore = new ArrayList<>();
+            lore.add(current ? Component.text("● You are here", NamedTextColor.WHITE)
+                : reached ? Component.text("✔ Reached", NamedTextColor.GREEN)
+                : Component.text("Locked — needs " + n + " duplicate" + (n == 1 ? "" : "s") + " total", NamedTextColor.GRAY));
+            lore.add(Component.empty());
+            lore.add(Component.text("Bonus at this star:", NamedTextColor.DARK_GRAY));
+            lore.add(Component.text("• " + trackPerkAtStar(track, n), NamedTextColor.AQUA));
+            lore.add(Component.text("• +" + (n * 10) + "% pet XP", NamedTextColor.GRAY));
+            lore.add(Component.text("• Stronger ability (+" + n + " tier" + (n == 1 ? "" : "s") + ")", NamedTextColor.GRAY));
             final ItemStack node = itemFactory.control(reached ? Material.NETHER_STAR : Material.GRAY_STAINED_GLASS_PANE,
-                Component.text("★".repeat(n) + "☆".repeat(OwnedPet.MAX_STARS - n) + "  Star " + n, titleColor),
-                List.of(
-                    reached ? Component.text("✔ Reached", NamedTextColor.GREEN) : Component.text("Locked", NamedTextColor.GRAY),
-                    Component.text("Ability: ", NamedTextColor.GRAY).append(Component.text(PetAbilities.value(definition.id(), pet.level(), n), NamedTextColor.YELLOW)),
-                    Component.text(track.display() + " perk active", NamedTextColor.AQUA),
-                    Component.text("Leveling: +" + (n * 10) + "% pet XP", NamedTextColor.GRAY)));
-            if (pet.stars() == n) {
+                Component.text("★".repeat(n) + "☆".repeat(OwnedPet.MAX_STARS - n) + "  Star " + n, titleColor), lore);
+            if (current) {
                 node.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
             }
             inventory.setItem(slots[n - 1], node);
         }
         final String progress = pet.stars() >= OwnedPet.MAX_STARS
             ? "Fully ascended ★★★★★"
-            : pet.fusionPoints() + " / " + pet.pointsForNextStar() + " duplicates to the next star";
+            : "Scrap " + pet.pointsForNextStar() + " of this pet total for the next star (" + pet.fusionPoints() + " scrapped)";
         inventory.setItem(4, itemFactory.control(Material.NETHER_STAR,
             Texts.gradient("★ Ascension", net.kyori.adventure.text.format.TextColor.color(0xFFD54F), net.kyori.adventure.text.format.TextColor.color(0xFFFFFF)),
             List.of(
-                Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
-                Component.text(track.perk(), NamedTextColor.WHITE),
-                Component.empty(),
                 Component.text("Current: ", NamedTextColor.GRAY).append(Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars()),
                     pet.stars() >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD)),
                 Component.text(progress, NamedTextColor.GRAY),
                 Component.empty(),
-                Component.text("Each star also strengthens this pet's ability & +10% XP.", NamedTextColor.DARK_GRAY),
-                Component.text("Scrap duplicates of this pet to ascend it.", NamedTextColor.GRAY))));
+                Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
+                Component.text("Its ability now (★" + pet.stars() + "): ", NamedTextColor.GRAY)
+                    .append(Component.text(PetAbilities.value(definition.id(), pet.level(), pet.stars()), NamedTextColor.YELLOW)),
+                Component.empty(),
+                Component.text("Every star adds up — higher stars are stronger.", NamedTextColor.DARK_GRAY))));
         inventory.setItem(49, itemFactory.control(Material.BARRIER,
             Component.text("Back", NamedTextColor.RED), List.of(Component.text("Return to Customize.", NamedTextColor.GRAY))));
+    }
+
+    /** The concrete, cumulative track perk a pet has at a given star count — shown per stage node so the scaling is obvious. */
+    private String trackPerkAtStar(final Ascension.Track track, final int n) {
+        return switch (track) {
+            case WARRIOR -> "+" + (n * 3) + "% damage dealt";
+            case GUARDIAN -> "-" + (n * 3) + "% damage taken";
+            case GATHERER -> "+" + (n * 6) + "% double-drop chance";
+            case RUNNER -> "-" + Math.min(90, n * 18) + "% fall damage" + (n >= 3 ? " + Speed" : "");
+            case MYSTIC -> "Luck " + new String[]{"I", "II", "III"}[Math.min(2, (n - 1) / 2)] + (n >= 4 ? " + Regeneration" : "");
+            case AQUATIC -> "+" + (n * 8) + "% double catch" + (n >= 3 ? " + Water Breathing" : "");
+        };
     }
 
     private void handleAscensionClick(final InventoryClickEvent event, final AscensionMenuHolder holder) {
