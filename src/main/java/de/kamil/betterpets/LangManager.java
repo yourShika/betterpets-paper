@@ -81,6 +81,8 @@ public final class LangManager {
             return;
         }
         final YamlConfiguration current = YamlConfiguration.loadConfiguration(target);
+        final java.util.Set<String> validKeys = defaults.getKeys(true);
+        // Add any key the bundled copy has but the on-disk file is missing (never touches edited lines).
         int added = 0;
         for (final String key : defaults.getKeys(true)) {
             if (defaults.isConfigurationSection(key) || current.contains(key)) {
@@ -89,10 +91,24 @@ public final class LangManager {
             current.set(key, defaults.get(key));
             added++;
         }
-        if (added > 0) {
+        // Drop any key the on-disk file still has but the current version no longer ships (obsolete text).
+        // getKeys(true) lists parents before children, so removing an obsolete section also clears its
+        // children; the contains() guard then skips those already-gone child paths.
+        int removed = 0;
+        for (final String key : new java.util.ArrayList<>(current.getKeys(true))) {
+            if (validKeys.contains(key) || !current.contains(key)) {
+                continue;
+            }
+            final boolean wasLeaf = !current.isConfigurationSection(key);
+            current.set(key, null);
+            if (wasLeaf) {
+                removed++;
+            }
+        }
+        if (added > 0 || removed > 0) {
             try {
                 current.save(target);
-                plugin.getLogger().info("Merged " + added + " new message(s) into lang/" + code + ".yml.");
+                plugin.getLogger().info("Synced lang/" + code + ".yml: added " + added + " new, removed " + removed + " obsolete message(s).");
             } catch (final Exception exception) {
                 plugin.getLogger().warning("Could not update lang/" + code + ".yml: " + exception.getMessage());
             }

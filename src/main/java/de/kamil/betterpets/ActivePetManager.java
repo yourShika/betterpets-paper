@@ -1021,12 +1021,19 @@ public final class ActivePetManager {
             final boolean petVisible = data.visible();
             // Cosmetic particles obey the per-pet toggle from the Customize menu.
             final boolean particles = petVisible && pet.particlesEnabled();
+            // A bought aura colour REPLACES the pet's built-in signature particles (dragon flight/walk trail,
+            // unicorn glitter, per-pet ambient) rather than stacking on top of them.
+            final boolean customAura = Cosmetics.particleColor(pet.particleColor()) != null;
             if (particles && ride != null && tick % 4L == 0L) {
-                spawnDragonTrail(player, pet);
-            } else if (particles && ride == null && isDragon(pet.definitionId()) && tick % 6L == 0L) {
+                if (customAura) {
+                    spawnAmbientPetParticle(pet, active);
+                } else {
+                    spawnDragonTrail(player, pet);
+                }
+            } else if (particles && !customAura && ride == null && isDragon(pet.definitionId()) && tick % 6L == 0L) {
                 spawnPetWalkTrail(player, pet, active);
             }
-            if (particles && pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
+            if (particles && !customAura && pet.definitionId().equals("unicorn") && pet.level() >= 50 && tick % 6L == 0L) {
                 spawnUnicornGlitter(player);
             }
             if (particles && ride == null && tick % 8L == 0L) {
