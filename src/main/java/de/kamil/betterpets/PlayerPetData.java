@@ -27,10 +27,10 @@ public final class PlayerPetData {
     private int boosterTier;
     private long boosterRemainingMillis;
     private transient long boosterTickReference;
-    // Pet tokens: currency earned by scrapping (duplicate) pets, spent in the /pets slots machine.
+    // Pet tokens: currency earned by scrapping (duplicate) pets, spent in the /pets shop.
     private int tokens;
-    // The pet currently featured in the slot machine; only re-rolled after a spin, not on each open.
-    private String slotFeaturedPet;
+    // Last known player name, refreshed on join, so leaderboards can show names without blocking UUID lookups.
+    private String playerName;
 
     public List<OwnedPet> pets() {
         return pets;
@@ -183,11 +183,20 @@ public final class PlayerPetData {
         return unlockedCosmetics;
     }
 
-    public String slotFeaturedPet() {
-        return slotFeaturedPet;
+    public String playerName() {
+        return playerName;
     }
 
-    public void setSlotFeaturedPet(final String slotFeaturedPet) {
-        this.slotFeaturedPet = slotFeaturedPet == null || slotFeaturedPet.isBlank() ? null : slotFeaturedPet;
+    public void setPlayerName(final String playerName) {
+        this.playerName = playerName == null || playerName.isBlank() ? null : playerName;
+    }
+
+    /** Total ascension stars across all owned pets (for leaderboards). */
+    public int totalStars() {
+        int total = 0;
+        for (final OwnedPet pet : pets()) {
+            total += pet.stars();
+        }
+        return total;
     }
 }

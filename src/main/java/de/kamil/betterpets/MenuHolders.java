@@ -340,60 +340,6 @@ final class ModulesMenuHolder implements InventoryHolder {
     }
 }
 
-final class SlotMenuHolder implements InventoryHolder {
-    private final UUID owner;
-    // The pet featured this spin - if the reels land on the pet symbol, this is what you win.
-    private String featuredPetId;
-    private Inventory inventory;
-
-    SlotMenuHolder(final UUID owner) {
-        this.owner = owner;
-    }
-
-    UUID owner() {
-        return owner;
-    }
-
-    String featuredPetId() {
-        return featuredPetId;
-    }
-
-    void setFeaturedPetId(final String featuredPetId) {
-        this.featuredPetId = featuredPetId;
-    }
-
-    void setInventory(final Inventory inventory) {
-        this.inventory = inventory;
-    }
-
-    @Override
-    public Inventory getInventory() {
-        return inventory;
-    }
-}
-
-final class SlotConfigMenuHolder implements InventoryHolder {
-    private final UUID owner;
-    private Inventory inventory;
-
-    SlotConfigMenuHolder(final UUID owner) {
-        this.owner = owner;
-    }
-
-    UUID owner() {
-        return owner;
-    }
-
-    void setInventory(final Inventory inventory) {
-        this.inventory = inventory;
-    }
-
-    @Override
-    public Inventory getInventory() {
-        return inventory;
-    }
-}
-
 final class AlpacaStorageHolder implements InventoryHolder {
     private final UUID owner;
     private final UUID pet;
@@ -416,6 +362,132 @@ final class AlpacaStorageHolder implements InventoryHolder {
 
     int size() {
         return size;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
+/** Leaderboard GUI (/pets top). Tracks which ranking category is being viewed. */
+final class LeaderboardMenuHolder implements InventoryHolder {
+    private final UUID owner;
+    private String category;
+    private Inventory inventory;
+
+    LeaderboardMenuHolder(final UUID owner, final String category) {
+        this.owner = owner;
+        this.category = category == null ? "pets" : category;
+    }
+
+    UUID owner() {
+        return owner;
+    }
+
+    String category() {
+        return category;
+    }
+
+    void setCategory(final String category) {
+        this.category = category == null ? "pets" : category;
+    }
+
+    void setInventory(final Inventory inventory) {
+        this.inventory = inventory;
+    }
+
+    @Override
+    public Inventory getInventory() {
+        return inventory;
+    }
+}
+
+/**
+ * A two-player trade window. Both sides offer tokens; each must confirm; the deal only completes when
+ * both have confirmed. The same holder instance backs both players' inventories so state stays in sync.
+ */
+final class TradeMenuHolder implements InventoryHolder {
+    static final int MAX_OFFER_ITEMS = 6;
+
+    private final UUID initiator;
+    private final UUID partner;
+    private int initiatorTokens;
+    private int partnerTokens;
+    private boolean initiatorConfirmed;
+    private boolean partnerConfirmed;
+    // Offered pet items are held here (removed from the player's inventory when offered), never in a shared
+    // clickable slot, so there is no way to dupe or lose them: on complete they go to the other player, on
+    // cancel/close they go back to their owner.
+    private final java.util.List<org.bukkit.inventory.ItemStack> initiatorItems = new java.util.ArrayList<>();
+    private final java.util.List<org.bukkit.inventory.ItemStack> partnerItems = new java.util.ArrayList<>();
+    private boolean settled;
+    private Inventory inventory;
+
+    TradeMenuHolder(final UUID initiator, final UUID partner) {
+        this.initiator = initiator;
+        this.partner = partner;
+    }
+
+    java.util.List<org.bukkit.inventory.ItemStack> itemsOf(final UUID id) {
+        return initiator.equals(id) ? initiatorItems : partnerItems;
+    }
+
+    /** True once the trade has been completed or cancelled, so close-handling only refunds once. */
+    boolean settled() {
+        return settled;
+    }
+
+    void markSettled() {
+        settled = true;
+    }
+
+    UUID initiator() {
+        return initiator;
+    }
+
+    UUID partner() {
+        return partner;
+    }
+
+    boolean isInitiator(final UUID id) {
+        return initiator.equals(id);
+    }
+
+    int tokensOf(final UUID id) {
+        return initiator.equals(id) ? initiatorTokens : partnerTokens;
+    }
+
+    void setTokensOf(final UUID id, final int value) {
+        final int clamped = Math.max(0, value);
+        if (initiator.equals(id)) {
+            initiatorTokens = clamped;
+        } else {
+            partnerTokens = clamped;
+        }
+        // Any change to an offer cancels both confirmations, so nobody confirms a deal that then changed.
+        initiatorConfirmed = false;
+        partnerConfirmed = false;
+    }
+
+    boolean confirmed(final UUID id) {
+        return initiator.equals(id) ? initiatorConfirmed : partnerConfirmed;
+    }
+
+    void setConfirmed(final UUID id, final boolean value) {
+        if (initiator.equals(id)) {
+            initiatorConfirmed = value;
+        } else {
+            partnerConfirmed = value;
+        }
+    }
+
+    boolean bothConfirmed() {
+        return initiatorConfirmed && partnerConfirmed;
     }
 
     void setInventory(final Inventory inventory) {

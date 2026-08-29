@@ -30,12 +30,17 @@ public final class PetAbilities {
     private PetAbilities() {
     }
 
+    /** The design ceiling every ability formula is written against; stars can never push scaling past this. */
+    public static final int MAX_TIER = 20;
+
     /**
-     * Ability tier for a pet level (1..20), plus any active ascension-star bonus. This is the single
-     * source of truth for all pet scaling, so every ability grows with the pet's stars automatically.
+     * Ability tier for a pet level (1..20), plus any active ascension-star bonus, clamped to {@link #MAX_TIER}.
+     * This is the single source of truth for all pet scaling, so every ability grows with the pet's stars
+     * automatically — but the clamp guarantees no formula ever overflows (e.g. &gt;100% chance, negative
+     * cooldowns) when a high-level pet is also ascended.
      */
     public static int tier(final int level) {
-        return baseTier(level) + STAR_TIER_BONUS.get();
+        return Math.min(MAX_TIER, baseTier(level) + STAR_TIER_BONUS.get());
     }
 
     private static int baseTier(final int level) {

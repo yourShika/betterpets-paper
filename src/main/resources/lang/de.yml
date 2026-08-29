@@ -60,8 +60,8 @@ visibility:
   hidden: "<yellow>Dein Pet ist jetzt versteckt.</yellow>"
 
 tokens:
-  disabled: "<gray>Das Token-/Slots-Feature ist deaktiviert.</gray>"
-  balance: "<gray>Du hast </gray><gold><bold>%total%</bold></gold><gray> Pet-Token. Setze sie in /pets slots ein.</gray>"
+  disabled: "<gray>Das Token-Feature ist deaktiviert.</gray>"
+  balance: "<gray>Du hast </gray><gold><bold>%total%</bold></gold><gray> Pet-Token. Gib sie im /pets shop aus.</gray>"
   scrapped: "<gray>Verwertet: </gray><white>%pet%</white><gray> fuer </gray><gold>%tokens%</gold><gray> Token - Guthaben </gray><gold>%total%</gold><gray>.</gray>"
   scrapped-none: "<red>Halte ein Better-Pets-Pet-Item in der Hand, um es zu Token zu verwerten.</red>"
   scrapped-all: "<gray>Verwertet: </gray><aqua>%count%</aqua><gray> Pet-Item(s) fuer </gray><gold>%tokens%</gold><gray> Token - Guthaben </gray><gold>%total%</gold><gray>.</gray>"
@@ -77,12 +77,6 @@ tokens:
   pass-received: "%player% hat dir %amount% Pet-Token gesendet."
   pass-self: "Du kannst dir nicht selbst Token senden."
   pass-not-enough: "Du hast nur %total% Token."
-slots:
-  not-enough: "<red>Du brauchst </red><gold>%cost%</gold><red> Token zum Drehen - du hast </red><gold>%total%</gold><red>.</red>"
-  spinning: "<gray>Warte, bis die Walzen stoppen.</gray>"
-  won: "<green>Die Walzen zeigen </green><yellow>%reward% x%amount%</yellow><green>!</green>"
-  won-pet: "<gradient:#FFE082:#FF8A00><bold>✦ JACKPOT! Du hast %pet% gezogen!</bold></gradient>"
-  jackpot-broadcast: "<aqua>%player%</aqua><gray> hat den Slot-Jackpot geknackt und </gray><gradient:#FFE082:#FF8A00><bold>%pet%</bold></gradient><gray> gewonnen!</gray>"
 
 hint:
   help: "Tipp: Tippe /pets help, um alle Befehle zu sehen."
@@ -124,3 +118,20 @@ shop:
   bought: "<green>Gekauft: </green><aqua>%item%</aqua><green> für </green><gold>%price% Tokens</gold><green>.</green>"
   already-owned: "<gray>Du besitzt </gray><aqua>%item%</aqua><gray> bereits.</gray>"
   not-enough: "<red>Nicht genug Tokens: brauchst </red><gold>%price%</gold><red>, du hast </red><gold>%total%</gold><red>.</red>"
+
+# Spieler-zu-Spieler-Handel (/pets trade).
+trade:
+  usage: "Verwendung: /pets trade <spieler> | /pets trade accept | /pets trade deny"
+  self: "<red>Du kannst nicht mit dir selbst handeln.</red>"
+  sent: "<green>Handelsanfrage an </green><aqua>%player%</aqua><green> gesendet. Läuft in 60s ab.</green>"
+  received: "<aqua>%player%</aqua><gray> möchte mit dir handeln.</gray>"
+  received-hint: "<gray>Tippe </gray><white>/pets trade accept</white><gray> zum Öffnen oder </gray><white>/pets trade deny</white><gray>.</gray>"
+  none-pending: "<red>Du hast keine offene Handelsanfrage.</red>"
+  partner-offline: "<red>Dieser Spieler ist nicht mehr online.</red>"
+  denied: "<yellow>%player% hat deine Handelsanfrage abgelehnt.</yellow>"
+  deny-done: "<gray>Handelsanfrage abgelehnt.</gray>"
+  offer-full: "<red>Dein Angebot ist voll (max. 6 Pets).</red>"
+  not-a-pet: "<red>Halte ein Better-Pets-Pet-Item, um es zum Handel hinzuzufügen.</red>"
+  complete: "<green>✦ Handel abgeschlossen!</green>"
+  cancelled: "<yellow>Handel abgebrochen - deine Items wurden zurückgegeben.</yellow>"
+  returned: "<yellow>Pets aus einem unterbrochenen Handel wurden dir zurückgegeben.</yellow>"

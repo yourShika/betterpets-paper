@@ -126,9 +126,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, PendingInput> pendingInputs = new java.util.concurrent.ConcurrentHashMap<>();
     // Players already shown the one-time "/pets help" hint this session.
     private final Set<UUID> menuHintShown = new HashSet<>();
-    // Players whose slot machine is mid-spin (ignore further clicks until the reels stop).
-    private final Set<UUID> spinningPlayers = new HashSet<>();
-    private static final int[] SLOT_REELS = {11, 13, 15};
+    // Pending /pets trade requests: target player id -> who asked + when it expires.
+    private final Map<UUID, TradeRequest> tradeRequests = new HashMap<>();
+    // Pets held for players who disconnected mid-trade; handed back on their next join so nothing is ever lost.
+    private final Map<UUID, List<ItemStack>> pendingTradeReturns = new HashMap<>();
+    private static final long TRADE_REQUEST_TIMEOUT_MILLIS = 60_000L;
+    // Extra pet XP per ascension star (0.06 = +6%/star, +30% at ★5). Capped against the booster by xp-max-multiplier.
+    private static final double ASCENSION_XP_PER_STAR = 0.06;
     private static final String[] DROP_SOURCES = {"chest", "fishing", "wandering-trader", "brushing", "vault", "trial-spawner", "xp-booster"};
     private static final int[] BOOSTER_DURATIONS = {15, 30, 45, 60};
     private static final int[] DROP_SLOTS = {10, 11, 12, 13, 14, 15, 16};
@@ -293,7 +297,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final PetMenuHolder holder = new PetMenuHolder(player.getUniqueId(), 0);
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Better Pets"));
+        // Show the token balance right in the title so players always see what they have to spend.
+        final String title = tokensEnabled()
+            ? "Better Pets   ✦ " + storage.data(player.getUniqueId()).tokens()
+            : "Better Pets";
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(title));
         holder.setInventory(inventory);
         renderMenu(player, inventory);
         player.openInventory(inventory);
@@ -312,10 +320,6 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handleModulesClick(event, modulesHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof DropMenuHolder dropHolder) {
                 handleDropClick(event, dropHolder);
-            } else if (event.getView().getTopInventory().getHolder() instanceof SlotMenuHolder slotHolder) {
-                handleSlotClick(event, slotHolder);
-            } else if (event.getView().getTopInventory().getHolder() instanceof SlotConfigMenuHolder slotConfigHolder) {
-                handleSlotConfigClick(event, slotConfigHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof AlpacaStorageHolder alpacaHolder) {
                 handleAlpacaStorageClick(event, alpacaHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder) {
@@ -330,6 +334,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 handleShopClick(event, shopHolder);
             } else if (event.getView().getTopInventory().getHolder() instanceof AscensionMenuHolder ascensionHolder) {
                 handleAscensionClick(event, ascensionHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof LeaderboardMenuHolder leaderboardHolder) {
+                handleLeaderboardClick(event, leaderboardHolder);
+            } else if (event.getView().getTopInventory().getHolder() instanceof TradeMenuHolder tradeHolder) {
+                handleTradeClick(event, tradeHolder);
             }
             return;
         }
@@ -426,10 +434,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             || event.getView().getTopInventory().getHolder() instanceof XpMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof ModulesMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof DropMenuHolder
-            || event.getView().getTopInventory().getHolder() instanceof SlotMenuHolder
-            || event.getView().getTopInventory().getHolder() instanceof SlotConfigMenuHolder
             || event.getView().getTopInventory().getHolder() instanceof InfoMenuHolder
-            || event.getView().getTopInventory().getHolder() instanceof PetDetailMenuHolder) {
+            || event.getView().getTopInventory().getHolder() instanceof PetDetailMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof LeaderboardMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof TradeMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof ShopMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof AscensionMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof CustomizeMenuHolder
+            || event.getView().getTopInventory().getHolder() instanceof VariantMenuHolder) {
             event.setCancelled(true);
             return;
         }
@@ -445,6 +457,17 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onInventoryClose(final InventoryCloseEvent event) {
+        // Closing a trade window (manually, or because a player disconnected) cancels the deal and returns
+        // everyone's offered pets. completeTrade marks the holder settled first, so a successful trade's own
+        // closeInventory() calls here are a no-op.
+        if (event.getInventory().getHolder() instanceof TradeMenuHolder tradeHolder) {
+            if (!tradeHolder.settled()) {
+                // Defer one tick: closing this viewer's window while completeTrade is closing the other's must
+                // not re-enter mid-loop, and getPlayer lookups stay valid for returning items.
+                Bukkit.getScheduler().runTask(this, () -> cancelTrade(tradeHolder));
+            }
+            return;
+        }
         if (!(event.getInventory().getHolder() instanceof AlpacaStorageHolder holder) || !(event.getPlayer() instanceof Player player)) {
             return;
         }
@@ -726,6 +749,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerJoin(final PlayerJoinEvent event) {
         activePets.prepareJoiningPlayer(event.getPlayer());
+        // Remember the name so /pets top can show it without a blocking offline-UUID lookup.
+        storage.data(event.getPlayer().getUniqueId()).setPlayerName(event.getPlayer().getName());
+        // Hand back any pets held from a trade the player disconnected out of.
+        deliverPendingTradeReturns(event.getPlayer());
         // Reset the booster tick reference so time spent offline is never counted against the booster.
         storage.data(event.getPlayer().getUniqueId()).setBoosterTickReference(System.currentTimeMillis());
         Bukkit.getScheduler().runTaskLater(this, () -> activePets.spawnSavedActivePet(event.getPlayer()), 20L);
@@ -746,7 +773,6 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         convertConfirms.remove(event.getPlayer().getUniqueId());
         pendingInputs.remove(event.getPlayer().getUniqueId());
         menuHintShown.remove(event.getPlayer().getUniqueId());
-        spinningPlayers.remove(event.getPlayer().getUniqueId());
         // A player leaving is a natural, infrequent save point, so persist immediately for durability.
         storage.save();
     }
@@ -798,11 +824,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             // writes the whole storage file on every single XP gain.
             // An active Pet XP Booster multiplies only the pet's gained XP (never the player's own XP).
             final PlayerPetData boosterData = storage.data(player.getUniqueId());
-            int effectiveAmount = boosterData.hasActiveBooster() ? amount * boosterData.boosterTier() : amount;
-            // Each ascension star speeds up leveling by +10% XP gained.
-            if (pet.stars() > 0) {
-                effectiveAmount = (int) Math.round(effectiveAmount * (1.0 + pet.stars() * 0.10));
-            }
+            // The pet-XP speed-up is booster x ascension, but capped so the two never stack into an absurd
+            // rate (e.g. x5 booster x +50% would be 7.5x). Ascension adds +6% per star (+30% at max).
+            final double boosterFactor = boosterData.hasActiveBooster() ? boosterData.boosterTier() : 1.0;
+            final double ascensionFactor = 1.0 + pet.stars() * ASCENSION_XP_PER_STAR;
+            final double cap = Math.max(1.0, getConfig().getDouble("xp-max-multiplier", 6.0));
+            final double combined = Math.min(cap, boosterFactor * ascensionFactor);
+            final int effectiveAmount = Math.max(1, (int) Math.round(amount * combined));
             final boolean leveled = pet.addExp(effectiveAmount, petXpMultiplier());
             if (leveled) {
                 activePets.refreshDisplay(player);
@@ -979,9 +1007,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final InventoryHolder holder = event.getView().getTopInventory().getHolder();
         if (holder instanceof PetMenuHolder || holder instanceof ChanceMenuHolder || holder instanceof NotifyMenuHolder
             || holder instanceof XpMenuHolder || holder instanceof ModulesMenuHolder || holder instanceof InfoMenuHolder || holder instanceof PetDetailMenuHolder
-            || holder instanceof AlpacaStorageHolder || holder instanceof SlotMenuHolder || holder instanceof SlotConfigMenuHolder
+            || holder instanceof AlpacaStorageHolder
             || holder instanceof VariantMenuHolder || holder instanceof CustomizeMenuHolder
-            || holder instanceof ShopMenuHolder || holder instanceof AscensionMenuHolder) {
+            || holder instanceof ShopMenuHolder || holder instanceof AscensionMenuHolder
+            || holder instanceof LeaderboardMenuHolder || holder instanceof TradeMenuHolder) {
             return;
         }
         if (event.getSlotType() == InventoryType.SlotType.ARMOR) {
@@ -1143,7 +1172,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 lore.add(Component.text("Revive cooldown: " + formatDuration(remaining), NamedTextColor.GRAY));
             }
         }
-        if (isFlyablePet(definition.id()) && pet.level() >= 50) {
+        if (activePets.isFlyable(definition.id()) && pet.level() >= 50) {
             lore.add(Component.text("Right-click the active pet to fly.", NamedTextColor.GOLD));
         }
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());
@@ -1934,15 +1963,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     // ---------------------------------------------------------------------------
-    //  Pet tokens & slot machine
+    //  Pet tokens (earned by scrapping, spent in the cosmetics shop)
     // ---------------------------------------------------------------------------
 
     private boolean tokensEnabled() {
         return getConfig().getBoolean("tokens.enabled", true);
-    }
-
-    private int slotCost() {
-        return Math.max(1, getConfig().getInt("tokens.slots.cost-per-spin", 3));
     }
 
     /** Tokens a pet of the given rarity is worth when scrapped. */
@@ -2009,6 +2034,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
             if (!starUps.isEmpty()) {
                 activePets.refreshDisplay(player);
+                player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 1.0F, 1.2F);
                 player.sendMessage(lang.component("fusion.star-up-multi", "%pets%", String.join(", ", starUps)));
             }
             return;
@@ -2236,340 +2262,6 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return parsed > 0 ? Optional.of(parsed) : Optional.empty();
         } catch (final NumberFormatException ignored) {
             return Optional.empty();
-        }
-    }
-
-    // --- Slot machine ---
-
-    private record LootType(String key, Material material, int min, int max, String display) {
-    }
-
-    private static final List<LootType> SLOT_LOOT = List.of(
-        new LootType("gold-nugget", Material.GOLD_NUGGET, 3, 12, "Gold Nugget"),
-        new LootType("coal", Material.COAL, 4, 16, "Coal"),
-        new LootType("iron-ingot", Material.IRON_INGOT, 2, 6, "Iron Ingot"),
-        new LootType("copper-ingot", Material.COPPER_INGOT, 4, 12, "Copper Ingot"),
-        new LootType("redstone", Material.REDSTONE, 4, 16, "Redstone"),
-        new LootType("lapis-lazuli", Material.LAPIS_LAZULI, 3, 10, "Lapis Lazuli"),
-        new LootType("gold-ingot", Material.GOLD_INGOT, 1, 4, "Gold Ingot"),
-        new LootType("experience-bottle", Material.EXPERIENCE_BOTTLE, 2, 8, "Bottle o' Enchanting"),
-        new LootType("emerald", Material.EMERALD, 1, 3, "Emerald"),
-        new LootType("diamond", Material.DIAMOND, 1, 3, "Diamond"),
-        new LootType("netherite-scrap", Material.NETHERITE_SCRAP, 1, 1, "Netherite Scrap"),
-        new LootType("netherite-ingot", Material.NETHERITE_INGOT, 1, 1, "Netherite Ingot")
-    );
-
-    private static final Map<String, Double> SLOT_DEFAULT_WEIGHTS = Map.ofEntries(
-        Map.entry("gold-nugget", 300.0), Map.entry("coal", 200.0), Map.entry("iron-ingot", 150.0),
-        Map.entry("copper-ingot", 150.0), Map.entry("redstone", 130.0), Map.entry("lapis-lazuli", 100.0),
-        Map.entry("gold-ingot", 80.0), Map.entry("experience-bottle", 70.0), Map.entry("emerald", 45.0),
-        Map.entry("diamond", 35.0), Map.entry("netherite-scrap", 12.0), Map.entry("netherite-ingot", 6.0),
-        Map.entry("pet", 15.0)
-    );
-
-    private double slotWeight(final String key) {
-        return Math.max(0.0, getConfig().getDouble("tokens.slots.weights." + key, SLOT_DEFAULT_WEIGHTS.getOrDefault(key, 0.0)));
-    }
-
-    private void setSlotWeight(final String key, final double weight) {
-        getConfig().set("tokens.slots.weights." + key, Math.max(0.0, weight));
-        saveConfig();
-    }
-
-    private String randomPetId() {
-        final PetDefinition definition = rollSourcePet();
-        return definition != null ? definition.id() : definitions.ordered().getFirst().id();
-    }
-
-    /** The player's persistent featured pet - only rolled if unset/invalid, so it survives menu re-opens. */
-    private String currentFeaturedPet(final Player player) {
-        final PlayerPetData data = storage.data(player.getUniqueId());
-        String featured = data.slotFeaturedPet();
-        if (featured == null || definitions.get(featured).isEmpty()) {
-            featured = randomPetId();
-            data.setSlotFeaturedPet(featured);
-            requestSave();
-        }
-        return featured;
-    }
-
-    void openSlotMenu(final Player player) {
-        if (!tokensEnabled()) {
-            player.sendMessage(message("tokens.disabled"));
-            return;
-        }
-        final SlotMenuHolder holder = new SlotMenuHolder(player.getUniqueId());
-        holder.setFeaturedPetId(currentFeaturedPet(player));
-        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle("Pet Slots"));
-        holder.setInventory(inventory);
-        renderSlotMenu(inventory, player, holder);
-        player.openInventory(inventory);
-    }
-
-    private void renderSlotMenu(final Inventory inventory, final Player player, final SlotMenuHolder holder) {
-        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
-        for (int i = 0; i < inventory.getSize(); i++) {
-            inventory.setItem(i, filler);
-        }
-        for (final int reel : SLOT_REELS) {
-            inventory.setItem(reel, itemFactory.control(Material.NETHER_STAR, Component.text("?", NamedTextColor.YELLOW), List.of()));
-        }
-        updateSlotChrome(inventory, player, holder);
-    }
-
-    /** Refreshes the non-reel slots: token balance, featured pet, spin/close/config buttons. */
-    private void updateSlotChrome(final Inventory inventory, final Player player, final SlotMenuHolder holder) {
-        final PlayerPetData data = storage.data(player.getUniqueId());
-        inventory.setItem(0, itemFactory.control(
-            Material.SUNFLOWER,
-            Component.text("Pet Tokens: " + data.tokens(), NamedTextColor.GOLD),
-            List.of(Component.text("Earn tokens with /pets scrap.", NamedTextColor.GRAY))
-        ));
-        definitions.get(holder.featuredPetId()).ifPresent(definition ->
-            inventory.setItem(4, itemFactory.infoItem(definition, List.of(
-                Component.text("Featured pet this spin!", NamedTextColor.GOLD),
-                Component.text("Land on the pet symbol to win it.", NamedTextColor.GRAY)
-            ))));
-        if (has(player, ADMIN_PERMISSION)) {
-            inventory.setItem(8, itemFactory.control(
-                Material.COMPARATOR,
-                Component.text("Configure Loot", NamedTextColor.AQUA),
-                List.of(Component.text("Admin: adjust reward chances.", NamedTextColor.GRAY))
-            ));
-        }
-        inventory.setItem(22, itemFactory.control(
-            Material.LIME_DYE,
-            Component.text("SPIN", NamedTextColor.GREEN),
-            List.of(
-                Component.text("Costs " + slotCost() + " token" + (slotCost() == 1 ? "" : "s") + ".", NamedTextColor.GRAY),
-                Component.text("Balance: " + data.tokens(), NamedTextColor.GRAY),
-                Component.text("Win materials, or the featured pet!", NamedTextColor.DARK_GRAY)
-            )
-        ));
-        inventory.setItem(26, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
-    }
-
-    private void handleSlotClick(final InventoryClickEvent event, final SlotMenuHolder holder) {
-        event.setCancelled(true);
-        if (!(event.getWhoClicked() instanceof Player player) || !player.getUniqueId().equals(holder.owner())) {
-            return;
-        }
-        final int slot = event.getRawSlot();
-        if (slot == 26) {
-            player.closeInventory();
-            return;
-        }
-        if (slot == 8 && has(player, ADMIN_PERMISSION)) {
-            openSlotConfigMenu(player);
-            return;
-        }
-        if (slot != 22) {
-            return;
-        }
-        if (spinningPlayers.contains(player.getUniqueId())) {
-            player.sendMessage(message("slots.spinning"));
-            return;
-        }
-        if (!tokensEnabled()) {
-            player.sendMessage(message("tokens.disabled"));
-            return;
-        }
-        final PlayerPetData data = storage.data(player.getUniqueId());
-        final int cost = slotCost();
-        if (data.tokens() < cost) {
-            player.sendMessage(lang.component("slots.not-enough", "%cost%", Integer.toString(cost), "%total%", Integer.toString(data.tokens())));
-            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.7F);
-            return;
-        }
-        data.addTokens(-cost);
-        requestSave();
-        startSpin(player, holder, event.getView().getTopInventory());
-    }
-
-    private void startSpin(final Player player, final SlotMenuHolder holder, final Inventory inventory) {
-        final UUID id = player.getUniqueId();
-        spinningPlayers.add(id);
-        final SlotReward reward = buildReward(rollOutcomeKey(), holder.featuredPetId());
-        final ItemStack result = reward.reelIcon();
-        final List<ItemStack> pool = new ArrayList<>();
-        for (final LootType loot : SLOT_LOOT) {
-            pool.add(new ItemStack(loot.material()));
-        }
-        pool.add(petHeadIcon(holder.featuredPetId()));
-        // The reels settle left -> middle -> right for a real slot-machine feel.
-        final int[] stop = {8, 12, 16};
-        new BukkitRunnable() {
-            private int frame;
-
-            @Override
-            public void run() {
-                final boolean stillOpen = player.isOnline()
-                    && player.getOpenInventory().getTopInventory().getHolder() instanceof SlotMenuHolder open
-                    && open.owner().equals(id);
-                if (frame > stop[2]) {
-                    spinningPlayers.remove(id);
-                    if (player.isOnline()) {
-                        finishSpin(player, holder, inventory, reward, stillOpen);
-                    }
-                    cancel();
-                    return;
-                }
-                if (stillOpen) {
-                    for (int r = 0; r < SLOT_REELS.length; r++) {
-                        if (frame < stop[r]) {
-                            inventory.setItem(SLOT_REELS[r], pool.get(ThreadLocalRandom.current().nextInt(pool.size())).clone());
-                        } else if (frame == stop[r]) {
-                            inventory.setItem(SLOT_REELS[r], result.clone());
-                            player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.7F, 1.0F + (r * 0.25F));
-                        }
-                    }
-                    if (frame < stop[2]) {
-                        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 0.4F, 1.0F + (frame * 0.03F));
-                    }
-                }
-                frame++;
-            }
-        }.runTaskTimer(this, 0L, 2L);
-    }
-
-    private void finishSpin(final Player player, final SlotMenuHolder holder, final Inventory inventory, final SlotReward reward, final boolean stillOpen) {
-        giveOrDrop(player, reward.item());
-        if (reward.isPet()) {
-            player.playSound(player.getLocation(), Sound.ENTITY_ENDER_DRAGON_GROWL, 0.8F, 1.4F);
-            player.sendMessage(lang.component("slots.won-pet", "%pet%", reward.name()));
-            if (getConfig().getBoolean("tokens.slots.broadcast-jackpot", true)) {
-                broadcastToUnmuted(Texts.prefix().append(lang.component("slots.jackpot-broadcast",
-                    "%player%", player.getName(), "%pet%", reward.name())));
-            }
-        } else {
-            player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.3F);
-            player.sendMessage(lang.component("slots.won", "%reward%", reward.name(), "%amount%", Integer.toString(reward.item().getAmount())));
-        }
-        final String next = randomPetId();
-        storage.data(player.getUniqueId()).setSlotFeaturedPet(next);
-        holder.setFeaturedPetId(next);
-        if (stillOpen) {
-            updateSlotChrome(inventory, player, holder);
-        }
-        requestSave();
-    }
-
-    private String rollOutcomeKey() {
-        final double total = totalSlotWeight();
-        if (total <= 0.0) {
-            return SLOT_LOOT.getFirst().key();
-        }
-        double roll = ThreadLocalRandom.current().nextDouble(total);
-        for (final LootType loot : SLOT_LOOT) {
-            roll -= slotWeight(loot.key());
-            if (roll < 0) {
-                return loot.key();
-            }
-        }
-        return "pet";
-    }
-
-    private SlotReward buildReward(final String key, final String featuredPetId) {
-        if (key.equals("pet")) {
-            final PetDefinition definition = definitions.get(featuredPetId).orElseGet(this::rollSourcePet);
-            if (definition != null) {
-                return new SlotReward(itemFactory.discoveryItem(definition), definition.name(), true, petHeadIcon(definition.id()));
-            }
-        }
-        final LootType loot = SLOT_LOOT.stream().filter(entry -> entry.key().equals(key)).findFirst().orElse(SLOT_LOOT.getFirst());
-        final int amount = loot.min() >= loot.max() ? loot.max() : ThreadLocalRandom.current().nextInt(loot.min(), loot.max() + 1);
-        return new SlotReward(new ItemStack(loot.material(), amount), loot.display(), false, new ItemStack(loot.material()));
-    }
-
-    private ItemStack petHeadIcon(final String petId) {
-        return definitions.get(petId).map(itemFactory::discoveryItem).orElse(new ItemStack(Material.NETHER_STAR));
-    }
-
-    private double totalSlotWeight() {
-        double total = slotWeight("pet");
-        for (final LootType loot : SLOT_LOOT) {
-            total += slotWeight(loot.key());
-        }
-        return total;
-    }
-
-    private record SlotReward(ItemStack item, String name, boolean isPet, ItemStack reelIcon) {
-    }
-
-    // --- Slot loot configuration GUI (admin) ---
-
-    private static final int[] SLOT_CONFIG_SLOTS = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24};
-
-    private List<String> slotConfigKeys() {
-        final List<String> keys = new ArrayList<>();
-        for (final LootType loot : SLOT_LOOT) {
-            keys.add(loot.key());
-        }
-        keys.add("pet");
-        return keys;
-    }
-
-    private void openSlotConfigMenu(final Player player) {
-        if (!has(player, ADMIN_PERMISSION)) {
-            player.sendMessage(message("messages.no-permission"));
-            return;
-        }
-        final SlotConfigMenuHolder holder = new SlotConfigMenuHolder(player.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Slot Loot Chances"));
-        holder.setInventory(inventory);
-        renderSlotConfigMenu(inventory);
-        player.openInventory(inventory);
-    }
-
-    private void renderSlotConfigMenu(final Inventory inventory) {
-        inventory.clear();
-        final double total = totalSlotWeight();
-        final List<String> keys = slotConfigKeys();
-        for (int i = 0; i < keys.size() && i < SLOT_CONFIG_SLOTS.length; i++) {
-            final String key = keys.get(i);
-            final boolean pet = key.equals("pet");
-            final double weight = slotWeight(key);
-            final double percent = total <= 0 ? 0 : (weight / total) * 100.0;
-            final Material icon = pet ? Material.NETHER_STAR
-                : SLOT_LOOT.stream().filter(loot -> loot.key().equals(key)).map(LootType::material).findFirst().orElse(Material.PAPER);
-            final String display = pet ? "Pet (jackpot)"
-                : SLOT_LOOT.stream().filter(loot -> loot.key().equals(key)).map(LootType::display).findFirst().orElse(key);
-            inventory.setItem(SLOT_CONFIG_SLOTS[i], itemFactory.control(icon,
-                Component.text(display, pet ? NamedTextColor.LIGHT_PURPLE : NamedTextColor.YELLOW),
-                List.of(
-                    Component.text("Weight: " + formatDecimal(weight), NamedTextColor.GRAY),
-                    Component.text("Chance: " + formatPercent(percent) + "%", NamedTextColor.AQUA),
-                    Component.empty(),
-                    Component.text("Left-click: +1   Shift: +10", NamedTextColor.GREEN),
-                    Component.text("Right-click: -1  Shift: -10", NamedTextColor.RED)
-                )));
-        }
-        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED),
-            List.of(Component.text("Changes save instantly.", NamedTextColor.GRAY))));
-    }
-
-    private void handleSlotConfigClick(final InventoryClickEvent event, final SlotConfigMenuHolder holder) {
-        event.setCancelled(true);
-        if (!(event.getWhoClicked() instanceof Player player) || !player.getUniqueId().equals(holder.owner())) {
-            return;
-        }
-        if (!has(player, ADMIN_PERMISSION)) {
-            player.sendMessage(message("messages.no-permission"));
-            return;
-        }
-        final int raw = event.getRawSlot();
-        if (raw == 49) {
-            player.closeInventory();
-            return;
-        }
-        final List<String> keys = slotConfigKeys();
-        for (int i = 0; i < SLOT_CONFIG_SLOTS.length && i < keys.size(); i++) {
-            if (SLOT_CONFIG_SLOTS[i] == raw) {
-                final double step = (event.isShiftClick() ? 10.0 : 1.0) * (event.isRightClick() ? -1.0 : 1.0);
-                setSlotWeight(keys.get(i), slotWeight(keys.get(i)) + step);
-                renderSlotConfigMenu(event.getView().getTopInventory());
-                return;
-            }
         }
     }
 
@@ -2838,14 +2530,6 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return sender.hasPermission(permission) || sender.hasPermission(ADMIN_PERMISSION);
     }
 
-    private boolean isDragonPet(final String id) {
-        return id.equals("blue_dragon") || id.equals("red_dragon") || id.equals("ender_dragon");
-    }
-
-    private boolean isFlyablePet(final String id) {
-        return isDragonPet(id) || id.equals("phoenix") || id.equals("shadow_dragon");
-    }
-
     private Player damagingPlayer(final Entity damager) {
         if (damager instanceof Player player) {
             return player;
@@ -2967,16 +2651,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final Ascension.Track ascTrack = Ascension.track(definition.id());
+        final List<Component> ascLore = new ArrayList<>(List.of(
+            Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(ascTrack.display(), NamedTextColor.AQUA)),
+            Component.text(trackDescription(ascTrack), NamedTextColor.GRAY),
+            Component.empty(),
+            Component.text("At ★★★★★ this pet gains:", NamedTextColor.DARK_GRAY),
+            Component.text("• " + trackPerkAtStar(ascTrack, OwnedPet.MAX_STARS), NamedTextColor.AQUA),
+            Component.text("• +" + (int) Math.round(OwnedPet.MAX_STARS * ASCENSION_XP_PER_STAR * 100) + "% pet XP", NamedTextColor.GRAY),
+            Component.text("• A stronger ability (until its tier cap)", NamedTextColor.GRAY)));
+        if (activePets.isFlyable(definition.id())) {
+            ascLore.add(Component.text("• +" + (int) Math.round(OwnedPet.MAX_STARS * getConfig().getDouble("flight-speed-per-star", 0.08) * 100) + "% flight speed", NamedTextColor.AQUA));
+        }
+        ascLore.add(Component.empty());
+        ascLore.add(Component.text("Scrap 5 duplicates of this pet to reach ★★★★★.", NamedTextColor.DARK_GRAY));
+        ascLore.add(Component.text("Right-click your pet → Ascension.", NamedTextColor.LIGHT_PURPLE));
         inventory.setItem(8, itemFactory.control(Material.NETHER_STAR,
-            Component.text("★ Ascension", NamedTextColor.GOLD),
-            List.of(Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(ascTrack.display(), NamedTextColor.AQUA)),
-                Component.text(ascTrack.perk(), NamedTextColor.GRAY),
-                Component.empty(),
-                Component.text("Ability at level 100:", NamedTextColor.DARK_GRAY),
-                Component.text("☆☆☆☆☆ ", NamedTextColor.GRAY).append(Component.text(PetAbilities.value(definition.id(), 100, 0), NamedTextColor.YELLOW)),
-                Component.text("★★★★★ ", NamedTextColor.WHITE).append(Component.text(PetAbilities.value(definition.id(), 100, OwnedPet.MAX_STARS), NamedTextColor.GOLD)),
-                Component.empty(),
-                Component.text("Right-click your pet → Ascension.", NamedTextColor.LIGHT_PURPLE))));
+            Component.text("★ Ascension", NamedTextColor.GOLD), ascLore));
 
         if (definition.hasVariants()) {
             inventory.setItem(45, itemFactory.control(
@@ -3389,6 +3079,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         holder.setInventory(inventory);
         renderAscensionMenu(inventory, holder, player);
         player.openInventory(inventory);
+        // Galactic "whoosh" when the ascension GUI opens.
+        player.playSound(player.getLocation(), Sound.BLOCK_BEACON_ACTIVATE, 0.5F, 1.6F);
+        player.playSound(player.getLocation(), Sound.BLOCK_AMETHYST_BLOCK_CHIME, 0.4F, 0.8F);
     }
 
     private void renderAscensionMenu(final Inventory inventory, final AscensionMenuHolder holder, final Player player) {
@@ -3412,6 +3105,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         inventory.setItem(13, itemFactory.menuItem(definition, pet, pet.uuid().equals(data.activePetId())));
         // Five star stages, centred in the row.
         final int[] slots = {29, 30, 31, 32, 33};
+        // Base ability tier at this level (no star bonus); stars raise it but never past MAX_TIER.
+        final int baseTier = PetAbilities.tier(pet.level());
         for (int n = 1; n <= OwnedPet.MAX_STARS; n++) {
             final boolean reached = pet.stars() >= n;
             final boolean current = pet.stars() == n;
@@ -3426,8 +3121,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             if (activePets.isFlyable(definition.id())) {
                 lore.add(Component.text("• +" + (int) Math.round(n * getConfig().getDouble("flight-speed-per-star", 0.08) * 100) + "% flight speed", NamedTextColor.AQUA));
             }
-            lore.add(Component.text("• +" + (n * 10) + "% pet XP", NamedTextColor.GRAY));
-            lore.add(Component.text("• Stronger ability (+" + n + " tier" + (n == 1 ? "" : "s") + ")", NamedTextColor.GRAY));
+            lore.add(Component.text("• +" + (int) Math.round(n * ASCENSION_XP_PER_STAR * 100) + "% pet XP", NamedTextColor.GRAY));
+            final int abilityGain = Math.min(PetAbilities.MAX_TIER, baseTier + n) - baseTier;
+            lore.add(abilityGain > 0
+                ? Component.text("• Stronger ability (+" + abilityGain + " tier" + (abilityGain == 1 ? "" : "s") + ")", NamedTextColor.GRAY)
+                : Component.text("• Ability already at its cap", NamedTextColor.DARK_GRAY));
             final ItemStack node = itemFactory.control(reached ? Material.NETHER_STAR : Material.GRAY_STAINED_GLASS_PANE,
                 Component.text("★".repeat(n) + "☆".repeat(OwnedPet.MAX_STARS - n) + "  Star " + n, titleColor), lore);
             if (current) {
@@ -3444,6 +3142,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             Component.text(progress, NamedTextColor.GRAY),
             Component.empty(),
             Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
+            Component.text(trackDescription(track), NamedTextColor.DARK_GRAY),
             Component.text("Its ability now (★" + pet.stars() + "): ", NamedTextColor.GRAY)
                 .append(Component.text(PetAbilities.value(definition.id(), pet.level(), pet.stars()), NamedTextColor.YELLOW))));
         if (activePets.isFlyable(definition.id())) {
@@ -3458,6 +3157,18 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             headerLore));
         inventory.setItem(49, itemFactory.control(Material.BARRIER,
             Component.text("Back", NamedTextColor.RED), List.of(Component.text("Return to Customize.", NamedTextColor.GRAY))));
+    }
+
+    /** One-line plain-language description of what an ascension track does, for menu tooltips. */
+    private String trackDescription(final Ascension.Track track) {
+        return switch (track) {
+            case WARRIOR -> "Fighter — deals more damage as it ascends.";
+            case GUARDIAN -> "Protector — takes less damage as it ascends.";
+            case GATHERER -> "Harvester — extra block/loot drops as it ascends.";
+            case RUNNER -> "Sprinter — softer falls, then Speed at higher stars.";
+            case MYSTIC -> "Enchanter — Luck, then Regeneration at higher stars.";
+            case AQUATIC -> "Diver — water breathing and extra fishing catches.";
+        };
     }
 
     /** The concrete, cumulative track perk a pet has at a given star count — shown per stage node so the scaling is obvious. */
@@ -3481,6 +3192,447 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             storage.data(player.getUniqueId()).findPet(holder.petUuid())
                 .ifPresentOrElse(pet -> openCustomizeMenu(player, pet), player::closeInventory);
         }
+    }
+
+    // ===== Leaderboard (/pets top) ==============================================================
+
+    private static final int[] LEADERBOARD_SLOTS = {10, 11, 12, 13, 14, 19, 20, 21, 22, 23};
+
+    void openLeaderboardMenu(final Player player, final String category) {
+        final LeaderboardMenuHolder holder = new LeaderboardMenuHolder(player.getUniqueId(), category);
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Pet Leaderboard"));
+        holder.setInventory(inventory);
+        renderLeaderboardMenu(inventory, holder, player);
+        player.openInventory(inventory);
+        player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.6F, 1.2F);
+    }
+
+    private record LeaderRow(UUID id, String name, int value) {
+    }
+
+    /** All known players ranked (descending) by the given category, skipping zero-value entries. */
+    private List<LeaderRow> leaderboard(final String category) {
+        final List<LeaderRow> rows = new ArrayList<>();
+        for (final Map.Entry<UUID, PlayerPetData> entry : storage.entries()) {
+            final PlayerPetData data = entry.getValue();
+            final int value = switch (category) {
+                case "stars" -> data.totalStars();
+                case "tokens" -> data.tokens();
+                default -> data.pets().size();
+            };
+            if (value <= 0) {
+                continue;
+            }
+            final String name = data.playerName() != null ? data.playerName()
+                : java.util.Optional.ofNullable(Bukkit.getOfflinePlayer(entry.getKey()).getName())
+                    .orElse(entry.getKey().toString().substring(0, 8));
+            rows.add(new LeaderRow(entry.getKey(), name, value));
+        }
+        rows.sort((a, b) -> Integer.compare(b.value(), a.value()));
+        return rows;
+    }
+
+    private String leaderboardUnit(final String category) {
+        return switch (category) {
+            case "stars" -> "stars";
+            case "tokens" -> "tokens";
+            default -> "pets";
+        };
+    }
+
+    private void renderLeaderboardMenu(final Inventory inventory, final LeaderboardMenuHolder holder, final Player viewer) {
+        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        for (int i = 0; i < inventory.getSize(); i++) {
+            inventory.setItem(i, filler);
+        }
+        final String category = holder.category();
+        inventory.setItem(2, leaderboardCategoryButton("pets", "Most Pets", Material.BONE, category));
+        inventory.setItem(4, leaderboardCategoryButton("stars", "Total Stars", Material.NETHER_STAR, category));
+        inventory.setItem(6, leaderboardCategoryButton("tokens", "Most Tokens", Material.SUNFLOWER, category));
+
+        final List<LeaderRow> rows = leaderboard(category);
+        final String unit = leaderboardUnit(category);
+        for (int i = 0; i < LEADERBOARD_SLOTS.length; i++) {
+            if (i >= rows.size()) {
+                inventory.setItem(LEADERBOARD_SLOTS[i], filler);
+                continue;
+            }
+            final LeaderRow row = rows.get(i);
+            inventory.setItem(LEADERBOARD_SLOTS[i], leaderboardHead(i + 1, row, unit, row.id().equals(viewer.getUniqueId())));
+        }
+
+        int myRank = -1;
+        int myValue = 0;
+        for (int i = 0; i < rows.size(); i++) {
+            if (rows.get(i).id().equals(viewer.getUniqueId())) {
+                myRank = i + 1;
+                myValue = rows.get(i).value();
+                break;
+            }
+        }
+        inventory.setItem(40, itemFactory.control(Material.NAME_TAG,
+            Component.text("Your Rank", NamedTextColor.AQUA),
+            List.of(myRank > 0
+                ? Component.text("#" + myRank + " — " + myValue + " " + unit, NamedTextColor.GOLD)
+                : Component.text("Unranked in this category", NamedTextColor.GRAY))));
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+    }
+
+    private ItemStack leaderboardCategoryButton(final String key, final String label, final Material icon, final String active) {
+        final boolean on = key.equals(active);
+        final ItemStack item = itemFactory.control(icon, Component.text(label, on ? NamedTextColor.GREEN : NamedTextColor.GRAY),
+            List.of(on ? Component.text("● Showing this ranking", NamedTextColor.DARK_GRAY)
+                : Component.text("Click to view this ranking", NamedTextColor.DARK_GRAY)));
+        if (on) {
+            item.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
+        }
+        return item;
+    }
+
+    private ItemStack leaderboardHead(final int rank, final LeaderRow row, final String unit, final boolean isViewer) {
+        final ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+        final NamedTextColor color = switch (rank) {
+            case 1 -> NamedTextColor.GOLD;
+            case 2 -> NamedTextColor.WHITE;
+            case 3 -> NamedTextColor.YELLOW;
+            default -> NamedTextColor.GRAY;
+        };
+        head.editMeta(org.bukkit.inventory.meta.SkullMeta.class, meta -> {
+            meta.setOwningPlayer(Bukkit.getOfflinePlayer(row.id()));
+            meta.displayName(Component.text("#" + rank + "  " + row.name() + (isViewer ? " (you)" : ""), color)
+                .decoration(TextDecoration.ITALIC, false));
+            meta.lore(List.of(Component.text(row.value() + " " + unit, NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
+        });
+        return head;
+    }
+
+    private void handleLeaderboardClick(final InventoryClickEvent event, final LeaderboardMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        final int slot = event.getRawSlot();
+        if (slot == 49) {
+            player.closeInventory();
+            return;
+        }
+        final String newCategory = switch (slot) {
+            case 2 -> "pets";
+            case 4 -> "stars";
+            case 6 -> "tokens";
+            default -> null;
+        };
+        if (newCategory != null && !newCategory.equals(holder.category())) {
+            holder.setCategory(newCategory);
+            renderLeaderboardMenu(event.getView().getTopInventory(), holder, player);
+            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.6F, 1.4F);
+        }
+    }
+
+    // ===== Player-to-player trading (/pets trade) ===============================================
+
+    private record TradeRequest(UUID requester, long expiresAt) {
+    }
+
+    // Item display slots per side, and the control/confirm slots.
+    private static final int[] TRADE_INIT_ITEM_SLOTS = {10, 11, 12, 19, 20, 21};
+    private static final int[] TRADE_PART_ITEM_SLOTS = {14, 15, 16, 23, 24, 25};
+    private static final int TRADE_INIT_ADD = 28;
+    private static final int TRADE_INIT_TOKENS = 29;
+    private static final int TRADE_INIT_CLEAR = 30;
+    private static final int TRADE_INIT_CONFIRM = 45;
+    private static final int TRADE_PART_ADD = 34;
+    private static final int TRADE_PART_TOKENS = 33;
+    private static final int TRADE_PART_CLEAR = 32;
+    private static final int TRADE_PART_CONFIRM = 53;
+    private static final int TRADE_CLOSE = 49;
+
+    void handleTradeCommand(final Player player, final String[] args) {
+        if (!tokensEnabled()) {
+            player.sendMessage(message("tokens.disabled"));
+            return;
+        }
+        if (args.length < 2) {
+            player.sendMessage(lang.colored("trade.usage", NamedTextColor.GRAY));
+            return;
+        }
+        final String sub = args[1].toLowerCase(java.util.Locale.ROOT);
+        if (sub.equals("accept")) {
+            final TradeRequest request = tradeRequests.remove(player.getUniqueId());
+            if (request == null || request.expiresAt() < System.currentTimeMillis()) {
+                player.sendMessage(lang.colored("trade.none-pending", NamedTextColor.RED));
+                return;
+            }
+            final Player requester = Bukkit.getPlayer(request.requester());
+            if (requester == null) {
+                player.sendMessage(lang.colored("trade.partner-offline", NamedTextColor.RED));
+                return;
+            }
+            openTradeMenu(requester, player);
+            return;
+        }
+        if (sub.equals("deny") || sub.equals("decline")) {
+            final TradeRequest request = tradeRequests.remove(player.getUniqueId());
+            if (request != null) {
+                final Player requester = Bukkit.getPlayer(request.requester());
+                if (requester != null) {
+                    requester.sendMessage(lang.colored("trade.denied", NamedTextColor.YELLOW, "%player%", player.getName()));
+                }
+            }
+            player.sendMessage(lang.colored("trade.deny-done", NamedTextColor.GRAY));
+            return;
+        }
+        final Player target = Bukkit.getPlayerExact(args[1]);
+        if (target == null) {
+            player.sendMessage(lang.colored("tokens.player-not-found", NamedTextColor.RED, "%player%", args[1]));
+            return;
+        }
+        if (target.getUniqueId().equals(player.getUniqueId())) {
+            player.sendMessage(lang.colored("trade.self", NamedTextColor.RED));
+            return;
+        }
+        tradeRequests.put(target.getUniqueId(), new TradeRequest(player.getUniqueId(), System.currentTimeMillis() + TRADE_REQUEST_TIMEOUT_MILLIS));
+        player.sendMessage(lang.colored("trade.sent", NamedTextColor.GREEN, "%player%", target.getName()));
+        target.sendMessage(lang.colored("trade.received", NamedTextColor.AQUA, "%player%", player.getName()));
+        target.sendMessage(lang.colored("trade.received-hint", NamedTextColor.GRAY, "%player%", player.getName()));
+        target.playSound(target.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7F, 1.6F);
+    }
+
+    private void openTradeMenu(final Player initiator, final Player partner) {
+        final TradeMenuHolder holder = new TradeMenuHolder(initiator.getUniqueId(), partner.getUniqueId());
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Trade"));
+        holder.setInventory(inventory);
+        renderTradeMenu(holder);
+        // Both players view the SAME inventory instance, so every change stays in sync between them.
+        initiator.openInventory(inventory);
+        partner.openInventory(inventory);
+        initiator.playSound(initiator.getLocation(), Sound.UI_BUTTON_CLICK, 0.6F, 1.2F);
+        partner.playSound(partner.getLocation(), Sound.UI_BUTTON_CLICK, 0.6F, 1.2F);
+    }
+
+    private void renderTradeMenu(final TradeMenuHolder holder) {
+        final Inventory inv = holder.getInventory();
+        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        final ItemStack divider = itemFactory.control(Material.GRAY_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        for (int i = 0; i < inv.getSize(); i++) {
+            inv.setItem(i, filler);
+        }
+        for (final int d : new int[]{4, 13, 22, 31, 40, 49}) {
+            inv.setItem(d, divider);
+        }
+        final String initName = nameOf(holder.initiator());
+        final String partName = nameOf(holder.partner());
+        inv.setItem(0, tradeHeader(initName, holder.confirmed(holder.initiator())));
+        inv.setItem(8, tradeHeader(partName, holder.confirmed(holder.partner())));
+
+        final List<ItemStack> initItems = holder.itemsOf(holder.initiator());
+        final List<ItemStack> partItems = holder.itemsOf(holder.partner());
+        for (int i = 0; i < TRADE_INIT_ITEM_SLOTS.length; i++) {
+            inv.setItem(TRADE_INIT_ITEM_SLOTS[i], i < initItems.size() ? initItems.get(i).clone() : emptyOfferSlot());
+            inv.setItem(TRADE_PART_ITEM_SLOTS[i], i < partItems.size() ? partItems.get(i).clone() : emptyOfferSlot());
+        }
+
+        inv.setItem(TRADE_INIT_ADD, tradeButton(Material.LIME_DYE, "Offer held pet", "Click with a pet in your hand."));
+        inv.setItem(TRADE_INIT_CLEAR, tradeButton(Material.CAULDRON, "Clear my offer", "Return my items & reset my tokens."));
+        inv.setItem(TRADE_INIT_TOKENS, tokenOfferItem(holder.tokensOf(holder.initiator())));
+        inv.setItem(TRADE_PART_ADD, tradeButton(Material.LIME_DYE, "Offer held pet", "Click with a pet in your hand."));
+        inv.setItem(TRADE_PART_CLEAR, tradeButton(Material.CAULDRON, "Clear my offer", "Return my items & reset my tokens."));
+        inv.setItem(TRADE_PART_TOKENS, tokenOfferItem(holder.tokensOf(holder.partner())));
+
+        inv.setItem(TRADE_INIT_CONFIRM, confirmButton(holder.confirmed(holder.initiator())));
+        inv.setItem(TRADE_PART_CONFIRM, confirmButton(holder.confirmed(holder.partner())));
+        inv.setItem(TRADE_CLOSE, itemFactory.control(Material.BARRIER, Component.text("Cancel trade", NamedTextColor.RED),
+            List.of(Component.text("Closing returns everyone's items.", NamedTextColor.GRAY))));
+    }
+
+    private ItemStack tradeHeader(final String name, final boolean confirmed) {
+        return itemFactory.control(Material.PLAYER_HEAD, Component.text(name, NamedTextColor.AQUA),
+            List.of(confirmed ? Component.text("✔ Confirmed", NamedTextColor.GREEN) : Component.text("Deciding…", NamedTextColor.GRAY)));
+    }
+
+    private ItemStack emptyOfferSlot() {
+        return itemFactory.control(Material.LIGHT_GRAY_STAINED_GLASS_PANE, Component.text("Empty offer slot", NamedTextColor.DARK_GRAY), List.of());
+    }
+
+    private ItemStack tradeButton(final Material icon, final String label, final String hint) {
+        return itemFactory.control(icon, Component.text(label, NamedTextColor.YELLOW), List.of(Component.text(hint, NamedTextColor.GRAY)));
+    }
+
+    private ItemStack tokenOfferItem(final int amount) {
+        return itemFactory.control(Material.SUNFLOWER, Component.text("Token offer: " + amount, NamedTextColor.GOLD),
+            List.of(Component.text("Left-click +1 (Shift +10)", NamedTextColor.GREEN),
+                Component.text("Right-click -1 (Shift -10)", NamedTextColor.RED)));
+    }
+
+    private ItemStack confirmButton(final boolean confirmed) {
+        return itemFactory.control(confirmed ? Material.EMERALD_BLOCK : Material.EMERALD,
+            Component.text(confirmed ? "Confirmed — click to unready" : "Confirm trade", confirmed ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
+            List.of(Component.text("Both sides must confirm to trade.", NamedTextColor.GRAY)));
+    }
+
+    private String nameOf(final UUID id) {
+        final Player online = Bukkit.getPlayer(id);
+        if (online != null) {
+            return online.getName();
+        }
+        final String stored = storage.data(id).playerName();
+        return stored != null ? stored : id.toString().substring(0, 8);
+    }
+
+    private void handleTradeClick(final InventoryClickEvent event, final TradeMenuHolder holder) {
+        event.setCancelled(true);
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
+        final UUID id = player.getUniqueId();
+        if (!holder.isInitiator(id) && !holder.partner().equals(id)) {
+            return;
+        }
+        final int slot = event.getRawSlot();
+        if (slot == TRADE_CLOSE) {
+            player.closeInventory();
+            return;
+        }
+        final boolean isInit = holder.isInitiator(id);
+        final int addSlot = isInit ? TRADE_INIT_ADD : TRADE_PART_ADD;
+        final int clearSlot = isInit ? TRADE_INIT_CLEAR : TRADE_PART_CLEAR;
+        final int tokenSlot = isInit ? TRADE_INIT_TOKENS : TRADE_PART_TOKENS;
+        final int confirmSlot = isInit ? TRADE_INIT_CONFIRM : TRADE_PART_CONFIRM;
+
+        if (slot == addSlot) {
+            offerHeldPet(player, holder);
+        } else if (slot == clearSlot) {
+            clearTradeOffer(player, holder);
+        } else if (slot == tokenSlot) {
+            final int step = (event.isShiftClick() ? 10 : 1) * (event.isRightClick() ? -1 : 1);
+            final int max = storage.data(id).tokens();
+            holder.setTokensOf(id, Math.min(max, holder.tokensOf(id) + step));
+            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.4F, step > 0 ? 1.4F : 0.9F);
+            renderTradeMenu(holder);
+        } else if (slot == confirmSlot) {
+            holder.setConfirmed(id, !holder.confirmed(id));
+            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.6F, 1.2F);
+            if (holder.bothConfirmed()) {
+                completeTrade(holder);
+            } else {
+                renderTradeMenu(holder);
+            }
+        }
+    }
+
+    private void offerHeldPet(final Player player, final TradeMenuHolder holder) {
+        final List<ItemStack> items = holder.itemsOf(player.getUniqueId());
+        if (items.size() >= TradeMenuHolder.MAX_OFFER_ITEMS) {
+            player.sendMessage(lang.colored("trade.offer-full", NamedTextColor.RED));
+            return;
+        }
+        final ItemStack held = player.getInventory().getItemInMainHand();
+        if (held.getType().isAir() || itemFactory.petId(held).isEmpty()) {
+            player.sendMessage(lang.colored("trade.not-a-pet", NamedTextColor.RED));
+            return;
+        }
+        final ItemStack one = held.clone();
+        one.setAmount(1);
+        items.add(one);
+        held.setAmount(held.getAmount() - 1);
+        player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.7F, 1.2F);
+        renderTradeMenu(holder);
+    }
+
+    private void clearTradeOffer(final Player player, final TradeMenuHolder holder) {
+        final List<ItemStack> items = holder.itemsOf(player.getUniqueId());
+        for (final ItemStack item : items) {
+            giveOrDrop(player, item);
+        }
+        items.clear();
+        holder.setTokensOf(player.getUniqueId(), 0);
+        renderTradeMenu(holder);
+    }
+
+    /** Atomically swaps both sides' offered items and tokens, then closes the window for both. */
+    private void completeTrade(final TradeMenuHolder holder) {
+        if (holder.settled()) {
+            return;
+        }
+        final Player initiator = Bukkit.getPlayer(holder.initiator());
+        final Player partner = Bukkit.getPlayer(holder.partner());
+        if (initiator == null || partner == null) {
+            cancelTrade(holder);
+            return;
+        }
+        final PlayerPetData initData = storage.data(holder.initiator());
+        final PlayerPetData partData = storage.data(holder.partner());
+        final int initTokens = Math.min(holder.tokensOf(holder.initiator()), initData.tokens());
+        final int partTokens = Math.min(holder.tokensOf(holder.partner()), partData.tokens());
+        // Move tokens.
+        initData.addTokens(-initTokens);
+        partData.addTokens(-partTokens);
+        initData.addTokens(partTokens);
+        partData.addTokens(initTokens);
+        // Move items to the OTHER player.
+        for (final ItemStack item : holder.itemsOf(holder.initiator())) {
+            giveOrDrop(partner, item);
+        }
+        for (final ItemStack item : holder.itemsOf(holder.partner())) {
+            giveOrDrop(initiator, item);
+        }
+        holder.itemsOf(holder.initiator()).clear();
+        holder.itemsOf(holder.partner()).clear();
+        holder.markSettled();
+        requestSave();
+        for (final Player p : new Player[]{initiator, partner}) {
+            p.sendMessage(lang.colored("trade.complete", NamedTextColor.GREEN));
+            p.playSound(p.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.8F, 1.3F);
+            p.closeInventory();
+        }
+    }
+
+    /** Returns each side's offered items to its owner (tokens were never deducted) and marks the trade done. */
+    private void cancelTrade(final TradeMenuHolder holder) {
+        if (holder.settled()) {
+            return;
+        }
+        holder.markSettled();
+        returnOfferedItems(holder, holder.initiator());
+        returnOfferedItems(holder, holder.partner());
+        for (final UUID id : new UUID[]{holder.initiator(), holder.partner()}) {
+            final Player p = Bukkit.getPlayer(id);
+            if (p != null) {
+                p.sendMessage(lang.colored("trade.cancelled", NamedTextColor.YELLOW));
+                if (p.getOpenInventory().getTopInventory().getHolder() instanceof TradeMenuHolder) {
+                    p.closeInventory();
+                }
+            }
+        }
+    }
+
+    private void returnOfferedItems(final TradeMenuHolder holder, final UUID id) {
+        final List<ItemStack> items = holder.itemsOf(id);
+        if (items.isEmpty()) {
+            return;
+        }
+        final Player owner = Bukkit.getPlayer(id);
+        for (final ItemStack item : items) {
+            if (owner != null) {
+                giveOrDrop(owner, item);
+            } else {
+                // Owner went offline mid-trade: hold their pet(s) and hand them back on next join. Never lost.
+                pendingTradeReturns.computeIfAbsent(id, k -> new ArrayList<>()).add(item);
+            }
+        }
+        items.clear();
+    }
+
+    /** Gives back any pets that were held for a player who disconnected mid-trade. Called on join. */
+    private void deliverPendingTradeReturns(final Player player) {
+        final List<ItemStack> pending = pendingTradeReturns.remove(player.getUniqueId());
+        if (pending == null || pending.isEmpty()) {
+            return;
+        }
+        for (final ItemStack item : pending) {
+            giveOrDrop(player, item);
+        }
+        player.sendMessage(lang.colored("trade.returned", NamedTextColor.YELLOW));
     }
 
     private void openCustomizeMenu(final Player player, final OwnedPet pet) {
@@ -4352,6 +4504,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         helpLine(sender, "/pets", "Open your pet menu", NamedTextColor.GOLD);
         helpLine(sender, "/pets scrap [all]", "Turn held (or all) duplicate pets into tokens", NamedTextColor.YELLOW);
         helpLine(sender, "/pets shop", "Spend tokens on skins, auras, trails and boosters", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets top", "Leaderboards: most pets, total stars, tokens", NamedTextColor.YELLOW);
+        helpLine(sender, "/pets trade <player>", "Trade pets and tokens with another player", NamedTextColor.YELLOW);
         helpLine(sender, "/pets tokens", "Show your pet token balance", NamedTextColor.YELLOW);
         helpLine(sender, "/pets tokens pass <player> <amount>", "Send tokens to another player", NamedTextColor.YELLOW);
         helpLine(sender, "/pets visible | invisible", "Show or hide your active pet", NamedTextColor.YELLOW);
@@ -4696,6 +4850,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 plugin.openShopMenu(player, "main", 0);
                 return;
             }
+            if (args.length > 0 && (args[0].equalsIgnoreCase("top") || args[0].equalsIgnoreCase("leaderboard"))) {
+                plugin.openLeaderboardMenu(player, args.length > 1 ? args[1].toLowerCase(java.util.Locale.ROOT) : "pets");
+                return;
+            }
+            if (args.length > 0 && (args[0].equalsIgnoreCase("trade") || args[0].equalsIgnoreCase("trades"))) {
+                plugin.handleTradeCommand(player, args);
+                return;
+            }
 
             if (args.length >= 1 && args[0].equalsIgnoreCase("set") && args.length >= 2 && args[1].equalsIgnoreCase("name")) {
                 if (args.length < 3) {
@@ -4725,6 +4887,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 suggestions.add("tokens");
                 suggestions.add("scrap");
                 suggestions.add("shop");
+                suggestions.add("top");
+                suggestions.add("trade");
                 suggestions.add("set");
                 suggestions.add("restore");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {
@@ -4757,6 +4921,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
             if (args.length == 2 && args[0].equalsIgnoreCase("scrap")) {
                 return List.of("all");
+            }
+            if (args.length == 2 && (args[0].equalsIgnoreCase("top") || args[0].equalsIgnoreCase("leaderboard"))) {
+                return List.of("pets", "stars", "tokens");
+            }
+            if (args.length == 2 && (args[0].equalsIgnoreCase("trade") || args[0].equalsIgnoreCase("trades"))) {
+                final List<String> suggestions = new ArrayList<>(List.of("accept", "deny"));
+                suggestions.addAll(Bukkit.getOnlinePlayers().stream().map(Player::getName).toList());
+                return suggestions;
             }
             if (args.length == 2 && args[0].equalsIgnoreCase("tokens")) {
                 final List<String> suggestions = new ArrayList<>(List.of("pass"));

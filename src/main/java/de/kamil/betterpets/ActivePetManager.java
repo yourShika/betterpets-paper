@@ -6,7 +6,6 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
-import org.bukkit.EntityEffect;
 import org.bukkit.GameMode;
 import org.bukkit.Input;
 import org.bukkit.Location;
@@ -1317,12 +1316,22 @@ public final class ActivePetManager {
         if (dx == 0.0 && dy == 0.0 && dz == 0.0) {
             return false;
         }
+        // Validate the whole path in sub-steps of at most ~0.45 blocks, not just the destination, so a
+        // fast mount (e.g. an ascended pet at +40% flight speed) can never tunnel through a thin wall.
+        // All-or-nothing: if any point along the way is blocked we return false and let the caller slide
+        // along an axis instead, which keeps the smooth wall-sliding feel.
+        final double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        final int steps = Math.max(1, (int) Math.ceil(dist / 0.45));
+        for (int i = 1; i <= steps; i++) {
+            final double f = (double) i / steps;
+            final Location point = base.clone().add(dx * f, dy * f, dz * f);
+            if (!isRideLocationSafe(point)) {
+                return false;
+            }
+        }
         final Location target = base.clone().add(dx, dy, dz);
         target.setYaw(yaw);
         target.setPitch(0.0F);
-        if (!isRideLocationSafe(target)) {
-            return false;
-        }
         mount.teleport(target);
         return true;
     }
@@ -1755,7 +1764,8 @@ public final class ActivePetManager {
         player.addPotionEffect(new PotionEffect(PotionEffectType.REGENERATION, 900, 1, true, true, true));
         player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, 100, 1, true, true, true));
         player.addPotionEffect(new PotionEffect(PotionEffectType.FIRE_RESISTANCE, 800, 0, true, true, true));
-        player.playEffect(EntityEffect.TOTEM_RESURRECT);
+        // Totem-of-undying golden burst (non-deprecated replacement for EntityEffect.TOTEM_RESURRECT).
+        player.getWorld().spawnParticle(Particle.TOTEM_OF_UNDYING, player.getLocation().add(0, 1.0, 0), 60, 0.4, 0.6, 0.4, 0.3);
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TOTEM_USE, 1.0F, 1.0F);
         player.sendMessage(lang.colored("pet.phoenix-saved", net.kyori.adventure.text.format.NamedTextColor.GOLD));
         storage.save();
@@ -2702,9 +2712,11 @@ public final class ActivePetManager {
 
     private AbilityCtx ctx(final Player player, final OwnedPet pet) {
         final int level = pet.level();
-        // Each ascension star adds a bonus ability tier, so the pet's abilities grow stronger even at max
-        // level. Formulas with Math.min caps naturally keep this from getting out of hand.
-        final int tier = PetAbilities.tier(level) + pet.stars();
+        // Each ascension star adds a bonus ability tier, so a pet's abilities keep growing as it ascends —
+        // but the total is clamped to MAX_TIER so no formula ever overflows (>100% chance, negative cooldown).
+        // A pet already at max ability tier therefore gains its star rewards from the track perk / XP / flight,
+        // not from further ability scaling.
+        final int tier = Math.min(PetAbilities.MAX_TIER, PetAbilities.tier(level) + pet.stars());
         return new AbilityCtx(player, pet, level, tier);
     }
 

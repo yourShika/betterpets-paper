@@ -160,11 +160,17 @@ public final class PetTests {
     }
 
     private static void starAbilityScaling() {
-        final String base = PetAbilities.value("reaper", 100, 0);
-        final String boosted = PetAbilities.value("reaper", 100, 5);
+        // Below max level, stars still raise the ability tier and so change a scaling value.
+        final String base = PetAbilities.value("reaper", 50, 0);
+        final String boosted = PetAbilities.value("reaper", 50, 5);
         eq("stars change a scaling ability", base.equals(boosted), false);
-        eq("bonus resets after the call", PetAbilities.value("reaper", 100), base);
+        eq("bonus resets after the call", PetAbilities.value("reaper", 50), base);
         eq("tier bonus not persisted", PetAbilities.tier(100), 20);
+        // Overflow guard: a maxed pet (tier 20) plus any number of stars must never exceed MAX_TIER,
+        // so the ability value at max level is identical with 0 or 5 stars (no >100%/negative overflow).
+        eq("max tier equals MAX_TIER", PetAbilities.tier(100), PetAbilities.MAX_TIER);
+        eq("max-level + 5 stars stays capped", PetAbilities.value("reaper", 100, 5).equals(PetAbilities.value("reaper", 100, 0)), true);
+        eq("mid-level + 5 stars still capped at max", PetAbilities.value("reaper", 80, 20).equals(PetAbilities.value("reaper", 80, 5)), true);
     }
 
     private static void ascensionTracks() {
