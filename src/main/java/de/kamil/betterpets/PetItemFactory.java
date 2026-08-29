@@ -34,8 +34,10 @@ public final class PetItemFactory {
     private final NamespacedKey boosterTierKey;
     private final NamespacedKey boosterMinutesKey;
     private final java.util.Random random = new java.util.Random();
+    private final LangManager lang;
 
-    public PetItemFactory(final JavaPlugin plugin) {
+    public PetItemFactory(final JavaPlugin plugin, final LangManager lang) {
+        this.lang = lang;
         this.petIdKey = new NamespacedKey(plugin, "pet_id");
         this.petUuidKey = new NamespacedKey(plugin, "pet_uuid");
         this.petLevelKey = new NamespacedKey(plugin, "pet_level");
@@ -46,19 +48,31 @@ public final class PetItemFactory {
         this.boosterMinutesKey = new NamespacedKey(plugin, "booster_minutes");
     }
 
+    /** Translated menu component (italics stripped, since these items don't pass through control()). */
+    private Component ml(final String key, final NamedTextColor color, final String... repl) {
+        return lang.colored(key, color, repl).decoration(TextDecoration.ITALIC, false);
+    }
+
+    private Component mg(final String key, final String... repl) {
+        return lang.component(key, repl).decoration(TextDecoration.ITALIC, false);
+    }
+
+    private String mt(final String key, final String... repl) {
+        return lang.raw(key, repl);
+    }
+
     public ItemStack boosterItem(final int tier, final int minutes) {
         final ItemStack item = new ItemStack(Material.EXPERIENCE_BOTTLE);
         final ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE)
-            .decoration(TextDecoration.ITALIC, false));
+        meta.displayName(ml("item.booster.name", NamedTextColor.LIGHT_PURPLE, "%tier%", Integer.toString(tier)));
         meta.lore(List.of(
-            Component.text("Booster", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false),
-            Component.text("Multiplier: ", NamedTextColor.GRAY).append(Component.text("x" + tier, NamedTextColor.LIGHT_PURPLE)).decoration(TextDecoration.ITALIC, false),
-            Component.text("Duration: ", NamedTextColor.GRAY).append(Component.text(formatMinutes(minutes), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false),
+            ml("item.booster.header", NamedTextColor.GOLD).decorate(TextDecoration.BOLD),
+            ml("item.booster.multiplier", NamedTextColor.GRAY, "%tier%", Integer.toString(tier)),
+            ml("item.booster.duration", NamedTextColor.GRAY, "%time%", formatMinutes(minutes)),
             Component.empty().decoration(TextDecoration.ITALIC, false),
-            Component.text("Use", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false),
-            Component.text("Right-click to activate.", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false),
-            Component.text("Pet XP only. Boosters do not stack.", NamedTextColor.DARK_GRAY).decoration(TextDecoration.ITALIC, false)
+            ml("item.booster.use", NamedTextColor.GOLD).decorate(TextDecoration.BOLD),
+            ml("item.booster.activate", NamedTextColor.YELLOW),
+            ml("item.booster.no-stack", NamedTextColor.DARK_GRAY)
         ));
         meta.getPersistentDataContainer().set(boosterTierKey, PersistentDataType.INTEGER, tier);
         meta.getPersistentDataContainer().set(boosterMinutesKey, PersistentDataType.INTEGER, minutes);
@@ -116,15 +130,15 @@ public final class PetItemFactory {
             Component.text(definition.name() + " - " + formatPercent(chance) + "%", definition.rarityColor())
                 .decoration(TextDecoration.ITALIC, false),
             List.of(
-                Component.text(definition.rarity() + " Pet", definition.rarityColor()).decorate(TextDecoration.BOLD),
+                ml("menu.detail.rarity-pet", definition.rarityColor(), "%rarity%", definition.rarity()).decorate(TextDecoration.BOLD),
                 Component.empty(),
-                Component.text("Current spawn weight: ", NamedTextColor.GRAY).append(Component.text(formatPercent(chance) + "%", NamedTextColor.AQUA)),
+                ml("item.chance.weight", NamedTextColor.GRAY, "%n%", formatPercent(chance)),
                 Component.empty(),
-                Component.text("Left-click: +1%", NamedTextColor.GREEN),
-                Component.text("Right-click: -1%", NamedTextColor.RED),
-                Component.text("Shift-click: +/-10%", NamedTextColor.YELLOW),
-                Component.text("Middle-click: type an exact value", NamedTextColor.AQUA),
-                Component.text("Range: 0.001% - 100%", NamedTextColor.DARK_GRAY)
+                ml("item.chance.plus", NamedTextColor.GREEN),
+                ml("item.chance.minus", NamedTextColor.RED),
+                ml("item.chance.shift", NamedTextColor.YELLOW),
+                ml("item.chance.exact", NamedTextColor.AQUA),
+                ml("item.chance.range", NamedTextColor.DARK_GRAY)
             )
         );
     }
@@ -257,14 +271,13 @@ public final class PetItemFactory {
         meta.displayName(title(definition, pet));
 
         final List<Component> lore = new ArrayList<>();
-        lore.add(Component.text("Rarity: ", NamedTextColor.GRAY).append(Component.text(definition.rarity(), definition.rarityColor())).decoration(TextDecoration.ITALIC, false));
+        lore.add(ml("item.pet.rarity", NamedTextColor.GRAY).append(Component.text(definition.rarity(), definition.rarityColor()).decoration(TextDecoration.ITALIC, false)));
         if (pet != null && pet.variant() != null && definition.hasVariants()) {
-            lore.add(Component.text("Variant: ", NamedTextColor.GRAY)
-                .append(Component.text(PetDefinition.variantDisplay(pet.variant()), NamedTextColor.AQUA))
-                .decoration(TextDecoration.ITALIC, false));
+            lore.add(ml("item.pet.variant", NamedTextColor.GRAY)
+                .append(Component.text(PetDefinition.variantDisplay(pet.variant()), NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
         }
         lore.add(Component.empty());
-        lore.add(Component.text("Abilities", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
+        lore.add(ml("item.pet.abilities", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
         definition.lore().stream()
             .filter(line -> !line.isBlank())
             .filter(line -> !line.equalsIgnoreCase("A loyal companion that offers"))
@@ -275,25 +288,24 @@ public final class PetItemFactory {
 
         if (pet != null && !discovery) {
             lore.add(Component.empty());
-            lore.add(Component.text("Progress", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("Level: ", NamedTextColor.GRAY).append(Component.text(pet.level() + " / 100", NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
-            lore.add(Component.text("EXP: ", NamedTextColor.GRAY).append(Component.text(pet.level() >= 100 ? "MAXED" : pet.exp() + " / " + pet.nextLevelExp(), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
-            final Component starLine = Component.text("Stars: ", NamedTextColor.GRAY)
+            lore.add(ml("item.pet.progress", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+            lore.add(ml("item.pet.level", NamedTextColor.GRAY).append(Component.text(pet.level() + " / 100", NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
+            lore.add(ml("item.pet.exp", NamedTextColor.GRAY).append(Component.text(pet.level() >= 100 ? mt("item.pet.maxed") : pet.exp() + " / " + pet.nextLevelExp(), NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
+            final Component starLine = ml("item.pet.stars", NamedTextColor.GRAY)
                 .append(pet.stars() >= OwnedPet.MAX_STARS
-                    ? Component.text("★★★★★ MAX", NamedTextColor.WHITE)
+                    ? Component.text("★★★★★ " + mt("item.pet.stars-max"), NamedTextColor.WHITE).decoration(TextDecoration.ITALIC, false)
                     : Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars())
-                        + "  " + pet.fusionPoints() + " / " + pet.pointsForNextStar(), NamedTextColor.GOLD))
-                .decoration(TextDecoration.ITALIC, false);
+                        + "  " + pet.fusionPoints() + " / " + pet.pointsForNextStar(), NamedTextColor.GOLD).decoration(TextDecoration.ITALIC, false));
             lore.add(starLine);
             lore.add(Component.empty());
-            lore.add(Component.text(active ? "Currently active" : "Click to summon", active ? NamedTextColor.GREEN : NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+            lore.add(ml(active ? "item.pet.active" : "item.pet.summon", active ? NamedTextColor.GREEN : NamedTextColor.YELLOW));
         } else {
             lore.add(Component.empty());
-            lore.add(Component.text("Claim", NamedTextColor.GOLD).decorate(TextDecoration.BOLD).decoration(TextDecoration.ITALIC, false));
+            lore.add(ml("item.pet.claim", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
             if (pet != null && pet.level() > 1) {
-                lore.add(Component.text("Starts at level ", NamedTextColor.GRAY).append(Component.text(pet.level(), NamedTextColor.AQUA)).decoration(TextDecoration.ITALIC, false));
+                lore.add(ml("item.pet.starts-at", NamedTextColor.GRAY).append(Component.text(pet.level(), NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
             }
-            lore.add(Component.text("Right-click to add this pet.", NamedTextColor.YELLOW).decoration(TextDecoration.ITALIC, false));
+            lore.add(ml("item.pet.add", NamedTextColor.YELLOW));
         }
 
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());

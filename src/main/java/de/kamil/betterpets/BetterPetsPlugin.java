@@ -161,7 +161,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             getLogger().info("LuckPerms detected. Permission nodes: betterpets.command.pets, betterpets.give, betterpets.chances, betterpets.info, betterpets.admin.");
         }
 
-        itemFactory = new PetItemFactory(this);
+        itemFactory = new PetItemFactory(this, lang);
         generatedChestKey = new NamespacedKey(this, "pet_loot_generated");
         containerOpenedKey = new NamespacedKey(this, "container_opened");
         announceOnPickupKey = new NamespacedKey(this, "announce_on_pickup");
@@ -1073,75 +1073,75 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         for (int slot = visiblePets; slot < PET_SLOT_LIMIT; slot++) {
             inventory.setItem(slot, itemFactory.control(
                 Material.GRAY_STAINED_GLASS_PANE,
-                Component.text("Empty Pet Slot", NamedTextColor.DARK_GRAY),
-                List.of(Component.text("Find pets in generated structure chests.", NamedTextColor.GRAY))
+                ml("menu.main.empty-slot", NamedTextColor.DARK_GRAY),
+                List.of(mg("menu.main.empty-slot-lore"))
             ));
         }
 
         inventory.setItem(45, itemFactory.control(
             holder.page() > 0 ? Material.ARROW : Material.GRAY_STAINED_GLASS_PANE,
-            Component.text("Back", holder.page() > 0 ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
-            List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            ml("menu.common.back", holder.page() > 0 ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
+            List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))
         ));
         inventory.setItem(46, itemFactory.control(
             Material.KNOWLEDGE_BOOK,
-            Component.text("Pet Catalogue", NamedTextColor.GOLD),
+            ml("menu.main.catalogue", NamedTextColor.GOLD),
             List.of(
-                Component.text("View every pet and its ability scaling.", NamedTextColor.GRAY),
-                Component.text("Pets: " + pets.size() + " / " + Math.max(1, getConfig().getInt("max-pets-per-player", PET_SLOT_LIMIT)), NamedTextColor.DARK_GRAY)
+                mg("menu.main.catalogue-lore"),
+                ml("menu.main.pets-count", NamedTextColor.DARK_GRAY, "%have%", Integer.toString(pets.size()), "%max%", Integer.toString(Math.max(1, getConfig().getInt("max-pets-per-player", PET_SLOT_LIMIT))))
             )
         ));
         if (has(player, CHANCES_PERMISSION)) {
             inventory.setItem(47, itemFactory.control(
                 Material.COMPARATOR,
-                Component.text("Spawn Chances", NamedTextColor.YELLOW),
-                List.of(Component.text("Adjust chest spawn weights.", NamedTextColor.GRAY))
+                ml("menu.main.spawn-chances", NamedTextColor.YELLOW),
+                List.of(mg("menu.main.spawn-chances-lore"))
             ));
         }
         if (has(player, ADMIN_PERMISSION)) {
             // The server-wide XP Multiplier is an admin control; the booster status is shown below it.
             final List<Component> xpLore = new ArrayList<>();
-            xpLore.add(Component.text("Current: " + formatDecimal(petXpMultiplier()) + "x", NamedTextColor.GRAY));
-            xpLore.add(Component.text("0.1x to 5.0x.", NamedTextColor.DARK_GRAY));
+            xpLore.add(ml("menu.main.xp-current", NamedTextColor.GRAY, "%n%", formatDecimal(petXpMultiplier())));
+            xpLore.add(mg("menu.main.xp-range"));
             xpLore.add(Component.empty());
             xpLore.addAll(boosterStatusLines(data));
             inventory.setItem(48, itemFactory.control(
                 Material.EXPERIENCE_BOTTLE,
-                Component.text("XP Multiplier", NamedTextColor.AQUA),
+                ml("menu.main.xp-multiplier", NamedTextColor.AQUA),
                 xpLore
             ));
         } else {
             // Everyone else gets a dedicated Pet XP Booster status item in the same spot.
             inventory.setItem(48, itemFactory.control(
                 Material.EXPERIENCE_BOTTLE,
-                Component.text("Pet XP Booster", NamedTextColor.LIGHT_PURPLE),
+                ml("menu.main.xp-booster", NamedTextColor.LIGHT_PURPLE),
                 boosterStatusLines(data)
             ));
         }
         inventory.setItem(50, itemFactory.control(
             Material.ENDER_EYE,
-            Component.text(data.visible() ? "Pet Visible" : "Pet Hidden", data.visible() ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
-            List.of(Component.text("Click to toggle active pet visibility.", NamedTextColor.GRAY))
+            ml(data.visible() ? "menu.main.pet-visible" : "menu.main.pet-hidden", data.visible() ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
+            List.of(mg("menu.main.visibility-lore"))
         ));
         inventory.setItem(51, itemFactory.control(
             holder.page() + 1 < pages ? Material.ARROW : Material.GRAY_STAINED_GLASS_PANE,
-            Component.text("Next", holder.page() + 1 < pages ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
-            List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+            ml("menu.main.next", holder.page() + 1 < pages ? NamedTextColor.YELLOW : NamedTextColor.DARK_GRAY),
+            List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))
         ));
         inventory.setItem(52, itemFactory.control(
             Material.PURPLE_DYE,
-            Component.text("Despawn Pet", NamedTextColor.DARK_RED),
-            List.of(Component.text("Keeps the pet in your list.", NamedTextColor.GRAY))
+            ml("menu.main.despawn", NamedTextColor.DARK_RED),
+            List.of(mg("menu.main.despawn-lore"))
         ));
         inventory.setItem(53, itemFactory.control(
             Material.GRAY_DYE,
-            Component.text("Convert To Item", NamedTextColor.RED),
-            List.of(Component.text("Removes the active pet from your list.", NamedTextColor.GRAY))
+            ml("menu.main.convert", NamedTextColor.RED),
+            List.of(mg("menu.main.convert-lore"))
         ));
         inventory.setItem(49, itemFactory.control(
             Material.BARRIER,
-            Component.text("Close", NamedTextColor.RED),
-            List.of(Component.text("Close the menu.", NamedTextColor.GRAY))
+            ml("menu.common.close", NamedTextColor.RED),
+            List.of(mg("menu.main.close-lore"))
         ));
     }
 
@@ -1161,19 +1161,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final ItemMeta meta = item.getItemMeta();
         final List<Component> lore = meta.lore() == null ? new ArrayList<>() : new ArrayList<>(meta.lore());
         lore.add(Component.empty());
-        lore.add(Component.text("Current ability value", NamedTextColor.AQUA));
+        lore.add(ml("menu.pet.current-ability", NamedTextColor.AQUA));
         lore.add(Component.text(abilityValue(definition.id(), pet.level()), NamedTextColor.GRAY));
         if (definition.id().equals("phoenix")) {
             final long remaining = ActivePetManager.phoenixCooldownMillis(pet.level()) - (System.currentTimeMillis() - pet.lastTotemMillis());
             lore.add(Component.empty());
             if (remaining <= 0) {
-                lore.add(Component.text("Revive: ready", NamedTextColor.GREEN));
+                lore.add(ml("menu.pet.revive-ready", NamedTextColor.GREEN));
             } else {
-                lore.add(Component.text("Revive cooldown: " + formatDuration(remaining), NamedTextColor.GRAY));
+                lore.add(ml("menu.pet.revive-cooldown", NamedTextColor.GRAY, "%time%", formatDuration(remaining)));
             }
         }
         if (activePets.isFlyable(definition.id()) && pet.level() >= 50) {
-            lore.add(Component.text("Right-click the active pet to fly.", NamedTextColor.GOLD));
+            lore.add(ml("menu.pet.fly-hint", NamedTextColor.GOLD));
         }
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());
         item.setItemMeta(meta);
@@ -1189,7 +1189,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final int size = alpacaStorageSize(ownedPet.level());
         final AlpacaStorageHolder holder = new AlpacaStorageHolder(player.getUniqueId(), pet.uuid(), size);
-        final Inventory inventory = Bukkit.createInventory(holder, size, Texts.menuTitle("Alpaca Storage"));
+        final Inventory inventory = Bukkit.createInventory(holder, size, Texts.menuTitle(mt("menu.title.alpaca-storage")));
         holder.setInventory(inventory);
         inventory.setContents(ownedPet.storageContents(size));
         player.openInventory(inventory);
@@ -1822,7 +1822,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final DropMenuHolder holder = new DropMenuHolder(player.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle("Better Pets Sources"));
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle(mt("menu.title.sources")));
         holder.setInventory(inventory);
         renderDropMenu(inventory);
         player.openInventory(inventory);
@@ -1834,15 +1834,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final String source = DROP_SOURCES[i];
             final boolean enabled = petSourceEnabled(source);
             final List<Component> lore = new ArrayList<>();
-            lore.add(Component.text(enabled ? "Enabled" : "Disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED));
-            lore.add(Component.text("Chance: " + formatPercent(petSourceChance(source)) + "%", NamedTextColor.GRAY));
+            lore.add(ml(enabled ? "menu.common.enabled" : "menu.common.disabled", enabled ? NamedTextColor.GREEN : NamedTextColor.RED));
+            lore.add(ml("menu.sources.chance", NamedTextColor.GRAY, "%n%", formatPercent(petSourceChance(source))));
             if (sourceHasOminousBonus(source)) {
-                lore.add(Component.text("Ominous bonus: +" + formatPercent(petSourceOminousBonus(source)) + "%", NamedTextColor.DARK_PURPLE));
+                lore.add(ml("menu.sources.ominous", NamedTextColor.DARK_PURPLE, "%n%", formatPercent(petSourceOminousBonus(source))));
             }
             lore.add(Component.empty());
-            lore.add(Component.text("Left-click: toggle on/off", NamedTextColor.YELLOW));
-            lore.add(Component.text("Right-click: +0.5%", NamedTextColor.GREEN));
-            lore.add(Component.text("Shift + right-click: -0.5%", NamedTextColor.RED));
+            lore.add(ml("menu.sources.toggle", NamedTextColor.YELLOW));
+            lore.add(ml("menu.sources.plus", NamedTextColor.GREEN));
+            lore.add(ml("menu.sources.minus", NamedTextColor.RED));
             inventory.setItem(DROP_SLOTS[i], itemFactory.control(
                 dropMaterial(source),
                 Component.text(dropName(source), enabled ? NamedTextColor.GREEN : NamedTextColor.RED),
@@ -1851,8 +1851,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         inventory.setItem(22, itemFactory.control(
             Material.BARRIER,
-            Component.text("Close", NamedTextColor.RED),
-            List.of(Component.text("Changes save instantly.", NamedTextColor.GRAY))
+            ml("menu.common.close", NamedTextColor.RED),
+            List.of(mg("menu.common.saves-instantly"))
         ));
     }
 
@@ -2550,7 +2550,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final InfoMenuHolder holder = new InfoMenuHolder();
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Better Pets Catalogue"));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.catalogue")));
         holder.setInventory(inventory);
         renderInfoMenu(inventory, holder);
         player.openInventory(inventory);
@@ -2571,27 +2571,27 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         inventory.setItem(45, itemFactory.control(
             Material.ARROW,
-            Component.text("Back", NamedTextColor.YELLOW),
-            List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
+            ml("menu.common.back", NamedTextColor.YELLOW),
+            List.of(mg("menu.catalogue.back-lore"))
         ));
         if (holder.page() > 0) {
             inventory.setItem(48, itemFactory.control(
                 Material.SPECTRAL_ARROW,
-                Component.text("Previous Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+                ml("menu.common.prev", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))
             ));
         }
         if (holder.page() + 1 < pages) {
             inventory.setItem(50, itemFactory.control(
                 Material.SPECTRAL_ARROW,
-                Component.text("Next Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+                ml("menu.common.next", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))
             ));
         }
         inventory.setItem(49, itemFactory.control(
             Material.BARRIER,
-            Component.text("Close", NamedTextColor.RED),
-            List.of(Component.text("Close this catalogue.", NamedTextColor.GRAY))
+            ml("menu.common.close", NamedTextColor.RED),
+            List.of(mg("menu.catalogue.close-lore"))
         ));
     }
 
@@ -2626,7 +2626,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void openPetDetailMenu(final Player player, final PetDefinition definition) {
         final PetDetailMenuHolder holder = new PetDetailMenuHolder(definition.id());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " Details", definition.rarityColor()));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " " + mt("menu.title.details-suffix"), definition.rarityColor()));
         holder.setInventory(inventory);
 
         final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
@@ -2636,7 +2636,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         inventory.setItem(4, itemFactory.infoItem(definition, List.of(
             Component.text(abilitySummary(definition.id()), NamedTextColor.GRAY),
-            Component.text(definition.rarity() + " Pet", definition.rarityColor())
+            ml("menu.detail.rarity-pet", definition.rarityColor(), "%rarity%", definition.rarity())
         )));
 
         final int[] slots = {10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22};
@@ -2645,44 +2645,44 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final int level = levels[i];
             inventory.setItem(slots[i], itemFactory.control(
                 level >= 50 ? Material.LIGHT_BLUE_STAINED_GLASS_PANE : Material.LIME_STAINED_GLASS_PANE,
-                Component.text("Level " + level, level >= 50 ? NamedTextColor.AQUA : NamedTextColor.GREEN),
+                ml("menu.detail.level", level >= 50 ? NamedTextColor.AQUA : NamedTextColor.GREEN, "%n%", Integer.toString(level)),
                 detailLore(definition, level)
             ));
         }
 
         final Ascension.Track ascTrack = Ascension.track(definition.id());
         final List<Component> ascLore = new ArrayList<>(List.of(
-            Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(ascTrack.display(), NamedTextColor.AQUA)),
+            ml("menu.asc.track-label", NamedTextColor.GRAY).append(Component.text(ascTrack.display(), NamedTextColor.AQUA)),
             Component.text(trackDescription(ascTrack), NamedTextColor.GRAY),
             Component.empty(),
-            Component.text("At ★★★★★ this pet gains:", NamedTextColor.DARK_GRAY),
+            ml("menu.detail.at-max", NamedTextColor.DARK_GRAY),
             Component.text("• " + trackPerkAtStar(ascTrack, OwnedPet.MAX_STARS), NamedTextColor.AQUA),
-            Component.text("• +" + (int) Math.round(OwnedPet.MAX_STARS * ASCENSION_XP_PER_STAR * 100) + "% pet XP", NamedTextColor.GRAY),
-            Component.text("• A stronger ability (until its tier cap)", NamedTextColor.GRAY)));
+            ml("menu.asc.xp", NamedTextColor.GRAY, "%n%", Integer.toString((int) Math.round(OwnedPet.MAX_STARS * ASCENSION_XP_PER_STAR * 100))),
+            ml("menu.detail.stronger-ability", NamedTextColor.GRAY)));
         if (activePets.isFlyable(definition.id())) {
-            ascLore.add(Component.text("• +" + (int) Math.round(OwnedPet.MAX_STARS * getConfig().getDouble("flight-speed-per-star", 0.08) * 100) + "% flight speed", NamedTextColor.AQUA));
+            ascLore.add(ml("menu.asc.flight", NamedTextColor.AQUA, "%n%", Integer.toString((int) Math.round(OwnedPet.MAX_STARS * getConfig().getDouble("flight-speed-per-star", 0.08) * 100))));
         }
         ascLore.add(Component.empty());
-        ascLore.add(Component.text("Scrap 5 duplicates of this pet to reach ★★★★★.", NamedTextColor.DARK_GRAY));
-        ascLore.add(Component.text("Right-click your pet → Ascension.", NamedTextColor.LIGHT_PURPLE));
+        ascLore.add(ml("menu.detail.reach-max", NamedTextColor.DARK_GRAY));
+        ascLore.add(ml("menu.detail.rightclick-asc", NamedTextColor.LIGHT_PURPLE));
         inventory.setItem(8, itemFactory.control(Material.NETHER_STAR,
-            Component.text("★ Ascension", NamedTextColor.GOLD), ascLore));
+            ml("menu.asc.title-item", NamedTextColor.GOLD), ascLore));
 
         if (definition.hasVariants()) {
             inventory.setItem(45, itemFactory.control(
                 Material.ITEM_FRAME,
-                Component.text("View Variants (" + definition.variants().size() + ")", NamedTextColor.LIGHT_PURPLE),
-                List.of(Component.text("Browse this pet's cosmetic skins.", NamedTextColor.GRAY))
+                ml("menu.detail.view-variants", NamedTextColor.LIGHT_PURPLE, "%n%", Integer.toString(definition.variants().size())),
+                List.of(mg("menu.detail.view-variants-lore"))
             ));
         }
         inventory.setItem(49, itemFactory.control(
             Material.ARROW,
-            Component.text("Back", NamedTextColor.YELLOW),
-            List.of(Component.text("Return to the pet catalogue.", NamedTextColor.GRAY))
+            ml("menu.common.back", NamedTextColor.YELLOW),
+            List.of(mg("menu.detail.back-lore"))
         ));
         inventory.setItem(53, itemFactory.control(
             Material.BARRIER,
-            Component.text("Close", NamedTextColor.RED),
+            ml("menu.common.close", NamedTextColor.RED),
             List.of()
         ));
         player.openInventory(inventory);
@@ -2705,7 +2705,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void openVariantMenu(final Player player, final PetDefinition definition, final int page) {
         final VariantMenuHolder holder = new VariantMenuHolder(definition.id(), Math.max(0, page));
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " Variants", definition.rarityColor()));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " " + mt("menu.title.variants-suffix"), definition.rarityColor()));
         holder.setInventory(inventory);
         renderVariantMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -2736,28 +2736,28 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 }
                 final List<Component> lore = new ArrayList<>(meta.lore() == null ? List.of() : meta.lore());
                 lore.add((collected
-                    ? Component.text("✔ Collected", NamedTextColor.GREEN)
-                    : Component.text("Not collected yet", NamedTextColor.DARK_GRAY)).decoration(TextDecoration.ITALIC, false));
+                    ? ml("menu.variants.collected", NamedTextColor.GREEN)
+                    : ml("menu.variants.not-collected", NamedTextColor.DARK_GRAY)).decoration(TextDecoration.ITALIC, false));
                 meta.lore(lore);
             });
             inventory.setItem(i, icon);
         }
         inventory.setItem(45, itemFactory.control(
             Material.ARROW,
-            Component.text("Back", NamedTextColor.YELLOW),
-            List.of(Component.text("Return to pet details.", NamedTextColor.GRAY))
+            ml("menu.common.back", NamedTextColor.YELLOW),
+            List.of(mg("menu.variants.back-lore"))
         ));
         if (holder.page() > 0) {
             inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW,
-                Component.text("Previous Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+                ml("menu.common.prev", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
         if (holder.page() + 1 < pages) {
             inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW,
-                Component.text("Next Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+                ml("menu.common.next", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
-        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
     }
 
     private void handleVariantClick(final InventoryClickEvent event, final VariantMenuHolder holder) {
@@ -2802,7 +2802,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final ShopMenuHolder holder = new ShopMenuHolder(category, Math.max(0, page));
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Pet Shop"));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.shop")));
         holder.setInventory(inventory);
         renderShopMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -2812,8 +2812,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         inventory.clear();
         final PlayerPetData data = storage.data(player.getUniqueId());
         inventory.setItem(4, itemFactory.control(Material.GOLD_INGOT,
-            Component.text("Tokens: " + data.tokens(), NamedTextColor.GOLD),
-            List.of(Component.text("Earn tokens by scrapping duplicate pets.", NamedTextColor.GRAY))));
+            ml("menu.shop.tokens", NamedTextColor.GOLD, "%n%", Integer.toString(data.tokens())),
+            List.of(mg("menu.shop.tokens-lore"))));
 
         switch (holder.category()) {
             case "particle" -> renderShopList(inventory, holder, player, "particle");
@@ -2822,42 +2822,41 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             case "booster" -> renderShopBoosters(inventory);
             default -> {
                 inventory.setItem(20, itemFactory.control(shopDye("aqua"),
-                    Component.text("Particle Colours", NamedTextColor.AQUA),
-                    List.of(Component.text("Auras your pets can wear.", NamedTextColor.GRAY),
-                        Component.text(shopPrice("particle", 10) + " tokens each", NamedTextColor.GOLD))));
+                    ml("menu.shop.particles", NamedTextColor.AQUA),
+                    List.of(mg("menu.shop.particles-lore"),
+                        ml("menu.shop.price-each", NamedTextColor.GOLD, "%n%", Integer.toString(shopPrice("particle", 10))))));
                 inventory.setItem(22, itemFactory.control(Material.FIREWORK_STAR,
-                    Component.text("Trails", NamedTextColor.LIGHT_PURPLE),
-                    List.of(Component.text("Particle trails as your pet moves.", NamedTextColor.GRAY),
-                        Component.text(shopPrice("trail", 15) + " tokens each", NamedTextColor.GOLD))));
+                    ml("menu.shop.trails", NamedTextColor.LIGHT_PURPLE),
+                    List.of(mg("menu.shop.trails-lore"),
+                        ml("menu.shop.price-each", NamedTextColor.GOLD, "%n%", Integer.toString(shopPrice("trail", 15))))));
                 inventory.setItem(24, itemFactory.control(Material.NAME_TAG,
-                    Component.text("Nametag Styles", NamedTextColor.YELLOW),
-                    List.of(Component.text("Coloured gradients for pet names.", NamedTextColor.GRAY),
-                        Component.text(shopPrice("nametag", 20) + " tokens each", NamedTextColor.GOLD))));
+                    ml("menu.shop.nametags", NamedTextColor.YELLOW),
+                    List.of(mg("menu.shop.nametags-lore"),
+                        ml("menu.shop.price-each", NamedTextColor.GOLD, "%n%", Integer.toString(shopPrice("nametag", 20))))));
                 inventory.setItem(30, itemFactory.control(Material.EXPERIENCE_BOTTLE,
-                    Component.text("XP Boosters", NamedTextColor.GREEN),
-                    List.of(Component.text("Speed up your pet's leveling.", NamedTextColor.GRAY))));
+                    ml("menu.shop.boosters", NamedTextColor.GREEN),
+                    List.of(mg("menu.shop.boosters-lore"))));
                 inventory.setItem(32, itemFactory.control(Material.PLAYER_HEAD,
-                    Component.text("Pet Skins", NamedTextColor.DARK_AQUA),
-                    List.of(Component.text("Buy skins directly in a pet's", NamedTextColor.GRAY),
-                        Component.text("Customize menu (sneak + right-click).", NamedTextColor.GRAY))));
+                    ml("menu.shop.skins", NamedTextColor.DARK_AQUA),
+                    List.of(mg("menu.shop.skins-lore1"), mg("menu.shop.skins-lore2"))));
             }
         }
         if (!holder.category().equals("main")) {
-            inventory.setItem(45, itemFactory.control(Material.ARROW,
-                Component.text("Back", NamedTextColor.YELLOW), List.of(Component.text("Return to the shop.", NamedTextColor.GRAY))));
             final int pages = shopPageCount(holder.category());
+            inventory.setItem(45, itemFactory.control(Material.ARROW,
+                ml("menu.common.back", NamedTextColor.YELLOW), List.of(mg("menu.shop.back-lore"))));
             if (holder.page() > 0) {
                 inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW,
-                    Component.text("Previous Page", NamedTextColor.YELLOW),
-                    List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+                    ml("menu.common.prev", NamedTextColor.YELLOW),
+                    List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
             }
             if (holder.page() + 1 < pages) {
                 inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW,
-                    Component.text("Next Page", NamedTextColor.YELLOW),
-                    List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+                    ml("menu.common.next", NamedTextColor.YELLOW),
+                    List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
             }
         }
-        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
     }
 
     private int shopPageCount(final String category) {
@@ -2898,9 +2897,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final int tier = tiers[i];
             final int price = shopPrice("booster-x" + tier, 15 * (tier - 1));
             inventory.setItem(slots[i], itemFactory.control(Material.EXPERIENCE_BOTTLE,
-                Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE),
-                List.of(Component.text("Duration: " + getConfig().getInt("shop.booster-minutes", 30) + "m", NamedTextColor.GRAY),
-                    Component.text("Click to buy: " + price + " tokens", NamedTextColor.GOLD))));
+                ml("menu.shop.booster-name", NamedTextColor.LIGHT_PURPLE, "%tier%", Integer.toString(tier)),
+                List.of(ml("menu.shop.booster-duration", NamedTextColor.GRAY, "%min%", Integer.toString(getConfig().getInt("shop.booster-minutes", 30))),
+                    ml("menu.shop.booster-buy", NamedTextColor.GOLD, "%price%", Integer.toString(price)))));
         }
     }
 
@@ -2931,10 +2930,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final List<Component> lore = new ArrayList<>();
         if (owned) {
-            lore.add(Component.text("✔ Owned", NamedTextColor.GREEN));
-            lore.add(Component.text("Select it in a pet's Customize menu.", NamedTextColor.GRAY));
+            lore.add(ml("menu.shop.owned", NamedTextColor.GREEN));
+            lore.add(mg("menu.shop.owned-lore"));
         } else {
-            lore.add(Component.text("Click to buy: " + price + " tokens", NamedTextColor.GOLD));
+            lore.add(ml("menu.shop.buy", NamedTextColor.GOLD, "%price%", Integer.toString(price)));
         }
         final ItemStack icon = itemFactory.control(material, name, lore);
         if (owned) {
@@ -3074,7 +3073,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final AscensionMenuHolder holder = new AscensionMenuHolder(pet.uuid());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.title("✦ " + definition.name() + " Ascension ✦",
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.title("✦ " + definition.name() + " " + mt("menu.title.ascension-suffix") + " ✦",
             net.kyori.adventure.text.format.TextColor.color(0x9B5CFF), net.kyori.adventure.text.format.TextColor.color(0xE100FF)));
         holder.setInventory(inventory);
         renderAscensionMenu(inventory, holder, player);
@@ -3112,74 +3111,70 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final boolean current = pet.stars() == n;
             final NamedTextColor titleColor = n >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : reached ? NamedTextColor.GOLD : NamedTextColor.DARK_GRAY;
             final List<Component> lore = new ArrayList<>();
-            lore.add(current ? Component.text("● You are here", NamedTextColor.WHITE)
-                : reached ? Component.text("✔ Reached", NamedTextColor.GREEN)
-                : Component.text("Locked — needs " + n + " duplicate" + (n == 1 ? "" : "s") + " total", NamedTextColor.GRAY));
+            lore.add(current ? ml("menu.asc.here", NamedTextColor.WHITE)
+                : reached ? ml("menu.asc.reached", NamedTextColor.GREEN)
+                : ml("menu.asc.locked", NamedTextColor.GRAY, "%n%", Integer.toString(n)));
             lore.add(Component.empty());
-            lore.add(Component.text("Bonus at this star:", NamedTextColor.DARK_GRAY));
+            lore.add(ml("menu.asc.bonus-header", NamedTextColor.DARK_GRAY));
             lore.add(Component.text("• " + trackPerkAtStar(track, n), NamedTextColor.AQUA));
             if (activePets.isFlyable(definition.id())) {
-                lore.add(Component.text("• +" + (int) Math.round(n * getConfig().getDouble("flight-speed-per-star", 0.08) * 100) + "% flight speed", NamedTextColor.AQUA));
+                lore.add(ml("menu.asc.flight", NamedTextColor.AQUA, "%n%", Integer.toString((int) Math.round(n * getConfig().getDouble("flight-speed-per-star", 0.08) * 100))));
             }
-            lore.add(Component.text("• +" + (int) Math.round(n * ASCENSION_XP_PER_STAR * 100) + "% pet XP", NamedTextColor.GRAY));
+            lore.add(ml("menu.asc.xp", NamedTextColor.GRAY, "%n%", Integer.toString((int) Math.round(n * ASCENSION_XP_PER_STAR * 100))));
             final int abilityGain = Math.min(PetAbilities.MAX_TIER, baseTier + n) - baseTier;
             lore.add(abilityGain > 0
-                ? Component.text("• Stronger ability (+" + abilityGain + " tier" + (abilityGain == 1 ? "" : "s") + ")", NamedTextColor.GRAY)
-                : Component.text("• Ability already at its cap", NamedTextColor.DARK_GRAY));
+                ? ml("menu.asc.ability", NamedTextColor.GRAY, "%n%", Integer.toString(abilityGain))
+                : ml("menu.asc.ability-capped", NamedTextColor.DARK_GRAY));
             final ItemStack node = itemFactory.control(reached ? Material.NETHER_STAR : Material.GRAY_STAINED_GLASS_PANE,
-                Component.text("★".repeat(n) + "☆".repeat(OwnedPet.MAX_STARS - n) + "  Star " + n, titleColor), lore);
+                ml("menu.asc.star", titleColor, "%stars%", "★".repeat(n) + "☆".repeat(OwnedPet.MAX_STARS - n), "%n%", Integer.toString(n)), lore);
             if (current) {
                 node.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
             }
             inventory.setItem(slots[n - 1], node);
         }
-        final String progress = pet.stars() >= OwnedPet.MAX_STARS
-            ? "Fully ascended ★★★★★"
-            : "Scrap " + pet.pointsForNextStar() + " of this pet total for the next star (" + pet.fusionPoints() + " scrapped)";
+        final Component progress = pet.stars() >= OwnedPet.MAX_STARS
+            ? ml("menu.asc.fully", NamedTextColor.GRAY)
+            : ml("menu.asc.progress", NamedTextColor.GRAY, "%next%", Integer.toString(pet.pointsForNextStar()), "%done%", Integer.toString(pet.fusionPoints()));
         final List<Component> headerLore = new ArrayList<>(List.of(
-            Component.text("Current: ", NamedTextColor.GRAY).append(Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars()),
+            ml("menu.asc.current", NamedTextColor.GRAY).append(Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars()),
                 pet.stars() >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD)),
-            Component.text(progress, NamedTextColor.GRAY),
+            progress,
             Component.empty(),
-            Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
-            Component.text(trackDescription(track), NamedTextColor.DARK_GRAY),
-            Component.text("Its ability now (★" + pet.stars() + "): ", NamedTextColor.GRAY)
+            ml("menu.asc.track-label", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
+            ml("menu.track.desc." + track.name().toLowerCase(java.util.Locale.ROOT), NamedTextColor.DARK_GRAY),
+            ml("menu.asc.ability-now", NamedTextColor.GRAY, "%stars%", Integer.toString(pet.stars()))
                 .append(Component.text(PetAbilities.value(definition.id(), pet.level(), pet.stars()), NamedTextColor.YELLOW))));
         if (activePets.isFlyable(definition.id())) {
             final int flightPct = (int) Math.round(pet.stars() * getConfig().getDouble("flight-speed-per-star", 0.08) * 100);
-            headerLore.add(Component.text("Flight speed: ", NamedTextColor.GRAY)
-                .append(Component.text("+" + flightPct + "%", NamedTextColor.AQUA)).append(Component.text(" (flying pets)", NamedTextColor.DARK_GRAY)));
+            headerLore.add(ml("menu.asc.flight-header", NamedTextColor.GRAY)
+                .append(Component.text("+" + flightPct + "%", NamedTextColor.AQUA)).append(ml("menu.asc.flight-note", NamedTextColor.DARK_GRAY)));
         }
         headerLore.add(Component.empty());
-        headerLore.add(Component.text("Every star adds up — higher stars are stronger.", NamedTextColor.DARK_GRAY));
+        headerLore.add(ml("menu.asc.footer", NamedTextColor.DARK_GRAY));
         inventory.setItem(4, itemFactory.control(Material.NETHER_STAR,
-            Texts.gradient("★ Ascension", net.kyori.adventure.text.format.TextColor.color(0xFFD54F), net.kyori.adventure.text.format.TextColor.color(0xFFFFFF)),
+            Texts.gradient(mt("menu.asc.title-item"), net.kyori.adventure.text.format.TextColor.color(0xFFD54F), net.kyori.adventure.text.format.TextColor.color(0xFFFFFF)),
             headerLore));
         inventory.setItem(49, itemFactory.control(Material.BARRIER,
-            Component.text("Back", NamedTextColor.RED), List.of(Component.text("Return to Customize.", NamedTextColor.GRAY))));
+            ml("menu.common.back", NamedTextColor.RED), List.of(mg("menu.picker.back-lore"))));
     }
 
     /** One-line plain-language description of what an ascension track does, for menu tooltips. */
     private String trackDescription(final Ascension.Track track) {
-        return switch (track) {
-            case WARRIOR -> "Fighter — deals more damage as it ascends.";
-            case GUARDIAN -> "Protector — takes less damage as it ascends.";
-            case GATHERER -> "Harvester — extra block/loot drops as it ascends.";
-            case RUNNER -> "Sprinter — softer falls, then Speed at higher stars.";
-            case MYSTIC -> "Enchanter — Luck, then Regeneration at higher stars.";
-            case AQUATIC -> "Diver — water breathing and extra fishing catches.";
-        };
+        return mt("menu.track.desc." + track.name().toLowerCase(java.util.Locale.ROOT));
     }
 
     /** The concrete, cumulative track perk a pet has at a given star count — shown per stage node so the scaling is obvious. */
     private String trackPerkAtStar(final Ascension.Track track, final int n) {
         return switch (track) {
-            case WARRIOR -> "+" + (n * 3) + "% damage dealt";
-            case GUARDIAN -> "-" + (n * 3) + "% damage taken";
-            case GATHERER -> "+" + (n * 6) + "% double-drop chance";
-            case RUNNER -> "-" + Math.min(90, n * 18) + "% fall damage" + (n >= 3 ? " + Speed" : "");
-            case MYSTIC -> "Luck " + new String[]{"I", "II", "III"}[Math.min(2, (n - 1) / 2)] + (n >= 4 ? " + Regeneration" : "");
-            case AQUATIC -> "+" + (n * 8) + "% double catch" + (n >= 3 ? " + Water Breathing" : "");
+            case WARRIOR -> mt("menu.track.perk.warrior", "%n%", Integer.toString(n * 3));
+            case GUARDIAN -> mt("menu.track.perk.guardian", "%n%", Integer.toString(n * 3));
+            case GATHERER -> mt("menu.track.perk.gatherer", "%n%", Integer.toString(n * 6));
+            case RUNNER -> mt("menu.track.perk.runner", "%n%", Integer.toString(Math.min(90, n * 18)))
+                + (n >= 3 ? mt("menu.track.extra.speed") : "");
+            case MYSTIC -> mt("menu.track.perk.mystic", "%level%", new String[]{"I", "II", "III"}[Math.min(2, (n - 1) / 2)])
+                + (n >= 4 ? mt("menu.track.extra.regen") : "");
+            case AQUATIC -> mt("menu.track.perk.aquatic", "%n%", Integer.toString(n * 8))
+                + (n >= 3 ? mt("menu.track.extra.water") : "");
         };
     }
 
@@ -3200,7 +3195,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     void openLeaderboardMenu(final Player player, final String category) {
         final LeaderboardMenuHolder holder = new LeaderboardMenuHolder(player.getUniqueId(), category);
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Pet Leaderboard"));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.leaderboard")));
         holder.setInventory(inventory);
         renderLeaderboardMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -3234,9 +3229,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private String leaderboardUnit(final String category) {
         return switch (category) {
-            case "stars" -> "stars";
-            case "tokens" -> "tokens";
-            default -> "pets";
+            case "stars" -> mt("menu.top.unit.stars");
+            case "tokens" -> mt("menu.top.unit.tokens");
+            default -> mt("menu.top.unit.pets");
         };
     }
 
@@ -3246,9 +3241,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             inventory.setItem(i, filler);
         }
         final String category = holder.category();
-        inventory.setItem(2, leaderboardCategoryButton("pets", "Most Pets", Material.BONE, category));
-        inventory.setItem(4, leaderboardCategoryButton("stars", "Total Stars", Material.NETHER_STAR, category));
-        inventory.setItem(6, leaderboardCategoryButton("tokens", "Most Tokens", Material.SUNFLOWER, category));
+        inventory.setItem(2, leaderboardCategoryButton("pets", "menu.top.cat.pets", Material.BONE, category));
+        inventory.setItem(4, leaderboardCategoryButton("stars", "menu.top.cat.stars", Material.NETHER_STAR, category));
+        inventory.setItem(6, leaderboardCategoryButton("tokens", "menu.top.cat.tokens", Material.SUNFLOWER, category));
 
         final List<LeaderRow> rows = leaderboard(category);
         final String unit = leaderboardUnit(category);
@@ -3271,18 +3266,18 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
         }
         inventory.setItem(40, itemFactory.control(Material.NAME_TAG,
-            Component.text("Your Rank", NamedTextColor.AQUA),
+            ml("menu.top.your-rank", NamedTextColor.AQUA),
             List.of(myRank > 0
-                ? Component.text("#" + myRank + " — " + myValue + " " + unit, NamedTextColor.GOLD)
-                : Component.text("Unranked in this category", NamedTextColor.GRAY))));
-        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+                ? ml("menu.top.rank-line", NamedTextColor.GOLD, "%rank%", Integer.toString(myRank), "%value%", Integer.toString(myValue), "%unit%", unit)
+                : ml("menu.top.unranked", NamedTextColor.GRAY))));
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
     }
 
-    private ItemStack leaderboardCategoryButton(final String key, final String label, final Material icon, final String active) {
+    private ItemStack leaderboardCategoryButton(final String key, final String labelKey, final Material icon, final String active) {
         final boolean on = key.equals(active);
-        final ItemStack item = itemFactory.control(icon, Component.text(label, on ? NamedTextColor.GREEN : NamedTextColor.GRAY),
-            List.of(on ? Component.text("● Showing this ranking", NamedTextColor.DARK_GRAY)
-                : Component.text("Click to view this ranking", NamedTextColor.DARK_GRAY)));
+        final ItemStack item = itemFactory.control(icon, ml(labelKey, on ? NamedTextColor.GREEN : NamedTextColor.GRAY),
+            List.of(on ? ml("menu.top.showing", NamedTextColor.DARK_GRAY)
+                : ml("menu.top.click-view", NamedTextColor.DARK_GRAY)));
         if (on) {
             item.editMeta(meta -> meta.setEnchantmentGlintOverride(true));
         }
@@ -3299,7 +3294,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         };
         head.editMeta(org.bukkit.inventory.meta.SkullMeta.class, meta -> {
             meta.setOwningPlayer(Bukkit.getOfflinePlayer(row.id()));
-            meta.displayName(Component.text("#" + rank + "  " + row.name() + (isViewer ? " (you)" : ""), color)
+            meta.displayName(Component.text("#" + rank + "  " + row.name() + (isViewer ? mt("menu.top.you") : ""), color)
                 .decoration(TextDecoration.ITALIC, false));
             meta.lore(List.of(Component.text(row.value() + " " + unit, NamedTextColor.AQUA).decoration(TextDecoration.ITALIC, false)));
         });
@@ -3400,7 +3395,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void openTradeMenu(final Player initiator, final Player partner) {
         final TradeMenuHolder holder = new TradeMenuHolder(initiator.getUniqueId(), partner.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Trade"));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.trade")));
         holder.setInventory(inventory);
         renderTradeMenu(holder);
         // Both players view the SAME inventory instance, so every change stays in sync between them.
@@ -3432,42 +3427,42 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             inv.setItem(TRADE_PART_ITEM_SLOTS[i], i < partItems.size() ? partItems.get(i).clone() : emptyOfferSlot());
         }
 
-        inv.setItem(TRADE_INIT_ADD, tradeButton(Material.LIME_DYE, "Offer held pet", "Click with a pet in your hand."));
-        inv.setItem(TRADE_INIT_CLEAR, tradeButton(Material.CAULDRON, "Clear my offer", "Return my items & reset my tokens."));
+        inv.setItem(TRADE_INIT_ADD, tradeButton(Material.LIME_DYE, "menu.trade.offer-pet", "menu.trade.offer-pet-hint"));
+        inv.setItem(TRADE_INIT_CLEAR, tradeButton(Material.CAULDRON, "menu.trade.clear", "menu.trade.clear-hint"));
         inv.setItem(TRADE_INIT_TOKENS, tokenOfferItem(holder.tokensOf(holder.initiator())));
-        inv.setItem(TRADE_PART_ADD, tradeButton(Material.LIME_DYE, "Offer held pet", "Click with a pet in your hand."));
-        inv.setItem(TRADE_PART_CLEAR, tradeButton(Material.CAULDRON, "Clear my offer", "Return my items & reset my tokens."));
+        inv.setItem(TRADE_PART_ADD, tradeButton(Material.LIME_DYE, "menu.trade.offer-pet", "menu.trade.offer-pet-hint"));
+        inv.setItem(TRADE_PART_CLEAR, tradeButton(Material.CAULDRON, "menu.trade.clear", "menu.trade.clear-hint"));
         inv.setItem(TRADE_PART_TOKENS, tokenOfferItem(holder.tokensOf(holder.partner())));
 
         inv.setItem(TRADE_INIT_CONFIRM, confirmButton(holder.confirmed(holder.initiator())));
         inv.setItem(TRADE_PART_CONFIRM, confirmButton(holder.confirmed(holder.partner())));
-        inv.setItem(TRADE_CLOSE, itemFactory.control(Material.BARRIER, Component.text("Cancel trade", NamedTextColor.RED),
-            List.of(Component.text("Closing returns everyone's items.", NamedTextColor.GRAY))));
+        inv.setItem(TRADE_CLOSE, itemFactory.control(Material.BARRIER, ml("menu.trade.cancel", NamedTextColor.RED),
+            List.of(mg("menu.trade.cancel-lore"))));
     }
 
     private ItemStack tradeHeader(final String name, final boolean confirmed) {
         return itemFactory.control(Material.PLAYER_HEAD, Component.text(name, NamedTextColor.AQUA),
-            List.of(confirmed ? Component.text("✔ Confirmed", NamedTextColor.GREEN) : Component.text("Deciding…", NamedTextColor.GRAY)));
+            List.of(confirmed ? ml("menu.trade.confirmed", NamedTextColor.GREEN) : ml("menu.trade.deciding", NamedTextColor.GRAY)));
     }
 
     private ItemStack emptyOfferSlot() {
-        return itemFactory.control(Material.LIGHT_GRAY_STAINED_GLASS_PANE, Component.text("Empty offer slot", NamedTextColor.DARK_GRAY), List.of());
+        return itemFactory.control(Material.LIGHT_GRAY_STAINED_GLASS_PANE, ml("menu.trade.empty-slot", NamedTextColor.DARK_GRAY), List.of());
     }
 
-    private ItemStack tradeButton(final Material icon, final String label, final String hint) {
-        return itemFactory.control(icon, Component.text(label, NamedTextColor.YELLOW), List.of(Component.text(hint, NamedTextColor.GRAY)));
+    private ItemStack tradeButton(final Material icon, final String labelKey, final String hintKey) {
+        return itemFactory.control(icon, ml(labelKey, NamedTextColor.YELLOW), List.of(mg(hintKey)));
     }
 
     private ItemStack tokenOfferItem(final int amount) {
-        return itemFactory.control(Material.SUNFLOWER, Component.text("Token offer: " + amount, NamedTextColor.GOLD),
-            List.of(Component.text("Left-click +1 (Shift +10)", NamedTextColor.GREEN),
-                Component.text("Right-click -1 (Shift -10)", NamedTextColor.RED)));
+        return itemFactory.control(Material.SUNFLOWER, ml("menu.trade.token-offer", NamedTextColor.GOLD, "%n%", Integer.toString(amount)),
+            List.of(ml("menu.trade.token-plus", NamedTextColor.GREEN),
+                ml("menu.trade.token-minus", NamedTextColor.RED)));
     }
 
     private ItemStack confirmButton(final boolean confirmed) {
         return itemFactory.control(confirmed ? Material.EMERALD_BLOCK : Material.EMERALD,
-            Component.text(confirmed ? "Confirmed — click to unready" : "Confirm trade", confirmed ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
-            List.of(Component.text("Both sides must confirm to trade.", NamedTextColor.GRAY)));
+            ml(confirmed ? "menu.trade.confirmed-btn" : "menu.trade.confirm-btn", confirmed ? NamedTextColor.GREEN : NamedTextColor.YELLOW),
+            List.of(mg("menu.trade.confirm-lore")));
     }
 
     private String nameOf(final UUID id) {
@@ -3641,7 +3636,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final CustomizeMenuHolder holder = new CustomizeMenuHolder(pet.uuid(), 0);
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle("Customize " + definition.name(), definition.rarityColor()));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(mt("menu.title.customize-prefix") + " " + definition.name(), definition.rarityColor()));
         holder.setInventory(inventory);
         renderCustomizeMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -3682,24 +3677,25 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         inventory.setItem(4, itemFactory.menuItem(definition, pet, pet.uuid().equals(data.activePetId())));
         inventory.setItem(0, itemFactory.control(
             pet.particlesEnabled() ? Material.LIME_DYE : Material.GRAY_DYE,
-            Component.text("Particles: " + (pet.particlesEnabled() ? "ON" : "OFF"), pet.particlesEnabled() ? NamedTextColor.GREEN : NamedTextColor.RED),
-            List.of(Component.text("Toggle this pet's ambient particles.", NamedTextColor.GRAY))));
+            ml(pet.particlesEnabled() ? "menu.customize.particles-on" : "menu.customize.particles-off",
+                pet.particlesEnabled() ? NamedTextColor.GREEN : NamedTextColor.RED),
+            List.of(mg("menu.customize.particles-lore"))));
         inventory.setItem(2, itemFactory.control(shopDye(pet.particleColor() == null ? "aqua" : pet.particleColor()),
-            Component.text("Particle Colour", NamedTextColor.AQUA),
-            List.of(Component.text("Current: ", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_PARTICLE, pet.particleColor()), NamedTextColor.WHITE)),
-                Component.text("Click to choose an aura colour.", NamedTextColor.YELLOW))));
+            ml("menu.customize.particle-colour", NamedTextColor.AQUA),
+            List.of(ml("menu.customize.current", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_PARTICLE, pet.particleColor()), NamedTextColor.WHITE)),
+                ml("menu.customize.pick-aura", NamedTextColor.YELLOW))));
         inventory.setItem(6, itemFactory.control(Material.FIREWORK_STAR,
-            Component.text("Trail", NamedTextColor.LIGHT_PURPLE),
-            List.of(Component.text("Current: ", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_TRAIL, pet.trail()), NamedTextColor.WHITE)),
-                Component.text("Click to choose a movement trail.", NamedTextColor.YELLOW))));
+            ml("menu.customize.trail", NamedTextColor.LIGHT_PURPLE),
+            List.of(ml("menu.customize.current", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_TRAIL, pet.trail()), NamedTextColor.WHITE)),
+                ml("menu.customize.pick-trail", NamedTextColor.YELLOW))));
         inventory.setItem(8, itemFactory.control(Material.NAME_TAG,
-            Component.text("Nametag Style", NamedTextColor.YELLOW),
-            List.of(Component.text("Current: ", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_NAMETAG, pet.nametagStyle()), NamedTextColor.WHITE)),
-                Component.text("Click to choose a name colour.", NamedTextColor.YELLOW))));
+            ml("menu.customize.nametag", NamedTextColor.YELLOW),
+            List.of(ml("menu.customize.current", NamedTextColor.GRAY).append(Component.text(cosmeticDisplay(Cosmetics.CAT_NAMETAG, pet.nametagStyle()), NamedTextColor.WHITE)),
+                ml("menu.customize.pick-nametag", NamedTextColor.YELLOW))));
         inventory.setItem(45, itemFactory.control(Material.NETHER_STAR,
-            Component.text("★ Ascension", NamedTextColor.LIGHT_PURPLE),
-            List.of(Component.text("Stars: " + "★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars()), NamedTextColor.GOLD),
-                Component.text("Click to view this pet's ascension.", NamedTextColor.YELLOW))));
+            ml("menu.customize.ascension", NamedTextColor.LIGHT_PURPLE),
+            List.of(ml("menu.customize.stars", NamedTextColor.GOLD, "%stars%", "★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars())),
+                ml("menu.customize.ascension-lore", NamedTextColor.YELLOW))));
 
         final List<String> keys = new ArrayList<>(definition.variants().keySet());
         final int pages = Math.max(1, (keys.size() + CUSTOMIZE_PER_PAGE - 1) / CUSTOMIZE_PER_PAGE);
@@ -3720,34 +3716,34 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                     }
                     final List<Component> lore = new ArrayList<>(meta.lore() == null ? List.of() : meta.lore());
                     lore.add((active
-                        ? Component.text("✓ Active skin", NamedTextColor.GREEN)
-                        : Component.text("Click to wear this skin.", NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false));
+                        ? ml("menu.customize.active-skin", NamedTextColor.GREEN)
+                        : ml("menu.customize.wear-skin", NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false));
                     meta.lore(lore);
                 });
                 inventory.setItem(slot, icon);
             } else {
                 inventory.setItem(slot, itemFactory.control(Material.GRAY_STAINED_GLASS_PANE,
-                    Component.text("Locked: " + PetDefinition.variantDisplay(key), NamedTextColor.DARK_GRAY),
-                    List.of(Component.text("Find & scrap this skin, or", NamedTextColor.GRAY),
-                        Component.text("click to buy for " + skinPrice + " tokens.", NamedTextColor.GOLD))));
+                    ml("menu.customize.locked", NamedTextColor.DARK_GRAY, "%skin%", PetDefinition.variantDisplay(key)),
+                    List.of(mg("menu.customize.locked-lore1"),
+                        ml("menu.customize.locked-lore2", NamedTextColor.GOLD, "%price%", Integer.toString(skinPrice)))));
             }
         }
         if (holder.page() > 0) {
             inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW,
-                Component.text("Previous Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+                ml("menu.common.prev", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
         if (holder.page() + 1 < pages) {
             inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW,
-                Component.text("Next Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+                ml("menu.common.next", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
-        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
     }
 
     private String cosmeticDisplay(final String category, final String id) {
         if (id == null) {
-            return "None";
+            return mt("menu.customize.none");
         }
         return switch (category) {
             case "particle" -> Cosmetics.particleColor(id) != null ? Cosmetics.particleColor(id).display() : id;
@@ -3767,15 +3763,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             default -> pet.nametagStyle();
         };
         fillCustomizeBorder(inventory);
-        final String title = category.equals("particle") ? "Particle Colour" : category.equals("trail") ? "Trail" : "Nametag Style";
+        final String title = mt(category.equals("particle") ? "menu.customize.particle-colour"
+            : category.equals("trail") ? "menu.customize.trail" : "menu.customize.nametag");
         inventory.setItem(4, itemFactory.control(
             category.equals("particle") ? Material.BLAZE_POWDER : category.equals("trail") ? Material.FIREWORK_STAR : Material.NAME_TAG,
-            Component.text("Choose: " + title, NamedTextColor.AQUA),
-            List.of(Component.text("Owned options are selectable;", NamedTextColor.GRAY),
-                Component.text("locked ones are in /pets shop.", NamedTextColor.GRAY))));
+            ml("menu.picker.choose", NamedTextColor.AQUA, "%what%", title),
+            List.of(mg("menu.picker.owned-hint1"), mg("menu.picker.owned-hint2"))));
         inventory.setItem(0, itemFactory.control(current == null ? Material.LIME_DYE : Material.GRAY_DYE,
-            Component.text("None (default)", current == null ? NamedTextColor.GREEN : NamedTextColor.GRAY),
-            List.of(Component.text("Click to clear this cosmetic.", NamedTextColor.GRAY))));
+            ml("menu.picker.none", current == null ? NamedTextColor.GREEN : NamedTextColor.GRAY),
+            List.of(mg("menu.picker.none-lore"))));
         final List<String> ids = shopIds(category);
         final int start = holder.page() * CUSTOMIZE_PER_PAGE;
         for (int i = 0; i < CUSTOMIZE_PER_PAGE && start + i < ids.size(); i++) {
@@ -3787,28 +3783,28 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 final ItemStack icon = shopIcon(category, id, 0, true);
                 icon.editMeta(meta -> {
                     meta.setEnchantmentGlintOverride(active);
-                    meta.lore(List.of((active ? Component.text("✓ Selected", NamedTextColor.GREEN)
-                        : Component.text("Click to apply.", NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false)));
+                    meta.lore(List.of((active ? ml("menu.picker.selected", NamedTextColor.GREEN)
+                        : ml("menu.picker.apply", NamedTextColor.YELLOW)).decoration(TextDecoration.ITALIC, false)));
                 });
                 inventory.setItem(slot, icon);
             } else {
                 inventory.setItem(slot, itemFactory.control(Material.GRAY_STAINED_GLASS_PANE,
-                    Component.text("Locked: " + cosmeticDisplay(category, id), NamedTextColor.DARK_GRAY),
-                    List.of(Component.text("Buy it in /pets shop.", NamedTextColor.GRAY))));
+                    ml("menu.picker.locked", NamedTextColor.DARK_GRAY, "%name%", cosmeticDisplay(category, id)),
+                    List.of(mg("menu.picker.locked-lore"))));
             }
         }
         inventory.setItem(45, itemFactory.control(Material.ARROW,
-            Component.text("Back", NamedTextColor.YELLOW), List.of(Component.text("Return to Customize.", NamedTextColor.GRAY))));
+            ml("menu.common.back", NamedTextColor.YELLOW), List.of(mg("menu.picker.back-lore"))));
         final int pages = Math.max(1, (ids.size() + CUSTOMIZE_PER_PAGE - 1) / CUSTOMIZE_PER_PAGE);
         if (holder.page() > 0) {
-            inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW, Component.text("Previous Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+            inventory.setItem(48, itemFactory.control(Material.SPECTRAL_ARROW, ml("menu.common.prev", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
         if (holder.page() + 1 < pages) {
-            inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW, Component.text("Next Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))));
+            inventory.setItem(50, itemFactory.control(Material.SPECTRAL_ARROW, ml("menu.common.next", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
-        inventory.setItem(49, itemFactory.control(Material.BARRIER, Component.text("Close", NamedTextColor.RED), List.of()));
+        inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
     }
 
     private void handleCustomizeClick(final InventoryClickEvent event, final CustomizeMenuHolder holder) {
@@ -3950,7 +3946,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final ChanceMenuHolder holder = new ChanceMenuHolder(player.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle("Better Pets Spawn Chances"));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.chances")));
         holder.setInventory(inventory);
         renderChanceMenu(inventory, holder);
         player.openInventory(inventory);
@@ -3971,32 +3967,32 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         inventory.setItem(45, itemFactory.control(
             Material.ARROW,
-            Component.text("Back", NamedTextColor.YELLOW),
-            List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
+            ml("menu.common.back", NamedTextColor.YELLOW),
+            List.of(mg("menu.catalogue.back-lore"))
         ));
         if (holder.page() > 0) {
             inventory.setItem(46, itemFactory.control(
                 Material.SPECTRAL_ARROW,
-                Component.text("Previous Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+                ml("menu.common.prev", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))
             ));
         }
         if (holder.page() + 1 < pages) {
             inventory.setItem(47, itemFactory.control(
                 Material.SPECTRAL_ARROW,
-                Component.text("Next Page", NamedTextColor.YELLOW),
-                List.of(Component.text("Page " + (holder.page() + 1) + " / " + pages, NamedTextColor.GRAY))
+                ml("menu.common.next", NamedTextColor.YELLOW),
+                List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))
             ));
         }
         inventory.setItem(49, itemFactory.control(
             Material.BARRIER,
-            Component.text("Close", NamedTextColor.RED),
-            List.of(Component.text("Changes save instantly.", NamedTextColor.GRAY))
+            ml("menu.common.close", NamedTextColor.RED),
+            List.of(mg("menu.common.saves-instantly"))
         ));
         inventory.setItem(48, itemFactory.control(
             Material.BELL,
-            Component.text("Find Broadcasts", NamedTextColor.GOLD),
-            List.of(Component.text("Toggle public pet-find messages.", NamedTextColor.GRAY))
+            ml("menu.chances.broadcasts", NamedTextColor.GOLD),
+            List.of(mg("menu.chances.broadcasts-lore"))
         ));
     }
 
@@ -4072,7 +4068,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final NotifyMenuHolder holder = new NotifyMenuHolder(player.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle("Better Pets Broadcasts"));
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle(mt("menu.title.broadcasts")));
         holder.setInventory(inventory);
         renderNotifyMenu(inventory);
         player.openInventory(inventory);
@@ -4087,14 +4083,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final boolean enabled = discoveryBroadcastEnabled(rarity);
             inventory.setItem(slots[i], itemFactory.control(
                 enabled ? Material.LIME_DYE : Material.GRAY_DYE,
-                Component.text(rarity + ": " + (enabled ? "ON" : "OFF"), rarityColor(rarity)),
-                List.of(Component.text("Click to toggle all-chat find messages.", NamedTextColor.GRAY))
+                Component.text(rarity + ": " + mt(enabled ? "menu.common.on-label" : "menu.common.off-label"), rarityColor(rarity)),
+                List.of(mg("menu.notify.toggle-lore"))
             ));
         }
         inventory.setItem(22, itemFactory.control(
             Material.ARROW,
-            Component.text("Back", NamedTextColor.YELLOW),
-            List.of(Component.text("Return to spawn chances.", NamedTextColor.GRAY))
+            ml("menu.common.back", NamedTextColor.YELLOW),
+            List.of(mg("menu.notify.back-lore"))
         ));
     }
 
@@ -4130,7 +4126,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final XpMenuHolder holder = new XpMenuHolder(player.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle("Better Pets XP Multiplier"));
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle(mt("menu.title.xp")));
         holder.setInventory(inventory);
         renderXpMenu(inventory);
         player.openInventory(inventory);
@@ -4142,33 +4138,33 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         inventory.setItem(11, itemFactory.control(
             Material.RED_STAINED_GLASS_PANE,
             Component.text("-0.1x", NamedTextColor.RED),
-            List.of(Component.text("Right-click or click this side.", NamedTextColor.GRAY))
+            List.of(mg("menu.xp.minus-lore"))
         ));
         inventory.setItem(13, itemFactory.control(
             Material.EXPERIENCE_BOTTLE,
-            Component.text("XP Multiplier: " + formatDecimal(multiplier) + "x", NamedTextColor.AQUA),
+            ml("menu.xp.multiplier", NamedTextColor.AQUA, "%n%", formatDecimal(multiplier)),
             List.of(
-                Component.text("1.0x is normal.", NamedTextColor.GRAY),
-                Component.text("2.0x means pets need half the XP.", NamedTextColor.GRAY),
-                Component.text("0.5x means pets need double XP.", NamedTextColor.GRAY),
-                Component.text("Middle-click: type an exact value", NamedTextColor.AQUA),
-                Component.text("Range: 0.1x - 5.0x.", NamedTextColor.DARK_GRAY)
+                mg("menu.xp.info1"),
+                mg("menu.xp.info2"),
+                mg("menu.xp.info3"),
+                ml("menu.xp.info-exact", NamedTextColor.AQUA),
+                mg("menu.xp.info-range")
             )
         ));
         inventory.setItem(15, itemFactory.control(
             Material.LIME_STAINED_GLASS_PANE,
             Component.text("+0.1x", NamedTextColor.GREEN),
-            List.of(Component.text("Left-click or click this side.", NamedTextColor.GRAY))
+            List.of(mg("menu.xp.plus-lore"))
         ));
         inventory.setItem(18, itemFactory.control(
             Material.ARROW,
-            Component.text("Back", NamedTextColor.YELLOW),
-            List.of(Component.text("Return to the pet menu.", NamedTextColor.GRAY))
+            ml("menu.common.back", NamedTextColor.YELLOW),
+            List.of(mg("menu.catalogue.back-lore"))
         ));
         inventory.setItem(22, itemFactory.control(
             Material.BARRIER,
-            Component.text("Close", NamedTextColor.RED),
-            List.of(Component.text("Shift-click changes by 1.0x.", NamedTextColor.GRAY))
+            ml("menu.common.close", NamedTextColor.RED),
+            List.of(mg("menu.xp.close-lore"))
         ));
     }
 
@@ -4222,7 +4218,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final ModulesMenuHolder holder = new ModulesMenuHolder(player.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle("Better Pets Modules"));
+        final Inventory inventory = Bukkit.createInventory(holder, 27, Texts.menuTitle(mt("menu.title.modules")));
         holder.setInventory(inventory);
         renderModulesMenu(inventory);
         player.openInventory(inventory);
@@ -4236,8 +4232,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         inventory.setItem(22, itemFactory.control(
             Material.BARRIER,
-            Component.text("Close", NamedTextColor.RED),
-            List.of(Component.text("Close module settings.", NamedTextColor.GRAY))
+            ml("menu.common.close", NamedTextColor.RED),
+            List.of(mg("menu.modules.close-lore"))
         ));
     }
 
@@ -4546,27 +4542,27 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final List<Component> lore = new ArrayList<>();
         lore.add(Component.text(abilitySummary(definition.id()), NamedTextColor.GRAY));
         lore.add(Component.empty());
-        lore.add(Component.text("Rarity: ", NamedTextColor.GRAY)
+        lore.add(ml("menu.detail.rarity-label", NamedTextColor.GRAY)
             .append(Component.text(definition.rarity(), definition.rarityColor())));
-        lore.add(Component.text("Default drop weight: " + formatPercent(spawnChance(definition)) + "%", NamedTextColor.AQUA));
+        lore.add(ml("menu.detail.drop-weight", NamedTextColor.AQUA, "%n%", formatPercent(spawnChance(definition))));
         lore.add(Component.empty());
-        lore.add(Component.text("Click to view level milestones.", NamedTextColor.YELLOW));
+        lore.add(ml("menu.detail.click-milestones", NamedTextColor.YELLOW));
         return lore;
     }
 
     private List<Component> detailLore(final PetDefinition definition, final int level) {
         final List<Component> lore = new ArrayList<>();
-        lore.add(Component.text("Current value", NamedTextColor.AQUA));
+        lore.add(ml("menu.detail.current-value", NamedTextColor.AQUA));
         lore.add(Component.text(abilityValue(definition.id(), level), NamedTextColor.GRAY));
         final List<String> unlocks = milestoneUnlocks(definition.id(), level);
         if (!unlocks.isEmpty()) {
             lore.add(Component.empty());
-            lore.add(Component.text("Unlocks", NamedTextColor.GOLD));
+            lore.add(ml("menu.detail.unlocks", NamedTextColor.GOLD));
             unlocks.forEach(unlock -> lore.add(Component.text("+ " + unlock, NamedTextColor.YELLOW)));
         }
         if (level == 100) {
             lore.add(Component.empty());
-            lore.add(Component.text("Maximum level", NamedTextColor.GREEN));
+            lore.add(ml("menu.detail.max-level", NamedTextColor.GREEN));
         }
         return lore;
     }
@@ -4706,6 +4702,21 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private Component message(final String path) {
         return lang.component(path);
+    }
+
+    /** Menu label in a given colour (control() removes italics). Shorthand for lang lookups in GUIs. */
+    private Component ml(final String key, final NamedTextColor color, final String... repl) {
+        return lang.colored(key, color, repl);
+    }
+
+    /** Gray menu lore line from lang. */
+    private Component mg(final String key, final String... repl) {
+        return lang.component(key, repl);
+    }
+
+    /** A plain translated menu string (for titles etc.), placeholders substituted, no styling. */
+    private String mt(final String key, final String... repl) {
+        return lang.raw(key, repl);
     }
 
     LangManager lang() {
