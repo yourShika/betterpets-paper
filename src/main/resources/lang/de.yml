@@ -54,6 +54,7 @@ pet:
 flight:
   level-required: "Dieses Pet kann ab Level 50 geflogen werden."
   confirm-mount: "<gold>Rechtsklick erneut, um auf </gold><yellow>%pet%</yellow><gold> zu fliegen.</gold>"
+  disabled: "Flug deaktiviert."
 
 visibility:
   shown: "<green>Dein Pet ist jetzt sichtbar.</green>"
@@ -84,6 +85,18 @@ hint:
 broadcast:
   muted: "<yellow>Pet-Fund-/Booster-Nachrichten sind jetzt </yellow><red><bold>AUS</bold></red><yellow>. Nutze /pets mute erneut, um sie wieder zu aktivieren.</yellow>"
   unmuted: "<green>Pet-Fund-/Booster-Nachrichten sind wieder </green><dark_green><bold>AN</bold></dark_green><green>.</green>"
+  found: "<aqua>%player%</aqua><gray> hat einen </gray><color:%rc%>%rarity%-Pet</color><gray> gefunden: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  fished: "<aqua>%player%</aqua><gray> hat einen </gray><color:%rc%>%rarity%-Pet</color><gray> herausgeangelt: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  brushed: "<aqua>%player%</aqua><gray> hat einen </gray><color:%rc%>%rarity%-Pet</color><gray> freigebürstet: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  bought: "<aqua>%player%</aqua><gray> hat einen </gray><color:%rc%>%rarity%-Pet</color><gray> gekauft: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  suffix:
+    trader: " von einem reisenden Händler"
+    vault: " in einem Gewölbe"
+    trial: " in einem Prüfungs-Spawner"
+  goblin: "<dark_purple>[Goblin] </dark_purple><green>Dein Goblin hat </green><gold>%item%</gold><green> vom Dorfbewohner stibitzt!</green>"
+  goblin-actionbar: "<green>Dein Goblin hat %item% stibitzt!</green>"
+  booster-drop: "<aqua>%player%</aqua><gray> hat einen </gray><light_purple>Pet-XP-Booster x%tier%</light_purple><aqua> (%time%)</aqua><gray> von %source% gedroppt!</gray>"
+  booster-activate: "<aqua>%player%</aqua><gray> hat einen </gray><light_purple>Pet-XP-Booster x%tier%</light_purple><aqua> für %time%</aqua><gray> aktiviert.</gray>"
 
 convert:
   confirm: "<gold>Klicke erneut auf 'In Gegenstand umwandeln', um </gold><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><gold> umzuwandeln. Level und Fortschritt bleiben erhalten.</gold>"

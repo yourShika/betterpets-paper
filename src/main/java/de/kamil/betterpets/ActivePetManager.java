@@ -789,7 +789,7 @@ public final class ActivePetManager {
             active.hitbox().setInteractionHeight(visible && interactive ? 1.8F : 0.1F);
         }
         if (notify) {
-            player.sendMessage(Component.text("Flight disabled.", net.kyori.adventure.text.format.NamedTextColor.GRAY));
+            player.sendMessage(lang.colored("flight.disabled", net.kyori.adventure.text.format.NamedTextColor.GRAY));
         }
     }
 

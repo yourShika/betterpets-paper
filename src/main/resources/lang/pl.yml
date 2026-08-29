@@ -54,6 +54,7 @@ pet:
 flight:
   level-required: "Tym zwierzakiem mozna latac od poziomu 50."
   confirm-mount: "<gold>Kliknij ponownie prawym, aby poleciec na </gold><yellow>%pet%</yellow><gold>.</gold>"
+  disabled: "Lot wylaczony."
 
 visibility:
   shown: "<green>Twoj zwierzak jest teraz widoczny.</green>"
@@ -84,6 +85,18 @@ hint:
 broadcast:
   muted: "<yellow>Ogloszenia o znalezieniu/boosterze sa teraz </yellow><red><bold>WYL.</bold></red><yellow> Uzyj /pets mute ponownie, aby je wlaczyc.</yellow>"
   unmuted: "<green>Ogloszenia o znalezieniu/boosterze sa znow </green><dark_green><bold>WL.</bold></dark_green><green></green>"
+  found: "<aqua>%player%</aqua><gray> znalazl </gray><color:%rc%>Peta %rarity%</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  fished: "<aqua>%player%</aqua><gray> wylowil </gray><color:%rc%>Peta %rarity%</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  brushed: "<aqua>%player%</aqua><gray> wyszczotkowal </gray><color:%rc%>Peta %rarity%</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  bought: "<aqua>%player%</aqua><gray> kupil </gray><color:%rc%>Peta %rarity%</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  suffix:
+    trader: " od wedrownego handlarza"
+    vault: " w Skarbcu"
+    trial: " w Spawnerze Prob"
+  goblin: "<dark_purple>[Goblin] </dark_purple><green>Twoj Goblin zwedzil </green><gold>%item%</gold><green> od wiesniaka!</green>"
+  goblin-actionbar: "<green>Twoj Goblin zwedzil %item%!</green>"
+  booster-drop: "<aqua>%player%</aqua><gray> wyrzucil </gray><light_purple>Booster XP Peta x%tier%</light_purple><aqua> (%time%)</aqua><gray> z %source%!</gray>"
+  booster-activate: "<aqua>%player%</aqua><gray> aktywowal </gray><light_purple>Booster XP Peta x%tier%</light_purple><aqua> na %time%.</aqua>"
 
 convert:
   confirm: "<gold>Kliknij ponownie 'Zamien na przedmiot', aby zamienic </gold><gradient:#FFE082:#FFA000><bold>%pet%</bold></gradient><gold>. Poziom i postep zostana zachowane.</gold>"

@@ -57,6 +57,7 @@ pet:
 flight:
   level-required: "This pet can be flown from level 50."
   confirm-mount: "<gold>Right-click again to fly your </gold><yellow>%pet%</yellow><gold>.</gold>"
+  disabled: "Flight disabled."
 
 # Pet visibility (/pets visible | invisible, or the menu toggle).
 visibility:
@@ -87,10 +88,24 @@ tokens:
   pass-self: "You cannot pass tokens to yourself."
   pass-not-enough: "You only have %total% token(s)."
 
-# Per-player broadcast mute (/pets mute).
+# Per-player broadcast mute (/pets mute) and the server-wide find/booster announcements.
+# %rc% is the pet's rarity colour (a #hex, injected by the plugin) — keep the <color:%rc%>…</color> tags
+# around the pet name and rarity so they stay coloured. %suffix% is a phrase from broadcast.suffix.* or empty.
 broadcast:
   muted: "<yellow>Pet find/booster broadcasts are now </yellow><red><bold>OFF</bold></red><yellow>. Use /pets mute again to turn them back on.</yellow>"
   unmuted: "<green>Pet find/booster broadcasts are now </green><dark_green><bold>ON</bold></dark_green><green> again.</green>"
+  found: "<aqua>%player%</aqua><gray> found a </gray><color:%rc%>%rarity% Pet</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  fished: "<aqua>%player%</aqua><gray> fished out a </gray><color:%rc%>%rarity% Pet</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  brushed: "<aqua>%player%</aqua><gray> brushed out a </gray><color:%rc%>%rarity% Pet</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  bought: "<aqua>%player%</aqua><gray> bought a </gray><color:%rc%>%rarity% Pet</color><gray>: </gray><color:%rc%>%pet%</color><gray>%suffix%!</gray>"
+  suffix:
+    trader: " from a Wandering Trader"
+    vault: " in a Vault"
+    trial: " in a Trial Spawner"
+  goblin: "<dark_purple>[Goblin] </dark_purple><green>Your Goblin snatched </green><gold>%item%</gold><green> from the villager!</green>"
+  goblin-actionbar: "<green>Your Goblin snatched %item%!</green>"
+  booster-drop: "<aqua>%player%</aqua><gray> dropped a </gray><light_purple>Pet XP Booster x%tier%</light_purple><aqua> (%time%)</aqua><gray> from %source%!</gray>"
+  booster-activate: "<aqua>%player%</aqua><gray> activated </gray><light_purple>Pet XP Booster x%tier%</light_purple><aqua> for %time%.</aqua>"
 
 # Convert-to-item confirmation (click twice).
 convert:

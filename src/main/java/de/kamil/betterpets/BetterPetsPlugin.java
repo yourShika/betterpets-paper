@@ -893,21 +893,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (!getConfig().getBoolean("xp-booster.broadcast-drops", true)) {
             return;
         }
-        broadcastToUnmuted(Texts.prefix()
-            .append(Component.text(player.getName(), NamedTextColor.AQUA))
-            .append(Component.text(" dropped a ", NamedTextColor.GRAY))
-            .append(Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE))
-            .append(Component.text(" (" + formatBoosterMinutes(minutes) + ")", NamedTextColor.AQUA))
-            .append(Component.text(" from " + friendlyEntityName(source) + "!", NamedTextColor.GRAY)));
+        broadcastToUnmuted(Texts.prefix().append(lang.colored("broadcast.booster-drop", NamedTextColor.GRAY,
+            "%player%", player.getName(), "%tier%", Integer.toString(tier),
+            "%time%", formatBoosterMinutes(minutes), "%source%", friendlyEntityName(source))));
         playBoosterSound(1.35F);
     }
 
     private void broadcastBoosterActivation(final Player player, final int tier, final int minutes) {
-        broadcastToUnmuted(Texts.prefix()
-            .append(Component.text(player.getName(), NamedTextColor.AQUA))
-            .append(Component.text(" activated ", NamedTextColor.GRAY))
-            .append(Component.text("Pet XP Booster x" + tier, NamedTextColor.LIGHT_PURPLE))
-            .append(Component.text(" for " + formatBoosterMinutes(minutes) + ".", NamedTextColor.AQUA)));
+        broadcastToUnmuted(Texts.prefix().append(lang.colored("broadcast.booster-activate", NamedTextColor.GRAY,
+            "%player%", player.getName(), "%tier%", Integer.toString(tier), "%time%", formatBoosterMinutes(minutes))));
         playBoosterSound(1.6F);
     }
 
@@ -1471,18 +1465,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    private void announcePet(final Player player, final PetDefinition definition, final String action, final String suffix) {
+    private void announcePet(final Player player, final PetDefinition definition, final String actionKey, final String suffixKey) {
         if (!discoveryBroadcastEnabled(definition.rarity())) {
             return;
         }
-        broadcastToUnmuted(Texts.prefix()
-            .append(Component.text(player.getName(), NamedTextColor.AQUA))
-            .append(Component.text(" " + action + " a ", NamedTextColor.GRAY))
-            .append(Component.text(definition.rarity() + " Pet", definition.rarityColor()))
-            .append(Component.text(": ", NamedTextColor.GRAY))
-            .append(Component.text(definition.name(), definition.rarityColor()))
-            .append(Component.text(suffix.isEmpty() ? "!" : " " + suffix + "!", NamedTextColor.GRAY)));
-
+        // Full-sentence templates (word order differs per language), with the rarity colour injected as a
+        // %rc% hex so the pet/rarity stay coloured. %suffix% is a translated " in a Vault"-style phrase or "".
+        final String suffix = (suffixKey == null || suffixKey.isEmpty()) ? "" : mt("broadcast.suffix." + suffixKey);
+        broadcastToUnmuted(Texts.prefix().append(lang.colored("broadcast." + actionKey, NamedTextColor.GRAY,
+            "%player%", player.getName(),
+            "%rarity%", definition.rarity(),
+            "%pet%", definition.name(),
+            "%suffix%", suffix,
+            "%rc%", definition.rarityColor().asHexString())));
         playDiscoverySound(definition.rarity());
     }
 
@@ -1561,7 +1556,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         caught.setItemStack(itemFactory.discoveryItem(definition));
-        announcePet(event.getPlayer(), definition, "fished out", "");
+        announcePet(event.getPlayer(), definition, "fished", "");
     }
 
     @EventHandler
@@ -1603,7 +1598,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         } else {
             block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 1.0, 0.5), itemFactory.discoveryItem(definition));
         }
-        announcePet(player, definition, "brushed out", "");
+        announcePet(player, definition, "brushed", "");
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -1653,7 +1648,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final ItemStack result = event.getTrade().getResult();
         itemFactory.petId(result)
             .flatMap(definitions::get)
-            .ifPresent(definition -> announcePet(event.getPlayer(), definition, "bought", "from a Wandering Trader"));
+            .ifPresent(definition -> announcePet(event.getPlayer(), definition, "bought", "trader"));
         maybeGoblinTradeRefund(event);
     }
 
@@ -1707,11 +1702,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 .forEach(stack -> player.getWorld().dropItemNaturally(player.getLocation(), stack));
             player.spawnParticle(Particle.HAPPY_VILLAGER, player.getLocation().add(0, 1.0, 0), 8, 0.3, 0.4, 0.3, 0.0);
             player.playSound(player.getLocation(), Sound.ENTITY_VILLAGER_NO, 0.6F, 1.4F);
-            player.sendMessage(Component.text("[Goblin] ", NamedTextColor.DARK_PURPLE)
-                .append(Component.text("Your Goblin snatched ", NamedTextColor.GREEN))
-                .append(Component.text(desc, NamedTextColor.GOLD))
-                .append(Component.text(" from the villager!", NamedTextColor.GREEN)));
-            player.sendActionBar(Component.text("Your Goblin snatched " + desc + "!", NamedTextColor.GREEN));
+            player.sendMessage(lang.colored("broadcast.goblin", NamedTextColor.GREEN, "%item%", desc));
+            player.sendActionBar(lang.colored("broadcast.goblin-actionbar", NamedTextColor.GREEN, "%item%", desc));
         });
     }
 
@@ -1747,7 +1739,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null) {
             return;
         }
-        final String suffix = source.equals("vault") ? "in a Vault" : "in a Trial Spawner";
+        final String suffix = source.equals("vault") ? "vault" : "trial";
         final ItemStack petItem = itemFactory.discoveryItem(definition);
         final Player player = event.getPlayer();
         if (player != null) {
