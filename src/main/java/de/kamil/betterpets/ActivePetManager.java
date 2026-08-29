@@ -1185,7 +1185,10 @@ public final class ActivePetManager {
         if (ride.left()) {
             move.subtract(right);
         }
-        final double speed = Math.max(0.05, plugin.getConfig().getDouble("flight-speed", 0.6));
+        // Ascension makes flying pets faster: each star adds a configurable % to the base flight speed.
+        final int stars = active.pet().stars();
+        final double perStar = Math.max(0.0, plugin.getConfig().getDouble("flight-speed-per-star", 0.08));
+        final double speed = Math.max(0.05, plugin.getConfig().getDouble("flight-speed", 0.6)) * (1.0 + stars * perStar);
         if (move.lengthSquared() > 1.0e-4) {
             move.normalize().multiply(speed);
         }

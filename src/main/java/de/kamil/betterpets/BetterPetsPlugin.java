@@ -3423,6 +3423,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             lore.add(Component.empty());
             lore.add(Component.text("Bonus at this star:", NamedTextColor.DARK_GRAY));
             lore.add(Component.text("• " + trackPerkAtStar(track, n), NamedTextColor.AQUA));
+            if (activePets.isFlyable(definition.id())) {
+                lore.add(Component.text("• +" + (int) Math.round(n * getConfig().getDouble("flight-speed-per-star", 0.08) * 100) + "% flight speed", NamedTextColor.AQUA));
+            }
             lore.add(Component.text("• +" + (n * 10) + "% pet XP", NamedTextColor.GRAY));
             lore.add(Component.text("• Stronger ability (+" + n + " tier" + (n == 1 ? "" : "s") + ")", NamedTextColor.GRAY));
             final ItemStack node = itemFactory.control(reached ? Material.NETHER_STAR : Material.GRAY_STAINED_GLASS_PANE,
@@ -3435,18 +3438,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final String progress = pet.stars() >= OwnedPet.MAX_STARS
             ? "Fully ascended ★★★★★"
             : "Scrap " + pet.pointsForNextStar() + " of this pet total for the next star (" + pet.fusionPoints() + " scrapped)";
+        final List<Component> headerLore = new ArrayList<>(List.of(
+            Component.text("Current: ", NamedTextColor.GRAY).append(Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars()),
+                pet.stars() >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD)),
+            Component.text(progress, NamedTextColor.GRAY),
+            Component.empty(),
+            Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
+            Component.text("Its ability now (★" + pet.stars() + "): ", NamedTextColor.GRAY)
+                .append(Component.text(PetAbilities.value(definition.id(), pet.level(), pet.stars()), NamedTextColor.YELLOW))));
+        if (activePets.isFlyable(definition.id())) {
+            final int flightPct = (int) Math.round(pet.stars() * getConfig().getDouble("flight-speed-per-star", 0.08) * 100);
+            headerLore.add(Component.text("Flight speed: ", NamedTextColor.GRAY)
+                .append(Component.text("+" + flightPct + "%", NamedTextColor.AQUA)).append(Component.text(" (flying pets)", NamedTextColor.DARK_GRAY)));
+        }
+        headerLore.add(Component.empty());
+        headerLore.add(Component.text("Every star adds up — higher stars are stronger.", NamedTextColor.DARK_GRAY));
         inventory.setItem(4, itemFactory.control(Material.NETHER_STAR,
             Texts.gradient("★ Ascension", net.kyori.adventure.text.format.TextColor.color(0xFFD54F), net.kyori.adventure.text.format.TextColor.color(0xFFFFFF)),
-            List.of(
-                Component.text("Current: ", NamedTextColor.GRAY).append(Component.text("★".repeat(pet.stars()) + "☆".repeat(OwnedPet.MAX_STARS - pet.stars()),
-                    pet.stars() >= OwnedPet.MAX_STARS ? NamedTextColor.WHITE : NamedTextColor.GOLD)),
-                Component.text(progress, NamedTextColor.GRAY),
-                Component.empty(),
-                Component.text("Track: ", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
-                Component.text("Its ability now (★" + pet.stars() + "): ", NamedTextColor.GRAY)
-                    .append(Component.text(PetAbilities.value(definition.id(), pet.level(), pet.stars()), NamedTextColor.YELLOW)),
-                Component.empty(),
-                Component.text("Every star adds up — higher stars are stronger.", NamedTextColor.DARK_GRAY))));
+            headerLore));
         inventory.setItem(49, itemFactory.control(Material.BARRIER,
             Component.text("Back", NamedTextColor.RED), List.of(Component.text("Return to Customize.", NamedTextColor.GRAY))));
     }

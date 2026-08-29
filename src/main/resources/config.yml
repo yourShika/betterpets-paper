@@ -143,10 +143,13 @@ tokens:
 # the pet and steer it like a real mount: look where you want to go and hold
 # forward, jump to climb, look down to dive, sneak to dismount. The mount moves
 # by velocity every tick, so it stays smooth and collides with blocks.
-#   flight-speed:      horizontal/forward flight speed in blocks per tick.
-#   flight-lift:       extra upward speed while holding jump.
-#   flight-pet-offset: how far below the seat the pet body floats.
+#   flight-speed:          horizontal/forward flight speed in blocks per tick.
+#   flight-speed-per-star: extra flight speed per Ascension star (0.08 = +8%/star,
+#                          so a 5-star flying pet flies +40% faster). Set 0 to disable.
+#   flight-lift:           extra upward speed while holding jump.
+#   flight-pet-offset:     how far below the seat the pet body floats.
 flight-speed: 0.6
+flight-speed-per-star: 0.08
 flight-lift: 0.5
 flight-pet-offset: -0.4
 # Highest Y a pet mount may fly to. There is no build-height cap - you can fly well
