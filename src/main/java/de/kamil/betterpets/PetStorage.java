@@ -54,7 +54,12 @@ public final class PetStorage {
                 data.setBooster(section.getInt("booster-tier", 0), section.getLong("booster-remaining-millis", 0L));
                 final String activeText = section.getString("active");
                 if (activeText != null && !activeText.isBlank()) {
-                    data.setActivePet(UUID.fromString(activeText));
+                    // A malformed active UUID must not discard the whole player's saved data.
+                    try {
+                        data.setActivePet(UUID.fromString(activeText));
+                    } catch (final IllegalArgumentException badUuid) {
+                        plugin.getLogger().warning("Ignoring invalid active pet UUID for " + uuidText + ": " + activeText);
+                    }
                 }
 
                 final ConfigurationSection pets = section.getConfigurationSection("pets");
@@ -157,8 +162,12 @@ public final class PetStorage {
 
         final YamlConfiguration config = new YamlConfiguration();
         for (final Map.Entry<UUID, PlayerPetData> entry : players.entrySet()) {
-            final String base = "players." + entry.getKey();
             final PlayerPetData data = entry.getValue();
+            // Don't persist ghost entries created by pure read-only data() lookups (e.g. placeholder plugins).
+            if (data.isEmpty()) {
+                continue;
+            }
+            final String base = "players." + entry.getKey();
             config.set(base + ".visible", data.visible());
             config.set(base + ".broadcasts-muted", data.broadcastsMuted());
             config.set(base + ".tokens", data.tokens());
@@ -304,7 +313,9 @@ public final class PetStorage {
                     }
                 }
                 return contents;
-            } catch (final IllegalArgumentException exception) {
+            } catch (final RuntimeException exception) {
+                // Any deserialization failure (e.g. an NBT schema change) must fall back to the legacy
+                // list and keep the pet, not bubble up and drop the whole pet.
                 plugin.getLogger().warning("Could not read Alpaca storage bytes for " + pet.getCurrentPath() + ", trying legacy storage list.");
             }
         }

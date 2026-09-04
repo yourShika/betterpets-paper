@@ -229,6 +229,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         getLogger().info("Stopping Better Pets.");
+        // Return any pets still parked in open trade windows to their owners (their inventories are saved
+        // by vanilla on shutdown) so a restart/reload never destroys offered pets.
+        for (final Player online : Bukkit.getOnlinePlayers()) {
+            if (online.getOpenInventory().getTopInventory().getHolder() instanceof TradeMenuHolder holder) {
+                cancelTrade(holder);
+            }
+        }
         if (saveTask != null) {
             saveTask.cancel();
             saveTask = null;
@@ -773,6 +780,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         convertConfirms.remove(event.getPlayer().getUniqueId());
         pendingInputs.remove(event.getPlayer().getUniqueId());
         menuHintShown.remove(event.getPlayer().getUniqueId());
+        // Drop any pending trade requests involving this player (as target or requester) so they don't linger.
+        final UUID quitId = event.getPlayer().getUniqueId();
+        tradeRequests.remove(quitId);
+        tradeRequests.values().removeIf(request -> request.requester().equals(quitId));
         // A player leaving is a natural, infrequent save point, so persist immediately for durability.
         storage.save();
     }
@@ -843,7 +854,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         });
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onEntityDamageByEntity(final EntityDamageByEntityEvent event) {
         if (!(event.getEntity() instanceof LivingEntity victim)) {
             return;
@@ -975,6 +986,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onBlockBreak(final BlockBreakEvent event) {
+        // Re-entry guard: our own Woodpecker/Badger chain-break fires BlockBreakEvents for protection checks.
+        if (activePets.isChainBreaking()) {
+            return;
+        }
         activePets.handleMoleBreak(event.getPlayer(), event.getBlock());
         activePets.handleOreBonus(event.getPlayer(), event.getBlock());
         activePets.handleSquirrelForage(event.getPlayer(), event.getBlock());
@@ -986,10 +1001,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.handleBadgerVein(event.getPlayer(), event.getBlock());
         activePets.handleScarecrow(event.getPlayer(), event.getBlock());
         activePets.handleGathererBonus(event.getPlayer(), event.getBlock());
+        // Now that all break bonuses have run, forget this position so the placed-block set stays bounded.
+        activePets.forgetPlacedBlock(event.getBlock());
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onGolemMasonPlace(final org.bukkit.event.block.BlockPlaceEvent event) {
+        // Track player-placed blocks so gatherer/chain bonuses never duplicate them.
+        activePets.notePlacedBlock(event.getBlockPlaced());
         activePets.handleGolemRefill(event);
     }
 
@@ -1296,6 +1315,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         itemFactory.petCustomName(item).ifPresent(pet::setCustomName);
         pet.recalculateNextLevelExp(petXpMultiplier());
         pet.setExp(itemFactory.petExp(item));
+        // Restore ascension progress and the nametag style so convert/trade never wipes them.
+        pet.setFusionPoints(itemFactory.petFusionPoints(item));
+        itemFactory.petNametagStyle(item).ifPresent(pet::setNametagStyle);
         // Keep the exact variant the loot/give item advertised; otherwise roll a fresh one.
         final String itemVariant = itemFactory.petVariant(item).orElse(null);
         if (itemVariant != null && definition.variants().containsKey(itemVariant.toLowerCase(Locale.ROOT))) {
@@ -2040,6 +2062,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final int gained = value * held.getAmount();
         final String name = itemFactory.petId(held).flatMap(definitions::get).map(PetDefinition::name).orElse("pet");
+        final String heldPetId = itemFactory.petId(held).orElse(null);
+        final boolean ownsPet = heldPetId != null && data.pets().stream().anyMatch(p -> p.definitionId().equals(heldPetId));
         final Component unlockMessage = scrapUnlockMessage(data, held);
         final Component fusionMessage = fusionMessage(player, data, held, held.getAmount());
         player.getInventory().setItemInMainHand(null);
@@ -2053,6 +2077,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         if (fusionMessage != null) {
             player.sendMessage(fusionMessage);
+        } else if (!ownsPet) {
+            // Scrapping a species you don't own grants tokens only — warn that no ascension progress was earned.
+            player.sendMessage(lang.component("tokens.scrapped-no-fusion", "%pet%", name));
         }
     }
 
@@ -2422,7 +2449,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final int maxMinutes = maxBoosterMinutes();
         final int minutes = parsedMinutes.get();
         if (minutes > maxMinutes) {
-            sender.sendMessage(Component.text("Booster time is capped at " + formatBoosterMinutes(maxMinutes) + ".", NamedTextColor.RED));
+            sender.sendMessage(lang.component("messages.booster-capped", "%time%", formatBoosterMinutes(maxMinutes)));
             return;
         }
 
@@ -3493,7 +3520,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         } else if (slot == tokenSlot) {
             final int step = (event.isShiftClick() ? 10 : 1) * (event.isRightClick() ? -1 : 1);
             final int max = storage.data(id).tokens();
-            holder.setTokensOf(id, Math.min(max, holder.tokensOf(id) + step));
+            holder.setTokensOf(id, Math.max(0, Math.min(max, holder.tokensOf(id) + step)));
+            resetTradeConfirmations(holder);
             player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.4F, step > 0 ? 1.4F : 0.9F);
             renderTradeMenu(holder);
         } else if (slot == confirmSlot) {
@@ -3522,6 +3550,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         one.setAmount(1);
         items.add(one);
         held.setAmount(held.getAmount() - 1);
+        resetTradeConfirmations(holder);
         player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.7F, 1.2F);
         renderTradeMenu(holder);
     }
@@ -3533,7 +3562,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         items.clear();
         holder.setTokensOf(player.getUniqueId(), 0);
+        resetTradeConfirmations(holder);
         renderTradeMenu(holder);
+    }
+
+    /** Any change to an offer must clear both confirmations, so nobody can confirm and then alter the deal. */
+    private void resetTradeConfirmations(final TradeMenuHolder holder) {
+        holder.setConfirmed(holder.initiator(), false);
+        holder.setConfirmed(holder.partner(), false);
     }
 
     /** Atomically swaps both sides' offered items and tokens, then closes the window for both. */
@@ -4193,7 +4229,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         setPetXpMultiplier(value);
         renderXpMenu(event.getView().getTopInventory());
-        player.sendMessage(Component.text("Pet XP multiplier is now " + formatDecimal(petXpMultiplier()) + "x.", NamedTextColor.AQUA));
+        player.sendMessage(lang.component("messages.xp-multiplier-set", "%value%", formatDecimal(petXpMultiplier())));
     }
 
     boolean experimentalModulesEnabled() {

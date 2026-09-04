@@ -121,7 +121,16 @@ public final class PlayerPetData {
     }
 
     public void addTokens(final int amount) {
-        this.tokens = Math.max(0, this.tokens + amount);
+        // Saturating: never overflow int (which would wrap negative and wipe the balance to 0).
+        this.tokens = (int) Math.max(0L, Math.min(Integer.MAX_VALUE, (long) this.tokens + amount));
+    }
+
+    /** True when this record holds no meaningful state (used to avoid persisting ghost/read-only lookups). */
+    public boolean isEmpty() {
+        return pets.isEmpty() && tokens == 0 && activePet == null && boosterTier == 0
+            && playerName == null && visible && !broadcastsMuted
+            && unlockedVariants.values().stream().allMatch(java.util.Set::isEmpty)
+            && unlockedCosmetics.values().stream().allMatch(java.util.Set::isEmpty);
     }
 
     /** Unlocks a cosmetic variant for a pet definition (per player). Returns true if newly added. */

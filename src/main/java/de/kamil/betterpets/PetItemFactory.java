@@ -31,6 +31,8 @@ public final class PetItemFactory {
     private final NamespacedKey petExpKey;
     private final NamespacedKey petNameKey;
     private final NamespacedKey petVariantKey;
+    private final NamespacedKey petFusionKey;
+    private final NamespacedKey petNametagKey;
     private final NamespacedKey boosterTierKey;
     private final NamespacedKey boosterMinutesKey;
     private final java.util.Random random = new java.util.Random();
@@ -44,6 +46,8 @@ public final class PetItemFactory {
         this.petExpKey = new NamespacedKey(plugin, "pet_exp");
         this.petNameKey = new NamespacedKey(plugin, "pet_name");
         this.petVariantKey = new NamespacedKey(plugin, "pet_variant");
+        this.petFusionKey = new NamespacedKey(plugin, "pet_fusion");
+        this.petNametagKey = new NamespacedKey(plugin, "pet_nametag");
         this.boosterTierKey = new NamespacedKey(plugin, "booster_tier");
         this.boosterMinutesKey = new NamespacedKey(plugin, "booster_minutes");
     }
@@ -205,6 +209,24 @@ public final class PetItemFactory {
         return variant == null || variant.isBlank() ? Optional.empty() : Optional.of(variant);
     }
 
+    /** Ascension fusion points stored on a pet item (0 if none), so stars survive convert/trade. */
+    public int petFusionPoints(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return 0;
+        }
+        final Integer points = item.getItemMeta().getPersistentDataContainer().get(petFusionKey, PersistentDataType.INTEGER);
+        return points == null ? 0 : Math.max(0, points);
+    }
+
+    /** The chosen nametag-style cosmetic stored on a pet item, or empty if none. */
+    public Optional<String> petNametagStyle(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return Optional.empty();
+        }
+        final String style = item.getItemMeta().getPersistentDataContainer().get(petNametagKey, PersistentDataType.STRING);
+        return style == null || style.isBlank() ? Optional.empty() : Optional.of(style);
+    }
+
     /**
      * Resolves a pet item's variant: first the stored tag, then (fallback) by matching the head's texture
      * against the definition's variant textures. The fallback recovers the skin from older items that carry
@@ -319,6 +341,13 @@ public final class PetItemFactory {
                 }
                 if (pet.hasCustomName()) {
                     meta.getPersistentDataContainer().set(petNameKey, PersistentDataType.STRING, pet.customName());
+                }
+                // Preserve ascension progress and the chosen nametag style across convert/trade round-trips.
+                if (pet.fusionPoints() > 0) {
+                    meta.getPersistentDataContainer().set(petFusionKey, PersistentDataType.INTEGER, pet.fusionPoints());
+                }
+                if (pet.nametagStyle() != null) {
+                    meta.getPersistentDataContainer().set(petNametagKey, PersistentDataType.STRING, pet.nametagStyle());
                 }
             } else {
                 meta.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, pet.uuid().toString());

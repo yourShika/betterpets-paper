@@ -131,6 +131,7 @@ final class Updater {
     }
 
     private boolean download(final String jarUrl) {
+        Path target = null;
         try {
             final File updateFolder = Bukkit.getUpdateFolderFile();
             if (!updateFolder.exists() && !updateFolder.mkdirs()) {
@@ -139,7 +140,7 @@ final class Updater {
             }
             // Place the new jar in the server's update folder under the current plugin's file name.
             // Bukkit applies it automatically on the next start, which avoids the locked-jar problem.
-            final Path target = new File(updateFolder, plugin.currentJar().getName()).toPath();
+            target = new File(updateFolder, plugin.currentJar().getName()).toPath();
             final HttpClient client = HttpClient.newBuilder()
                 .followRedirects(HttpClient.Redirect.NORMAL)
                 .connectTimeout(Duration.ofSeconds(10))
@@ -161,6 +162,13 @@ final class Updater {
             return true;
         } catch (final Exception exception) {
             plugin.getLogger().severe("Update download failed: " + exception.getMessage());
+            if (target != null) {
+                try {
+                    Files.deleteIfExists(target);
+                } catch (final Exception ignored) {
+                    // Best effort: leave nothing behind, but never fail the failure path.
+                }
+            }
             return false;
         }
     }

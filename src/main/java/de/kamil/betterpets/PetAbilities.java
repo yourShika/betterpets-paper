@@ -177,7 +177,7 @@ public final class PetAbilities {
             lvl -> lvl == 50 ? List.of("Mount flight", "Shadow flight trail", "Aura radius grows to 6 blocks")
                 : lvl == 100 ? List.of("Aura radius grows to 8 blocks") : List.of());
         put(m, "ancient_elf", "Shortens debuffs, then blocks and finally nullifies them.",
-            lvl -> lvl >= 100 ? "Nullifies all debuffs" : lvl >= 50 ? "Debuffs capped to 2s" : "Debuff duration cut by 40%",
+            lvl -> lvl >= 100 ? "Nullifies all debuffs" : lvl >= 50 ? "Debuffs capped to 2s" : "Debuffs capped to 10s",
             lvl -> lvl == 50 ? List.of("Debuffs are capped to 2 seconds")
                 : lvl == 100 ? List.of("All debuffs are nullified") : List.of());
         put(m, "hamster", "Higher step height.",

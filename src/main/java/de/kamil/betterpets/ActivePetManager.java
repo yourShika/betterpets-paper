@@ -221,6 +221,17 @@ public final class ActivePetManager {
     private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> oreGlows = new HashMap<>();
     // Kangaroo double-jump cooldown: one mid-air dash per short window per owner.
     private final Map<UUID, Long> kangarooCooldowns = new HashMap<>();
+    // Positions of blocks players placed this session, so chain/gatherer bonuses never duplicate them.
+    private final Set<Long> playerPlaced = new HashSet<>();
+    // True while a multi-block ability (Woodpecker/Badger) is breaking, so our own block-break handlers skip re-entry.
+    private boolean chainBreaking;
+    // Pet-applied potion effects, used to strip infinite leftovers after an unclean shutdown.
+    private static final Set<PotionEffectType> PET_APPLIED_EFFECTS = Set.of(
+        PotionEffectType.SPEED, PotionEffectType.JUMP_BOOST, PotionEffectType.REGENERATION,
+        PotionEffectType.HASTE, PotionEffectType.RESISTANCE, PotionEffectType.LUCK,
+        PotionEffectType.NIGHT_VISION, PotionEffectType.FIRE_RESISTANCE, PotionEffectType.WATER_BREATHING,
+        PotionEffectType.DOLPHINS_GRACE, PotionEffectType.HERO_OF_THE_VILLAGE, PotionEffectType.SLOW_FALLING,
+        PotionEffectType.STRENGTH);
     // Mechanist spawner reveal: spawner blocks glow through walls via owner-only BlockDisplay proxies.
     private final Map<UUID, Map<Long, org.bukkit.entity.BlockDisplay>> spawnerGlows = new HashMap<>();
     // Raccoon pickpocket loot pool (mostly common, the odd small valuable).
@@ -396,6 +407,7 @@ public final class ActivePetManager {
 
     public void despawn(final Player player, final boolean clearActive) {
         mountConfirms.remove(player.getUniqueId());
+        kangarooCooldowns.remove(player.getUniqueId());
         stopRide(player, false);
         clearReveal(player);
         clearChestGlow(player);
@@ -910,7 +922,7 @@ public final class ActivePetManager {
         if (pet == null || !pet.definitionId().equals("goblin")) {
             return false;
         }
-        final double chance = Math.min(0.20, 0.03 + (abilityTier(pet.level()) * 0.009));
+        final double chance = Math.min(0.20, 0.03 + (abilityTier(pet) * 0.009));
         return ThreadLocalRandom.current().nextDouble() < chance;
     }
 
@@ -959,13 +971,40 @@ public final class ActivePetManager {
         if (pet == null || pet.stars() <= 0 || Ascension.track(pet.definitionId()) != Ascension.Track.GATHERER) {
             return;
         }
-        if (ThreadLocalRandom.current().nextDouble() >= pet.stars() * 0.06) {
+        if (wasPlayerPlaced(block) || ThreadLocalRandom.current().nextDouble() >= pet.stars() * 0.06) {
             return;
         }
         final Location loc = block.getLocation().add(0.5, 0.5, 0.5);
         for (final ItemStack drop : block.getDrops(player.getInventory().getItemInMainHand(), player)) {
             loc.getWorld().dropItemNaturally(loc, drop);
         }
+    }
+
+    /** Records a block a player placed, so gatherer/chain bonuses never duplicate placed valuables. */
+    public void notePlacedBlock(final Block block) {
+        if (playerPlaced.size() > 200_000) {
+            playerPlaced.clear();
+        }
+        playerPlaced.add(blockKey(block.getX(), block.getY(), block.getZ()));
+    }
+
+    public void forgetPlacedBlock(final Block block) {
+        playerPlaced.remove(blockKey(block.getX(), block.getY(), block.getZ()));
+    }
+
+    private boolean wasPlayerPlaced(final Block block) {
+        return playerPlaced.contains(blockKey(block.getX(), block.getY(), block.getZ()));
+    }
+
+    public boolean isChainBreaking() {
+        return chainBreaking;
+    }
+
+    /** Fires a BlockBreakEvent so protection plugins can veto a chain-broken block; true if allowed. */
+    private boolean canBreakAt(final Player player, final Block block) {
+        final org.bukkit.event.block.BlockBreakEvent event = new org.bukkit.event.block.BlockBreakEvent(block, player);
+        Bukkit.getPluginManager().callEvent(event);
+        return !event.isCancelled();
     }
 
     /** Aquatic track: a starred aquatic pet has a per-star chance to double a fishing catch. */
@@ -999,7 +1038,13 @@ public final class ActivePetManager {
             final PlayerPetData data = storage.data(player.getUniqueId());
             final OwnedPet pet = data.activePet().orElse(null);
             if (pet == null) {
-                despawn(player, false);
+                // Only run the (relatively costly) cleanup when the player actually has leftover pet state,
+                // instead of every tick for every petless player.
+                final UUID id = player.getUniqueId();
+                if (activePets.containsKey(id) || petBuffs.containsKey(id) || herobrineWeather.contains(id)
+                    || rides.containsKey(id) || shadowBars.containsKey(id)) {
+                    despawn(player, false);
+                }
                 continue;
             }
 
@@ -1048,7 +1093,7 @@ public final class ActivePetManager {
                 updateReveals(player, pet);
             }
             if (pet.definitionId().equals("allay") && tick % 10L == 0L) {
-                collectAllayItems(player, Math.min(12.0, 4.0 + (abilityTier(pet.level()) * 0.4)));
+                collectAllayItems(player, Math.min(12.0, 4.0 + (abilityTier(pet) * 0.4)));
             }
             if (pet.definitionId().equals("penguin")) {
                 if (tick % penguinInterval == 0L) {
@@ -1675,7 +1720,7 @@ public final class ActivePetManager {
     private void triggerShadowAoe(final Player player, final OwnedPet pet, final boolean visible) {
         final int level = pet.level();
         final double radius = level >= 100 ? 8.0 : level >= 50 ? 6.0 : 4.0;
-        final double damage = 1.5 + (abilityTier(level) * 0.3);
+        final double damage = 1.5 + (abilityTier(pet) * 0.3);
         for (final Entity entity : player.getNearbyEntities(radius, radius, radius)) {
             if (entity instanceof LivingEntity living && !living.equals(player) && isHostile(living)) {
                 living.damage(damage, player);
@@ -1782,7 +1827,7 @@ public final class ActivePetManager {
         if (!isDurabilityTool(tool.getType())) {
             return;
         }
-        final double chance = Math.min(0.6, 0.15 + (abilityTier(pet.level()) * 0.025));
+        final double chance = Math.min(0.6, 0.15 + (abilityTier(pet) * 0.025));
         if (ThreadLocalRandom.current().nextDouble() >= chance) {
             return;
         }
@@ -1809,7 +1854,7 @@ public final class ActivePetManager {
         if (pet == null || !pet.definitionId().equals("crystal_golem") || !CRYSTAL_GOLEM_ORES.contains(block.getType())) {
             return;
         }
-        final double chance = Math.min(0.6, 0.15 + (abilityTier(pet.level()) * 0.02));
+        final double chance = Math.min(0.6, 0.15 + (abilityTier(pet) * 0.02));
         if (ThreadLocalRandom.current().nextDouble() >= chance) {
             return;
         }
@@ -1862,7 +1907,7 @@ public final class ActivePetManager {
     private void updatePenguinChestGlow(final Player player, final OwnedPet pet) {
         final World world = player.getWorld();
         final Location center = player.getLocation();
-        final double radius = Math.min(24.0, 8.0 + (abilityTier(pet.level()) * 0.5));
+        final double radius = Math.min(24.0, 8.0 + (abilityTier(pet) * 0.5));
         final double radiusSq = radius * radius;
 
         // Block containers: keep one owner-only glowing BlockDisplay per unopened container in range.
@@ -2064,7 +2109,7 @@ public final class ActivePetManager {
         }
         final World world = player.getWorld();
         final Location center = player.getLocation();
-        final double radius = Math.min(7.0, 4.0 + (abilityTier(pet.level()) * 0.15));
+        final double radius = Math.min(7.0, 4.0 + (abilityTier(pet) * 0.15));
         final int r = (int) Math.ceil(radius);
         final double radiusSq = radius * radius;
         final Set<Material> ores = ferretOreSet(pet.level());
@@ -2190,7 +2235,7 @@ public final class ActivePetManager {
         if (until != null && now < until) {
             return;
         }
-        final double power = 0.7 + (abilityTier(pet.level()) * 0.03);
+        final double power = 0.7 + (abilityTier(pet) * 0.03);
         final Vector dir = player.getLocation().getDirection().normalize().multiply(power);
         dir.setY(Math.max(0.5, dir.getY() + 0.5));
         player.setVelocity(dir);
@@ -2216,7 +2261,7 @@ public final class ActivePetManager {
         if (!leaves && !logs) {
             return;
         }
-        final double chance = Math.min(0.6, 0.12 + (abilityTier(pet.level()) * 0.02));
+        final double chance = Math.min(0.6, 0.12 + (abilityTier(pet) * 0.02));
         if (ThreadLocalRandom.current().nextDouble() >= chance) {
             return;
         }
@@ -2236,7 +2281,7 @@ public final class ActivePetManager {
         if (!type.name().endsWith("_ORE") && type != Material.ANCIENT_DEBRIS) {
             return;
         }
-        player.giveExp(1 + (abilityTier(pet.level()) / 2));
+        player.giveExp(1 + (abilityTier(pet) / 2));
         block.getWorld().spawnParticle(Particle.ENCHANT, block.getLocation().add(0.5, 0.5, 0.5), 8, 0.3, 0.3, 0.3, 0.5);
     }
 
@@ -2257,7 +2302,7 @@ public final class ActivePetManager {
         if (!isSilkTouchBlock(type)) {
             return;
         }
-        if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.5, 0.12 + (abilityTier(pet.level()) * 0.02))) {
+        if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.5, 0.12 + (abilityTier(pet) * 0.02))) {
             return;
         }
         event.setDropItems(false);
@@ -2283,7 +2328,7 @@ public final class ActivePetManager {
         if (pet == null || !SALAMANDER_ORES.contains(block.getType())) {
             return;
         }
-        if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.8, 0.25 + (abilityTier(pet.level()) * 0.03))) {
+        if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.8, 0.25 + (abilityTier(pet) * 0.03))) {
             return;
         }
         // Use the block's real drops for the held tool, so Fortune (and Silk Touch) still apply, then
@@ -2309,7 +2354,7 @@ public final class ActivePetManager {
             return;
         }
         // At level 100 there is no size cap; below it scales with level.
-        final int cap = pet.level() >= 100 ? 2048 : Math.min(48, 4 + (abilityTier(pet.level()) * 2));
+        final int cap = pet.level() >= 100 ? 2048 : Math.min(48, 4 + (abilityTier(pet) * 2));
         final int scanLimit = Math.min(4096, cap + 512);
 
         // Flood-fill the connected logs and confirm it is a real tree: natural trees have NON-persistent
@@ -2350,11 +2395,19 @@ public final class ActivePetManager {
         }
         final ItemStack tool = player.getInventory().getItemInMainHand();
         int felled = 0;
-        for (final Block log : logs) {
-            log.breakNaturally(tool);
-            if (++felled >= cap) {
-                break;
+        chainBreaking = true;
+        try {
+            for (final Block log : logs) {
+                if (!canBreakAt(player, log)) {
+                    continue;
+                }
+                log.breakNaturally(tool);
+                if (++felled >= cap) {
+                    break;
+                }
             }
+        } finally {
+            chainBreaking = false;
         }
         if (felled > 0) {
             tool.damage(felled, player);
@@ -2370,7 +2423,7 @@ public final class ActivePetManager {
         if (pet == null || !ore || !isHoldingTool(player, "_PICKAXE")) {
             return;
         }
-        final int max = Math.min(40, 3 + abilityTier(pet.level()));
+        final int max = Math.min(40, 3 + abilityTier(pet));
         final int mined = veinBreak(player, origin, max, block -> block.getType() == type);
         if (mined > 0) {
             player.getInventory().getItemInMainHand().damage(mined, player);
@@ -2388,28 +2441,36 @@ public final class ActivePetManager {
         queue.add(origin);
         final ItemStack tool = player.getInventory().getItemInMainHand();
         int broken = 0;
-        while (!queue.isEmpty() && broken < max) {
-            final Block current = queue.poll();
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dy = -1; dy <= 1; dy++) {
-                    for (int dz = -1; dz <= 1; dz++) {
-                        if (dx == 0 && dy == 0 && dz == 0) {
-                            continue;
-                        }
-                        final Block next = current.getRelative(dx, dy, dz);
-                        final long key = blockKey(next.getX(), next.getY(), next.getZ());
-                        if (visited.contains(key) || !match.test(next)) {
-                            continue;
-                        }
-                        visited.add(key);
-                        next.breakNaturally(tool);
-                        queue.add(next);
-                        if (++broken >= max) {
-                            return broken;
+        chainBreaking = true;
+        try {
+            while (!queue.isEmpty() && broken < max) {
+                final Block current = queue.poll();
+                for (int dx = -1; dx <= 1; dx++) {
+                    for (int dy = -1; dy <= 1; dy++) {
+                        for (int dz = -1; dz <= 1; dz++) {
+                            if (dx == 0 && dy == 0 && dz == 0) {
+                                continue;
+                            }
+                            final Block next = current.getRelative(dx, dy, dz);
+                            final long key = blockKey(next.getX(), next.getY(), next.getZ());
+                            if (visited.contains(key) || !match.test(next)) {
+                                continue;
+                            }
+                            visited.add(key);
+                            if (!canBreakAt(player, next)) {
+                                continue;
+                            }
+                            next.breakNaturally(tool);
+                            queue.add(next);
+                            if (++broken >= max) {
+                                return broken;
+                            }
                         }
                     }
                 }
             }
+        } finally {
+            chainBreaking = false;
         }
         return broken;
     }
@@ -2425,7 +2486,7 @@ public final class ActivePetManager {
             return;
         }
         final Location loc = block.getLocation();
-        if (ThreadLocalRandom.current().nextDouble() < Math.min(0.6, 0.15 + (abilityTier(pet.level()) * 0.02))) {
+        if (ThreadLocalRandom.current().nextDouble() < Math.min(0.6, 0.15 + (abilityTier(pet) * 0.02))) {
             loc.getWorld().dropItemNaturally(loc.clone().add(0.5, 0.5, 0.5), new ItemStack(SCARECROW_PRODUCE.get(block.getType())));
         }
         final Material cropType = block.getType();
@@ -2504,7 +2565,7 @@ public final class ActivePetManager {
         if (pet == null || !pet.definitionId().equals("water_serpent")) {
             return;
         }
-        final int tier = abilityTier(pet.level());
+        final int tier = abilityTier(pet);
         if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.FISHING) {
             final org.bukkit.entity.FishHook hook = event.getHook();
             final int minWait = Math.max(20, 100 - (tier * 3));
@@ -2607,7 +2668,7 @@ public final class ActivePetManager {
         if (look.lengthSquared() < 0.01) {
             return;
         }
-        final double push = 0.08 + (abilityTier(pet.level()) * 0.006);
+        final double push = 0.08 + (abilityTier(pet) * 0.006);
         look.normalize().multiply(push);
         player.setVelocity(new Vector(v.getX() + look.getX(), Math.max(v.getY(), -0.1), v.getZ() + look.getZ()));
         player.setFallDistance(0.0F);
@@ -2619,7 +2680,7 @@ public final class ActivePetManager {
     private void updateMechanistGlow(final Player player, final OwnedPet pet) {
         final World world = player.getWorld();
         final Location center = player.getLocation();
-        final double radius = Math.min(24.0, 8.0 + (abilityTier(pet.level()) * 0.5));
+        final double radius = Math.min(24.0, 8.0 + (abilityTier(pet) * 0.5));
         final double radiusSq = radius * radius;
         final Set<Long> desired = new HashSet<>();
         final Map<Long, org.bukkit.entity.BlockDisplay> playerGlows =
@@ -2832,10 +2893,10 @@ public final class ActivePetManager {
         });
 
         // Periodic effects, applied every ability interval.
-        final Behavior dragonAbsorption = c -> applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 3, 220);
+        final Behavior dragonAbsorption = c -> applyShield(c.player(), 3, periodicShieldDurationTicks());
         periodicBehaviors.put("blue_dragon", dragonAbsorption);
         periodicBehaviors.put("red_dragon", dragonAbsorption);
-        periodicBehaviors.put("ender_dragon", c -> applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 2, 220));
+        periodicBehaviors.put("ender_dragon", c -> applyShield(c.player(), 2, periodicShieldDurationTicks()));
         periodicBehaviors.put("capybara", c -> {
             if (isWetOrNearWater(c.player())) {
                 applyPetBuff(c.player(), PotionEffectType.REGENERATION, c.player().getWorld().hasStorm() && c.level() >= 80 ? 1 : 0);
@@ -2971,7 +3032,7 @@ public final class ActivePetManager {
         passiveBehaviors.put("cave_spider", c -> setTarget(c.player(), Attribute.SAFE_FALL_DISTANCE, 30.0));
 
         periodicBehaviors.put("guardian_angel", c -> {
-            applyPetBuff(c.player(), PotionEffectType.ABSORPTION, Math.min(3, 1 + c.tier() / 8), 220);
+            applyShield(c.player(), Math.min(3, 1 + c.tier() / 8), periodicShieldDurationTicks());
             applyPetBuff(c.player(), PotionEffectType.REGENERATION, 0);
         });
         periodicBehaviors.put("sugar_glider", c -> {
@@ -3057,13 +3118,13 @@ public final class ActivePetManager {
         defenseBehaviors.put("mimic", (c, damager) -> {
             if (ThreadLocalRandom.current().nextDouble() < Math.min(0.5, 0.15 + (c.tier() * 0.02))) {
                 c.player().addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 40, 2, true, false, true));
-                applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 1, 60);
+                applyShield(c.player(), 1, 60);
                 spawnShieldEffect(c.player());
             }
         });
         defenseBehaviors.put("guardian_angel", (c, damager) -> {
             if (c.player().getHealth() <= 6.0) {
-                applyPetBuff(c.player(), PotionEffectType.ABSORPTION, 3, 200);
+                applyShield(c.player(), 3, 200);
                 c.player().addPotionEffect(new PotionEffect(PotionEffectType.RESISTANCE, 100, 1, true, false, true));
                 c.player().getWorld().spawnParticle(Particle.END_ROD, c.player().getLocation().add(0, 1, 0), 20, 0.4, 0.6, 0.4, 0.02);
             }
@@ -3110,6 +3171,11 @@ public final class ActivePetManager {
         return PetAbilities.tier(level);
     }
 
+    /** Star-aware tier for event-driven abilities, so ascension stars boost them like the passive attributes. */
+    private int abilityTier(final OwnedPet pet) {
+        return Math.min(PetAbilities.MAX_TIER, PetAbilities.tier(pet.level()) + pet.stars());
+    }
+
     private void resetPlayerState(final Player player) {
         for (final Attribute attribute : MODIFIED_ATTRIBUTES) {
             final AttributeInstance instance = player.getAttribute(attribute);
@@ -3142,6 +3208,14 @@ public final class ActivePetManager {
      */
     public void prepareJoiningPlayer(final Player player) {
         resetPlayerState(player);
+        // After a crash (no onDisable) infinite pet effects can linger with no in-memory tracking to remove
+        // them. Strip any known pet effect that is still infinite so a player never keeps a permanent buff.
+        for (final PotionEffectType type : PET_APPLIED_EFFECTS) {
+            final PotionEffect effect = player.getPotionEffect(type);
+            if (effect != null && effect.getDuration() == PotionEffect.INFINITE_DURATION) {
+                player.removePotionEffect(type);
+            }
+        }
     }
 
     /**
@@ -3161,6 +3235,26 @@ public final class ActivePetManager {
         }
         tracked.add(type);
         player.addPotionEffect(new PotionEffect(type, duration, amplifier, true, false, true));
+    }
+
+    /** Real-tick duration that always outlives one periodic ability cycle, closing the shield coverage gap. */
+    private int periodicShieldDurationTicks() {
+        final int abilityInterval = Math.max(20, plugin.getConfig().getInt("ability-update-ticks", 100));
+        final int followInterval = Math.max(1, plugin.getConfig().getInt("follow-update-ticks", 3));
+        return (abilityInterval * followInterval) + 40;
+    }
+
+    /**
+     * Applies an Absorption shield directly (NOT tracked as a pet buff), so the periodic passive refresh
+     * never strips it — nor the player's own Absorption (e.g. from a golden apple). A stronger existing
+     * Absorption is left untouched.
+     */
+    private void applyShield(final Player player, final int amplifier, final int duration) {
+        final PotionEffect current = player.getPotionEffect(PotionEffectType.ABSORPTION);
+        if (current != null && current.getAmplifier() > amplifier) {
+            return;
+        }
+        player.addPotionEffect(new PotionEffect(PotionEffectType.ABSORPTION, duration, amplifier, true, true, true));
     }
 
     private void setTarget(final Player player, final Attribute attribute, final double targetValue) {
@@ -3193,7 +3287,7 @@ public final class ActivePetManager {
         switch (pet.definitionId()) {
             case "bat" -> {
                 if (player.getLocation().getY() < 50.0) {
-                    collectRevealTargets(player, Math.min(24, 8 + abilityTier(pet.level())), false, desired);
+                    collectRevealTargets(player, Math.min(24, 8 + abilityTier(pet)), false, desired);
                 }
             }
             case "red_parrot" -> {
@@ -3410,7 +3504,9 @@ public final class ActivePetManager {
                 player.removePotionEffect(negative);
                 continue;
             }
-            final int cap = level >= 50 ? 40 : (int) (effect.getDuration() * 0.6);
+            // Absolute caps are idempotent: once an effect is at/under the cap, it is left alone (no runaway
+            // re-cutting every tick). Higher level = shorter cap, so a higher-level pet always wins.
+            final int cap = level >= 50 ? 40 : 200;
             if (cap < effect.getDuration()) {
                 player.removePotionEffect(negative);
                 if (cap > 0) {
