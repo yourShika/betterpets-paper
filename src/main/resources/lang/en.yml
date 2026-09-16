@@ -78,6 +78,7 @@ tokens:
   scrapped-none: "<red>Hold a Better Pets pet item to scrap it into tokens.</red>"
   scrapped-all: "<gray>Scrapped </gray><aqua>%count%</aqua><gray> pet item(s) for </gray><gold>%tokens%</gold><gray> token(s) - balance </gray><gold>%total%</gold><gray>.</gray>"
   scrapped-no-fusion: "<gray>You don't own </gray><white>%pet%</white><gray> yet, so no star progress was earned - add it to your pets first.</gray>"
+  ore-found: "<gray>You found </gray><gold>%tokens%</gold><gray> token(s) mining </gray><white>%ore%</white><gray>!</gray>"
   usage: "Usage: /pets tokens [give|remove <player|all> <amount> | pass <player> <amount>]"
   invalid-amount: "Enter a positive whole number of tokens."
   player-not-found: "Player not found: %player%"
@@ -107,6 +108,7 @@ broadcast:
     trial: " in a Trial Spawner"
   goblin: "<dark_purple>[Goblin] </dark_purple><green>Your Goblin snatched </green><gold>%item%</gold><green> from the villager!</green>"
   goblin-actionbar: "<green>Your Goblin snatched %item%!</green>"
+  ore-tokens: "<aqua>%player%</aqua><gray> found </gray><gold>%tokens%</gold><gray> token(s) mining </gray><white>%ore%</white><gray>!</gray>"
   booster-drop: "<aqua>%player%</aqua><gray> dropped a </gray><light_purple>Pet XP Booster x%tier%</light_purple><aqua> (%time%)</aqua><gray> from %source%!</gray>"
   booster-activate: "<aqua>%player%</aqua><gray> activated </gray><light_purple>Pet XP Booster x%tier%</light_purple><aqua> for %time%.</aqua>"
 

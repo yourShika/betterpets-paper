@@ -69,6 +69,7 @@ tokens:
   scrapped-none: "<red>Trzymaj przedmiot-zwierzaka Better Pets, aby rozlozyc go na tokeny.</red>"
   scrapped-all: "<gray>Rozlozono </gray><aqua>%count%</aqua><gray> przedmiot(ow) na </gray><gold>%tokens%</gold><gray> token(ow) - saldo </gray><gold>%total%</gold><gray>.</gray>"
   scrapped-no-fusion: "<gray>Nie posiadasz jeszcze </gray><white>%pet%</white><gray>, wiec nie zdobyto postepu gwiazdki - najpierw dodaj go do swoich zwierzakow.</gray>"
+  ore-found: "<gray>Znalazles </gray><gold>%tokens%</gold><gray> token(ow) kopiac </gray><white>%ore%</white><gray>!</gray>"
   usage: "Uzycie: /pets tokens [give|remove <gracz|all> <ilosc> | pass <gracz> <ilosc>]"
   invalid-amount: "Podaj dodatnia liczbe calkowita tokenow."
   player-not-found: "Nie znaleziono gracza: %player%"
@@ -98,6 +99,7 @@ broadcast:
     trial: " w Spawnerze Prob"
   goblin: "<dark_purple>[Goblin] </dark_purple><green>Twoj Goblin zwedzil </green><gold>%item%</gold><green> od wiesniaka!</green>"
   goblin-actionbar: "<green>Twoj Goblin zwedzil %item%!</green>"
+  ore-tokens: "<aqua>%player%</aqua><gray> znalazl </gray><gold>%tokens%</gold><gray> token(ow) kopiac </gray><white>%ore%</white><gray>!</gray>"
   booster-drop: "<aqua>%player%</aqua><gray> wyrzucil </gray><light_purple>Booster XP Peta x%tier%</light_purple><aqua> (%time%)</aqua><gray> z %source%!</gray>"
   booster-activate: "<aqua>%player%</aqua><gray> aktywowal </gray><light_purple>Booster XP Peta x%tier%</light_purple><aqua> na %time%.</aqua>"
 

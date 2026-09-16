@@ -116,6 +116,14 @@ tokens:
     epic: 3
     legendary: 4
     mythical: 5
+  # Mining an ore has a small chance to drop a few tokens directly (survival/adventure only,
+  # never for player-placed ores). Amount is a random min..max. broadcast announces the find in chat.
+  ore-tokens:
+    enabled: true
+    chance-percent: 3.0
+    min: 1
+    max: 5
+    broadcast: true
 
 
 # ═══ 5) FLIGHT ══════════════════════════════════════════════════════════════

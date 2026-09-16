@@ -996,6 +996,11 @@ public final class ActivePetManager {
         return playerPlaced.contains(blockKey(block.getX(), block.getY(), block.getZ()));
     }
 
+    /** Public view of the placed-block tracker, so the ore-token drop never rewards placed ores. */
+    public boolean isPlayerPlaced(final Block block) {
+        return wasPlayerPlaced(block);
+    }
+
     public boolean isChainBreaking() {
         return chainBreaking;
     }

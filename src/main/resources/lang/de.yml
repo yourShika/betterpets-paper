@@ -69,6 +69,7 @@ tokens:
   scrapped-none: "<red>Halte ein Better-Pets-Pet-Item in der Hand, um es zu Token zu verwerten.</red>"
   scrapped-all: "<gray>Verwertet: </gray><aqua>%count%</aqua><gray> Pet-Item(s) fuer </gray><gold>%tokens%</gold><gray> Token - Guthaben </gray><gold>%total%</gold><gray>.</gray>"
   scrapped-no-fusion: "<gray>Du besitzt </gray><white>%pet%</white><gray> noch nicht, daher gab es keinen Stern-Fortschritt - fuege es zuerst deinen Pets hinzu.</gray>"
+  ore-found: "<gray>Du hast </gray><gold>%tokens%</gold><gray> Token beim Abbauen von </gray><white>%ore%</white><gray> gefunden!</gray>"
   usage: "Verwendung: /pets tokens [give|remove <spieler|all> <anzahl> | pass <spieler> <anzahl>]"
   invalid-amount: "Gib eine positive ganze Zahl an Token an."
   player-not-found: "Spieler nicht gefunden: %player%"
@@ -98,6 +99,7 @@ broadcast:
     trial: " in einem Prüfungs-Spawner"
   goblin: "<dark_purple>[Goblin] </dark_purple><green>Dein Goblin hat </green><gold>%item%</gold><green> vom Dorfbewohner stibitzt!</green>"
   goblin-actionbar: "<green>Dein Goblin hat %item% stibitzt!</green>"
+  ore-tokens: "<aqua>%player%</aqua><gray> hat </gray><gold>%tokens%</gold><gray> Token beim Abbauen von </gray><white>%ore%</white><gray> gefunden!</gray>"
   booster-drop: "<aqua>%player%</aqua><gray> hat einen </gray><light_purple>Pet-XP-Booster x%tier%</light_purple><aqua> (%time%)</aqua><gray> von %source% gedroppt!</gray>"
   booster-activate: "<aqua>%player%</aqua><gray> hat einen </gray><light_purple>Pet-XP-Booster x%tier%</light_purple><aqua> für %time%</aqua><gray> aktiviert.</gray>"
 

@@ -1001,8 +1001,49 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.handleBadgerVein(event.getPlayer(), event.getBlock());
         activePets.handleScarecrow(event.getPlayer(), event.getBlock());
         activePets.handleGathererBonus(event.getPlayer(), event.getBlock());
+        maybeOreTokenDrop(event.getPlayer(), event.getBlock());
         // Now that all break bonuses have run, forget this position so the placed-block set stays bounded.
         activePets.forgetPlacedBlock(event.getBlock());
+    }
+
+    private boolean isOre(final Material type) {
+        return type.name().endsWith("_ORE") || type == Material.ANCIENT_DEBRIS;
+    }
+
+    /** A small chance for a mined ore to drop 1..max tokens directly, with an optional chat broadcast. */
+    private void maybeOreTokenDrop(final Player player, final Block block) {
+        if (!tokensEnabled() || !getConfig().getBoolean("tokens.ore-tokens.enabled", true)) {
+            return;
+        }
+        if (!isOre(block.getType()) || activePets.isPlayerPlaced(block)) {
+            return;
+        }
+        final org.bukkit.GameMode mode = player.getGameMode();
+        if (mode != org.bukkit.GameMode.SURVIVAL && mode != org.bukkit.GameMode.ADVENTURE) {
+            return;
+        }
+        final double chance = getConfig().getDouble("tokens.ore-tokens.chance-percent", 3.0);
+        if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
+            return;
+        }
+        final int min = Math.max(1, getConfig().getInt("tokens.ore-tokens.min", 1));
+        final int max = Math.max(min, getConfig().getInt("tokens.ore-tokens.max", 5));
+        final int amount = min + ThreadLocalRandom.current().nextInt(max - min + 1);
+        final PlayerPetData data = storage.data(player.getUniqueId());
+        data.addTokens(amount);
+        requestSave();
+        player.playSound(player.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.7F, 1.6F);
+        final String ore = friendlyMaterialName(block.getType());
+        if (getConfig().getBoolean("tokens.ore-tokens.broadcast", true)) {
+            broadcastToUnmuted(Texts.prefix().append(lang.colored("broadcast.ore-tokens", NamedTextColor.GRAY,
+                "%player%", player.getName(), "%tokens%", Integer.toString(amount), "%ore%", ore)));
+        } else {
+            player.sendMessage(lang.component("tokens.ore-found", "%tokens%", Integer.toString(amount), "%ore%", ore));
+        }
+    }
+
+    private String friendlyMaterialName(final Material material) {
+        return material.name().toLowerCase(Locale.ROOT).replace('_', ' ');
     }
 
     @EventHandler(ignoreCancelled = true)
