@@ -90,6 +90,14 @@ import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 
 public final class BetterPetsPlugin extends JavaPlugin implements Listener {
+    // Singleton reference so the public de.kamil.betterpets.api.BetterPetsApi (called by other plugins,
+    // typically via reflection with no hard dependency) can delegate to the running plugin instance.
+    private static BetterPetsPlugin instance;
+
+    public static BetterPetsPlugin getInstance() {
+        return instance;
+    }
+
     private static final String USE_PERMISSION = "betterpets.command.pets";
     private static final String GIVE_PERMISSION = "betterpets.give";
     private static final String CHANCES_PERMISSION = "betterpets.chances";
@@ -140,6 +148,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
+        instance = this;
         getLogger().info("Starting Better Pets as a pure Paper plugin.");
         saveDefaultConfig();
         // Keep the documented comments in config.yml intact across the saves this plugin performs.
@@ -251,6 +260,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             storage.save();
             getLogger().info("Pet storage saved.");
         }
+        instance = null;
     }
 
     /** Adds any config options that are missing from an older config.yml, keeping the user's values. */
@@ -549,29 +559,61 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private void consumeBooster(final Player player, final ItemStack item) {
+        // Activate from the held item, then consume exactly one on success. All activation logic lives in
+        // activateBooster so the public API can reuse it without requiring a physical item.
+        if (activateBooster(player, itemFactory.boosterTier(item), itemFactory.boosterMinutes(item))) {
+            consumeOne(player, item);
+        }
+    }
+
+    /**
+     * Activates a Pet XP Booster for the player, exactly like using a booster item but WITHOUT requiring or
+     * consuming one (the caller manages the item). Boosters never stack: if one is already running, the
+     * player gets the usual "already active" feedback and this returns false. {@code minutes} is clamped to
+     * {@link #maxBoosterMinutes()}. Public entry point for {@link de.kamil.betterpets.api.BetterPetsApi}.
+     *
+     * @return true if a booster was activated, false if one was already active or the tier is invalid (not 2..5).
+     */
+    public boolean activateBooster(final Player player, final int tier, final int minutes) {
         final PlayerPetData data = storage.data(player.getUniqueId());
         if (data.hasActiveBooster()) {
             player.sendMessage(lang.colored("booster.already-active", NamedTextColor.RED,
                 "%tier%", Integer.toString(data.boosterTier()),
                 "%time%", formatDuration(data.boosterRemainingMillis())));
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.8F, 0.8F);
-            return;
+            return false;
         }
-        final int tier = itemFactory.boosterTier(item);
         if (tier < 2 || tier > 5) {
-            return;
+            return false;
         }
-        final int minutes = Math.max(1, Math.min(maxBoosterMinutes(), itemFactory.boosterMinutes(item)));
-        data.setBooster(tier, minutes * 60_000L);
+        final int clampedMinutes = Math.max(1, Math.min(maxBoosterMinutes(), minutes));
+        data.setBooster(tier, clampedMinutes * 60_000L);
         data.setBoosterTickReference(System.currentTimeMillis());
-        consumeOne(player, item);
         requestSave();
         player.sendMessage(lang.colored("booster.activated", NamedTextColor.LIGHT_PURPLE,
-            "%tier%", Integer.toString(tier), "%time%", formatBoosterMinutes(minutes)));
+            "%tier%", Integer.toString(tier), "%time%", formatBoosterMinutes(clampedMinutes)));
         player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.3F);
         if (getConfig().getBoolean("xp-booster.broadcast-activations", true)) {
-            broadcastBoosterActivation(player, tier, minutes);
+            broadcastBoosterActivation(player, tier, clampedMinutes);
         }
+        return true;
+    }
+
+    // ---- Public accessors for de.kamil.betterpets.api.BetterPetsApi -----------------------------------
+
+    /** Booster tier (2..5) of an item, or 0 if it is not a Pet XP Booster. */
+    public int boosterTier(final ItemStack item) {
+        return itemFactory.boosterTier(item);
+    }
+
+    /** Configured booster minutes stored on an item, or 0 if it is not a booster. */
+    public int boosterMinutes(final ItemStack item) {
+        return itemFactory.boosterMinutes(item);
+    }
+
+    /** Whether the player currently has an active Pet XP Booster running. */
+    public boolean hasActiveBooster(final Player player) {
+        return storage.data(player.getUniqueId()).hasActiveBooster();
     }
 
     @EventHandler
