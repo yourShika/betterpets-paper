@@ -126,6 +126,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     // (non-orb) XP gained in the same tick is not dropped when we de-duplicate orb pickups.
     private final Map<UUID, long[]> orbXpThisTick = new HashMap<>();
     private final Map<UUID, Long> brushCooldowns = new HashMap<>();
+    // Suspicious blocks (world:x:y:z) already rolled for a pet, so right-click spam can't re-roll one block.
+    private final Set<String> brushedBlocks = new HashSet<>();
     // "Convert To Item" needs a second confirming click within this window (see Q1 in review).
     private final Map<UUID, Long> convertConfirms = new HashMap<>();
     private static final long CONVERT_CONFIRM_MILLIS = 5000L;
@@ -1681,11 +1683,27 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final Player player = event.getPlayer();
+        // A suspicious block may be rolled for a pet ONLY ONCE. Previously each right-click re-rolled the
+        // same block (throttled only by a per-player cooldown), so tapping a single block eventually
+        // guaranteed a pet. Require a pristine block (loot table still intact) and remember which blocks
+        // we already decided, so every block gets exactly one roll.
+        if (!(block.getState() instanceof org.bukkit.block.BrushableBlock brushable) || !brushable.hasLootTable()) {
+            return;
+        }
+        final String blockKey = block.getWorld().getUID() + ":" + block.getX() + ":" + block.getY() + ":" + block.getZ();
+        if (brushedBlocks.contains(blockKey)) {
+            return;
+        }
         final long now = System.currentTimeMillis();
         if (now < brushCooldowns.getOrDefault(player.getUniqueId(), 0L)) {
             return;
         }
         brushCooldowns.put(player.getUniqueId(), now + 1500L);
+        // This block is now decided (win or lose) and can never roll again.
+        if (brushedBlocks.size() > 100_000) {
+            brushedBlocks.clear();
+        }
+        brushedBlocks.add(blockKey);
         final double chance = petSourceChance("brushing");
         if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
             return;
@@ -1694,15 +1712,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null) {
             return;
         }
-        // Replace the item buried in the block so the pet is brushed out of the block naturally,
-        // instead of suddenly spawning above it.
-        if (block.getState() instanceof org.bukkit.block.BrushableBlock brushable) {
-            brushable.setLootTable(null);
-            brushable.setItem(itemFactory.discoveryItem(definition));
-            brushable.update(true);
-        } else {
-            block.getWorld().dropItemNaturally(block.getLocation().add(0.5, 1.0, 0.5), itemFactory.discoveryItem(definition));
-        }
+        // Replace the item buried in the block so the pet is brushed out of the block naturally.
+        brushable.setLootTable(null);
+        brushable.setItem(itemFactory.discoveryItem(definition));
+        brushable.update(true);
         announcePet(player, definition, "brushed", "");
     }
 
