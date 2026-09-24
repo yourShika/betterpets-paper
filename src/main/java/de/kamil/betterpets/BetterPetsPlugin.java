@@ -136,6 +136,27 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, PendingInput> pendingInputs = new java.util.concurrent.ConcurrentHashMap<>();
     // Players already shown the one-time "/pets help" hint this session.
     private final Set<UUID> menuHintShown = new HashSet<>();
+    // Per-player filter/sort state for the main /pets menu. Kept here (not in the holder) so it survives a
+    // name-search chat prompt, which closes and reopens the menu.
+    private final Map<UUID, PetFilter> menuFilters = new HashMap<>();
+    private static final String[] FILTER_RARITIES = {"Common", "Rare", "Epic", "Legendary", "Mythical"};
+    private static final String[] SORT_MODES = {"default", "name", "rarity", "level", "stars"};
+    // The main menu shows 36 pets (rows 0-3); row 4 (36-44) is the filter bar; row 5 (45-53) is the chrome.
+    private static final int MAIN_PETS_PER_PAGE = 36;
+
+    private static final class PetFilter {
+        String rarity;          // null = all rarities
+        String sort = "default";
+        String query;           // null/blank = no name search
+
+        boolean isActive() {
+            return rarity != null || (query != null && !query.isBlank()) || !"default".equals(sort);
+        }
+    }
+
+    private PetFilter filterOf(final UUID id) {
+        return menuFilters.computeIfAbsent(id, k -> new PetFilter());
+    }
     // Pending /pets trade requests: target player id -> who asked + when it expires.
     private final Map<UUID, TradeRequest> tradeRequests = new HashMap<>();
     // Pets held for players who disconnected mid-trade; handed back on their next join so nothing is ever lost.
@@ -372,12 +393,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final PlayerPetData data = storage.data(player.getUniqueId());
-        if (slot >= 0 && slot < PET_SLOT_LIMIT) {
-            final int petIndex = (holder.page() * PET_SLOT_LIMIT) + slot;
-            if (petIndex < 0 || petIndex >= data.pets().size()) {
+        if (slot >= 0 && slot < MAIN_PETS_PER_PAGE) {
+            final List<OwnedPet> shown = visibleMenuPets(player);
+            final int petIndex = (holder.page() * MAIN_PETS_PER_PAGE) + slot;
+            if (petIndex < 0 || petIndex >= shown.size()) {
                 return;
             }
-            final OwnedPet selectedPet = data.pets().get(petIndex);
+            final OwnedPet selectedPet = shown.get(petIndex);
             itemFactory.petUuid(event.getCurrentItem()).flatMap(data::findPet).filter(pet -> pet.uuid().equals(selectedPet.uuid())).ifPresent(pet -> {
                 if (!pet.uuid().equals(data.activePetId()) && activeAlpacaStorageLocked(player, data)) {
                     return;
@@ -396,6 +418,37 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         switch (slot) {
+            case 37 -> {
+                cycleRarityFilter(player, event.isRightClick());
+                holder.setPage(0);
+                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 1.2F);
+                renderMenu(player, event.getView().getTopInventory());
+            }
+            case 39 -> {
+                cycleSortMode(player, event.isRightClick());
+                holder.setPage(0);
+                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 1.3F);
+                renderMenu(player, event.getView().getTopInventory());
+            }
+            case 41 -> {
+                if (event.isRightClick()) {
+                    filterOf(player.getUniqueId()).query = null;
+                    holder.setPage(0);
+                    player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 0.9F);
+                    renderMenu(player, event.getView().getTopInventory());
+                } else {
+                    startMenuSearchInput(player);
+                }
+            }
+            case 43 -> {
+                final PetFilter f = filterOf(player.getUniqueId());
+                f.rarity = null;
+                f.sort = "default";
+                f.query = null;
+                holder.setPage(0);
+                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 1.0F);
+                renderMenu(player, event.getView().getTopInventory());
+            }
             case 45 -> {
                 if (holder.page() > 0) {
                     holder.setPage(holder.page() - 1);
@@ -421,7 +474,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 renderMenu(player, event.getView().getTopInventory());
             }
             case 51 -> {
-                if (holder.page() + 1 < pageCount(data.pets().size())) {
+                final int mainPages = Math.max(1, (int) Math.ceil(visibleMenuPets(player).size() / (double) MAIN_PETS_PER_PAGE));
+                if (holder.page() + 1 < mainPages) {
                     holder.setPage(holder.page() + 1);
                     renderMenu(player, event.getView().getTopInventory());
                 }
@@ -1149,32 +1203,79 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
+    private int rarityRank(final String rarity) {
+        for (int i = 0; i < FILTER_RARITIES.length; i++) {
+            if (FILTER_RARITIES[i].equalsIgnoreCase(rarity)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The player's pets filtered by rarity + name query and ordered by the chosen sort mode. */
+    private List<OwnedPet> visibleMenuPets(final Player player) {
+        final PetFilter f = filterOf(player.getUniqueId());
+        final String q = (f.query == null || f.query.isBlank()) ? null : f.query.toLowerCase(java.util.Locale.ROOT);
+        final List<OwnedPet> out = new ArrayList<>();
+        for (final OwnedPet pet : storage.data(player.getUniqueId()).pets()) {
+            final PetDefinition def = definitions.get(pet.definitionId()).orElse(null);
+            if (def == null) {
+                continue;
+            }
+            if (f.rarity != null && !def.rarity().equalsIgnoreCase(f.rarity)) {
+                continue;
+            }
+            if (q != null) {
+                final boolean nameHit = def.name().toLowerCase(java.util.Locale.ROOT).contains(q);
+                final boolean nickHit = pet.customName() != null && pet.customName().toLowerCase(java.util.Locale.ROOT).contains(q);
+                if (!nameHit && !nickHit) {
+                    continue;
+                }
+            }
+            out.add(pet);
+        }
+        switch (f.sort) {
+            case "name" -> out.sort(java.util.Comparator.comparing(
+                p -> definitions.get(p.definitionId()).map(PetDefinition::name).orElse(p.definitionId()), String.CASE_INSENSITIVE_ORDER));
+            case "rarity" -> out.sort(java.util.Comparator.comparingInt(
+                (OwnedPet p) -> definitions.get(p.definitionId()).map(d -> rarityRank(d.rarity())).orElse(-1)).reversed());
+            case "level" -> out.sort(java.util.Comparator.comparingInt(OwnedPet::level).reversed());
+            case "stars" -> out.sort(java.util.Comparator.comparingInt(OwnedPet::stars).reversed());
+            default -> {
+            }
+        }
+        return out;
+    }
+
     private void renderMenu(final Player player, final Inventory inventory) {
         inventory.clear();
         final PlayerPetData data = storage.data(player.getUniqueId());
         final List<OwnedPet> pets = data.pets();
         final PetMenuHolder holder = inventory.getHolder() instanceof PetMenuHolder menuHolder ? menuHolder : new PetMenuHolder(player.getUniqueId(), 0);
-        final int pages = pageCount(pets.size());
+        // Pets shown are filtered/sorted; the count lore still reflects the true total (pets.size()).
+        final List<OwnedPet> shown = visibleMenuPets(player);
+        final int pages = Math.max(1, (int) Math.ceil(shown.size() / (double) MAIN_PETS_PER_PAGE));
         if (holder.page() >= pages) {
             holder.setPage(Math.max(0, pages - 1));
         }
-        final int start = holder.page() * PET_SLOT_LIMIT;
-        final int visiblePets = Math.max(0, Math.min(PET_SLOT_LIMIT, pets.size() - start));
+        final int start = holder.page() * MAIN_PETS_PER_PAGE;
+        final int visiblePets = Math.max(0, Math.min(MAIN_PETS_PER_PAGE, shown.size() - start));
 
         for (int slot = 0; slot < visiblePets; slot++) {
             final int petSlot = slot;
-            final OwnedPet pet = pets.get(start + slot);
+            final OwnedPet pet = shown.get(start + slot);
             definitions.get(pet.definitionId()).ifPresent(definition ->
                 inventory.setItem(petSlot, petMenuItem(definition, pet, pet.uuid().equals(data.activePetId())))
             );
         }
-        for (int slot = visiblePets; slot < PET_SLOT_LIMIT; slot++) {
+        for (int slot = visiblePets; slot < MAIN_PETS_PER_PAGE; slot++) {
             inventory.setItem(slot, itemFactory.control(
                 Material.GRAY_STAINED_GLASS_PANE,
-                ml("menu.main.empty-slot", NamedTextColor.DARK_GRAY),
-                List.of(mg("menu.main.empty-slot-lore"))
+                ml(filterOf(player.getUniqueId()).isActive() ? "menu.filter.no-match" : "menu.main.empty-slot", NamedTextColor.DARK_GRAY),
+                List.of(mg(filterOf(player.getUniqueId()).isActive() ? "menu.filter.no-match-lore" : "menu.main.empty-slot-lore"))
             ));
         }
+        renderFilterBar(inventory, player, shown.size());
 
         inventory.setItem(45, itemFactory.control(
             holder.page() > 0 ? Material.ARROW : Material.GRAY_STAINED_GLASS_PANE,
@@ -1241,6 +1342,61 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ml("menu.common.close", NamedTextColor.RED),
             List.of(mg("menu.main.close-lore"))
         ));
+    }
+
+    /** Row 4 (slots 36-44) of the main menu: rarity, sort, name-search and clear controls + result count. */
+    private void renderFilterBar(final Inventory inventory, final Player player, final int resultCount) {
+        final PetFilter f = filterOf(player.getUniqueId());
+        final ItemStack sep = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        for (final int s : new int[]{36, 38, 40, 42, 44}) {
+            inventory.setItem(s, sep);
+        }
+        inventory.setItem(37, itemFactory.control(Material.NAME_TAG,
+            ml("menu.filter.rarity", NamedTextColor.AQUA),
+            List.of(
+                ml("menu.filter.rarity-value", NamedTextColor.GRAY, "%value%", f.rarity == null ? mt("menu.filter.all") : f.rarity),
+                mg("menu.filter.cycle-hint"))));
+        inventory.setItem(39, itemFactory.control(Material.HOPPER,
+            ml("menu.filter.sort", NamedTextColor.AQUA),
+            List.of(
+                ml("menu.filter.sort-value", NamedTextColor.GRAY, "%value%", mt("menu.filter.sort-" + f.sort)),
+                mg("menu.filter.cycle-hint"))));
+        inventory.setItem(41, itemFactory.control(Material.OAK_SIGN,
+            ml("menu.filter.search", NamedTextColor.AQUA),
+            List.of(
+                ml("menu.filter.search-value", NamedTextColor.GRAY, "%value%", (f.query == null || f.query.isBlank()) ? mt("menu.filter.none") : f.query),
+                mg("menu.filter.search-hint"))));
+        inventory.setItem(43, itemFactory.control(f.isActive() ? Material.LIME_DYE : Material.GRAY_DYE,
+            ml("menu.filter.clear", f.isActive() ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY),
+            List.of(
+                ml("menu.filter.results", NamedTextColor.GRAY, "%count%", Integer.toString(resultCount)),
+                mg("menu.filter.clear-hint"))));
+    }
+
+    private void cycleRarityFilter(final Player player, final boolean backward) {
+        final PetFilter f = filterOf(player.getUniqueId());
+        // Sequence is [all, Common, Rare, Epic, Legendary, Mythical]; index 0 = all (null).
+        int idx = f.rarity == null ? 0 : rarityRank(f.rarity) + 1;
+        idx = Math.floorMod(idx + (backward ? -1 : 1), FILTER_RARITIES.length + 1);
+        f.rarity = idx == 0 ? null : FILTER_RARITIES[idx - 1];
+    }
+
+    private void cycleSortMode(final Player player, final boolean backward) {
+        final PetFilter f = filterOf(player.getUniqueId());
+        int idx = 0;
+        for (int i = 0; i < SORT_MODES.length; i++) {
+            if (SORT_MODES[i].equals(f.sort)) {
+                idx = i;
+                break;
+            }
+        }
+        f.sort = SORT_MODES[Math.floorMod(idx + (backward ? -1 : 1), SORT_MODES.length)];
+    }
+
+    private void startMenuSearchInput(final Player player) {
+        pendingInputs.put(player.getUniqueId(), new PendingInput("menu-search", null));
+        player.closeInventory();
+        player.sendMessage(lang.colored("menu.filter.search-prompt", NamedTextColor.AQUA));
     }
 
     private List<Component> boosterStatusLines(final PlayerPetData data) {
@@ -4531,6 +4687,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (raw.equalsIgnoreCase("cancel")) {
             pendingInputs.remove(player.getUniqueId());
             player.sendMessage(lang.colored("input.cancelled", NamedTextColor.GRAY));
+            if (pending.type().equals("menu-search")) {
+                openPetsMenu(player);
+            }
+            return;
+        }
+        // Name search is free text, not a number, so handle it before the numeric parse.
+        if (pending.type().equals("menu-search")) {
+            pendingInputs.remove(player.getUniqueId());
+            filterOf(player.getUniqueId()).query = raw.equalsIgnoreCase("clear") || raw.equalsIgnoreCase("all") ? null : raw;
+            openPetsMenu(player);
             return;
         }
         final double value;
