@@ -141,8 +141,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, PetFilter> menuFilters = new HashMap<>();
     private static final String[] FILTER_RARITIES = {"Common", "Rare", "Epic", "Legendary", "Mythical"};
     private static final String[] SORT_MODES = {"default", "name", "rarity", "level", "stars"};
-    // The main menu shows 36 pets (rows 0-3); row 4 (36-44) is the filter bar; row 5 (45-53) is the chrome.
-    private static final int MAIN_PETS_PER_PAGE = 36;
+    // The main menu shows 44 pets (slots 0-43); slot 44 is a single filter/sort item; row 5 (45-53) is chrome.
+    private static final int MAIN_PETS_PER_PAGE = 44;
+    private static final int FILTER_SLOT = 44;
 
     private static final class PetFilter {
         String rarity;          // null = all rarities
@@ -417,38 +418,27 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
 
-        switch (slot) {
-            case 37 -> {
-                cycleRarityFilter(player, event.isRightClick());
-                holder.setPage(0);
-                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 1.2F);
-                renderMenu(player, event.getView().getTopInventory());
+        if (slot == FILTER_SLOT) {
+            final PetFilter f = filterOf(player.getUniqueId());
+            if (event.isShiftClick() && event.isLeftClick()) {
+                startMenuSearchInput(player);
+                return;
             }
-            case 39 -> {
-                cycleSortMode(player, event.isRightClick());
-                holder.setPage(0);
-                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 1.3F);
-                renderMenu(player, event.getView().getTopInventory());
-            }
-            case 41 -> {
-                if (event.isRightClick()) {
-                    filterOf(player.getUniqueId()).query = null;
-                    holder.setPage(0);
-                    player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 0.9F);
-                    renderMenu(player, event.getView().getTopInventory());
-                } else {
-                    startMenuSearchInput(player);
-                }
-            }
-            case 43 -> {
-                final PetFilter f = filterOf(player.getUniqueId());
+            if (event.isShiftClick() && event.isRightClick()) {
                 f.rarity = null;
                 f.sort = "default";
                 f.query = null;
-                holder.setPage(0);
-                player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 1.0F);
-                renderMenu(player, event.getView().getTopInventory());
+            } else if (event.isRightClick()) {
+                cycleSortMode(player, false);
+            } else {
+                cycleRarityFilter(player, false);
             }
+            holder.setPage(0);
+            player.playSound(player.getLocation(), Sound.UI_BUTTON_CLICK, 0.5F, 1.2F);
+            renderMenu(player, event.getView().getTopInventory());
+            return;
+        }
+        switch (slot) {
             case 45 -> {
                 if (holder.page() > 0) {
                     holder.setPage(holder.page() - 1);
@@ -1275,7 +1265,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 List.of(mg(filterOf(player.getUniqueId()).isActive() ? "menu.filter.no-match-lore" : "menu.main.empty-slot-lore"))
             ));
         }
-        renderFilterBar(inventory, player, shown.size());
+        inventory.setItem(FILTER_SLOT, filterItem(player, shown.size()));
 
         inventory.setItem(45, itemFactory.control(
             holder.page() > 0 ? Material.ARROW : Material.GRAY_STAINED_GLASS_PANE,
@@ -1344,33 +1334,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         ));
     }
 
-    /** Row 4 (slots 36-44) of the main menu: rarity, sort, name-search and clear controls + result count. */
-    private void renderFilterBar(final Inventory inventory, final Player player, final int resultCount) {
+    /** The single filter/sort item at slot 44: all four controls live on one item via click type. */
+    private ItemStack filterItem(final Player player, final int resultCount) {
         final PetFilter f = filterOf(player.getUniqueId());
-        final ItemStack sep = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
-        for (final int s : new int[]{36, 38, 40, 42, 44}) {
-            inventory.setItem(s, sep);
-        }
-        inventory.setItem(37, itemFactory.control(Material.NAME_TAG,
-            ml("menu.filter.rarity", NamedTextColor.AQUA),
-            List.of(
-                ml("menu.filter.rarity-value", NamedTextColor.GRAY, "%value%", f.rarity == null ? mt("menu.filter.all") : f.rarity),
-                mg("menu.filter.cycle-hint"))));
-        inventory.setItem(39, itemFactory.control(Material.HOPPER,
-            ml("menu.filter.sort", NamedTextColor.AQUA),
-            List.of(
-                ml("menu.filter.sort-value", NamedTextColor.GRAY, "%value%", mt("menu.filter.sort-" + f.sort)),
-                mg("menu.filter.cycle-hint"))));
-        inventory.setItem(41, itemFactory.control(Material.OAK_SIGN,
-            ml("menu.filter.search", NamedTextColor.AQUA),
-            List.of(
-                ml("menu.filter.search-value", NamedTextColor.GRAY, "%value%", (f.query == null || f.query.isBlank()) ? mt("menu.filter.none") : f.query),
-                mg("menu.filter.search-hint"))));
-        inventory.setItem(43, itemFactory.control(f.isActive() ? Material.LIME_DYE : Material.GRAY_DYE,
-            ml("menu.filter.clear", f.isActive() ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY),
-            List.of(
-                ml("menu.filter.results", NamedTextColor.GRAY, "%count%", Integer.toString(resultCount)),
-                mg("menu.filter.clear-hint"))));
+        final List<Component> lore = new ArrayList<>();
+        lore.add(ml("menu.filter.rarity-line", NamedTextColor.GRAY, "%value%", f.rarity == null ? mt("menu.filter.all") : f.rarity));
+        lore.add(ml("menu.filter.sort-line", NamedTextColor.GRAY, "%value%", mt("menu.filter.sort-" + f.sort)));
+        lore.add(ml("menu.filter.search-line", NamedTextColor.GRAY, "%value%", (f.query == null || f.query.isBlank()) ? mt("menu.filter.none") : f.query));
+        lore.add(Component.empty());
+        lore.add(mg("menu.filter.act-rarity"));
+        lore.add(mg("menu.filter.act-sort"));
+        lore.add(mg("menu.filter.act-search"));
+        lore.add(mg("menu.filter.act-clear"));
+        lore.add(Component.empty());
+        lore.add(ml("menu.filter.results", f.isActive() ? NamedTextColor.GREEN : NamedTextColor.DARK_GRAY, "%count%", Integer.toString(resultCount)));
+        return itemFactory.control(f.isActive() ? Material.SPYGLASS : Material.HOPPER,
+            ml("menu.filter.item", NamedTextColor.AQUA), lore);
     }
 
     private void cycleRarityFilter(final Player player, final boolean backward) {
