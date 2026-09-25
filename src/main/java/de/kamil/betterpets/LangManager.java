@@ -168,6 +168,27 @@ public final class LangManager {
         return YamlConfiguration.loadConfiguration(new InputStreamReader(stream, StandardCharsets.UTF_8));
     }
 
+    /**
+     * The translated string for a key from the active language then the bundled English file, or {@code null}
+     * if neither has it. Unlike {@link #raw(String)} this never returns the key itself, so callers can supply
+     * their own fallback (used for pet-ability text whose English source lives in {@link PetAbilities}).
+     */
+    public String rawOrNull(final String key) {
+        if (active != null) {
+            final String value = active.getString(key);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        if (englishFallback != null) {
+            final String value = englishFallback.getString(key);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
     /** Raw translated string for a key, with active -> bundled English -> key fallback. */
     public String raw(final String key) {
         if (active != null) {

@@ -45,7 +45,7 @@ final class Updater {
     void checkLatestVersion(final CommandSender sender, final String currentVersion) {
         final String repo = repo();
         if (repo.isEmpty()) {
-            sender.sendMessage(Component.text("Update check is disabled (set update.repo in config.yml to enable it).", NamedTextColor.DARK_GRAY));
+            sender.sendMessage(plugin.lang().colored("update.disabled", NamedTextColor.DARK_GRAY));
             return;
         }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
@@ -53,18 +53,18 @@ final class Updater {
             final String latest = info == null ? null : info.tag();
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (latest == null) {
-                    sender.sendMessage(Component.text("Could not check for updates (GitHub unreachable).", NamedTextColor.DARK_GRAY));
+                    sender.sendMessage(plugin.lang().colored("update.unreachable", NamedTextColor.DARK_GRAY));
                     return;
                 }
                 final String latestClean = latest.startsWith("v") ? latest.substring(1) : latest;
                 final int comparison = compareVersions(currentVersion, latestClean);
                 if (comparison < 0) {
-                    sender.sendMessage(Component.text("A newer version is available: v" + latestClean + " (you have v" + currentVersion + ").", NamedTextColor.YELLOW));
+                    sender.sendMessage(plugin.lang().colored("update.available", NamedTextColor.YELLOW, "%latest%", latestClean, "%current%", currentVersion));
                     sender.sendMessage(Component.text("https://github.com/" + repo + "/releases/latest", NamedTextColor.AQUA));
                 } else if (comparison > 0) {
-                    sender.sendMessage(Component.text("You are running a newer build (v" + currentVersion + ") than the latest release (v" + latestClean + ").", NamedTextColor.GRAY));
+                    sender.sendMessage(plugin.lang().colored("update.newer", NamedTextColor.GRAY, "%current%", currentVersion, "%latest%", latestClean));
                 } else {
-                    sender.sendMessage(Component.text("You are on the latest version.", NamedTextColor.GREEN));
+                    sender.sendMessage(plugin.lang().colored("update.latest", NamedTextColor.GREEN));
                 }
             });
         });
@@ -75,25 +75,25 @@ final class Updater {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             final ReleaseInfo info = fetchLatestRelease();
             if (info == null || info.tag() == null) {
-                runOnMain(() -> sender.sendMessage(Component.text("Could not reach GitHub to check for updates.", NamedTextColor.RED)));
+                runOnMain(() -> sender.sendMessage(plugin.lang().colored("update.unreachable-red", NamedTextColor.RED)));
                 return;
             }
             final String latest = info.tag().startsWith("v") ? info.tag().substring(1) : info.tag();
             if (compareVersions(currentVersion, latest) >= 0) {
-                runOnMain(() -> sender.sendMessage(Component.text("You are already on the latest version (v" + currentVersion + ").", NamedTextColor.GREEN)));
+                runOnMain(() -> sender.sendMessage(plugin.lang().colored("update.already-latest", NamedTextColor.GREEN, "%current%", currentVersion)));
                 return;
             }
             if (info.jarUrl() == null) {
-                runOnMain(() -> sender.sendMessage(Component.text("Release v" + latest + " has no downloadable jar asset.", NamedTextColor.RED)));
+                runOnMain(() -> sender.sendMessage(plugin.lang().colored("update.no-asset", NamedTextColor.RED, "%latest%", latest)));
                 return;
             }
             final boolean downloaded = download(info.jarUrl());
             runOnMain(() -> {
                 if (downloaded) {
-                    sender.sendMessage(Component.text("Downloaded Better Pets v" + latest + " (you have v" + currentVersion + ").", NamedTextColor.GREEN));
-                    sender.sendMessage(Component.text("Restart the server to apply the update.", NamedTextColor.YELLOW));
+                    sender.sendMessage(plugin.lang().colored("update.downloaded", NamedTextColor.GREEN, "%latest%", latest, "%current%", currentVersion));
+                    sender.sendMessage(plugin.lang().colored("update.restart", NamedTextColor.YELLOW));
                 } else {
-                    sender.sendMessage(Component.text("Update download failed - see the console for details.", NamedTextColor.RED));
+                    sender.sendMessage(plugin.lang().colored("update.failed", NamedTextColor.RED));
                 }
             });
         });

@@ -428,3 +428,323 @@ item:
     claim: "Einlösen"
     starts-at: "Startet bei Level "
     add: "Rechtsklick, um diesen Pet hinzuzufügen."
+
+# Pet-Fähigkeiten: Kurzbeschreibung (summary), level-abhängiger Wert (value) und Meilensteine.
+# %n%/%a%/%b%/%c% sind vom Plugin eingesetzte Zahlen; %rank% ist ein Textbaustein. Englisch dient als
+# Rueckfall, wenn ein Schluessel hier fehlt.
+ability:
+  ms:
+    mount-flight: "Reittier-Flug"
+    enchant-trail: "Verzauberungs-Spur"
+    dragon-breath-trail: "Drachenatem-Spur"
+    flame-trail: "Flammen-Spur"
+    flame-flight-trail: "Flammen-Flugspur"
+    shadow-flight-trail: "Schatten-Flugspur"
+    rainbow-trail: "Regenbogen-Spur"
+  unknown:
+    summary: "Pet-Fähigkeit."
+    value: "Skaliert mit den gelisteten Meilensteinen"
+  ant:
+    summary: "Macht dich kleiner."
+    value: "%n%% Größe"
+  alpaca:
+    summary: "Tragbarer Speicher, der mit dem Level wächst."
+    value: "%n% Speicherplätze"
+  axolotl:
+    summary: "Erhöht den Sauerstoffbonus unter Wasser."
+    value: "+%n% Sauerstoff"
+  bat:
+    summary: "Zeigt nahe feindliche Mobs unter der Erde an."
+    value: "%n% Block Untergrund-Sicht"
+  beaver:
+    summary: "Schnelleres Hacken mit einer Axt in der Hand."
+    value: "+%n% Axt-Abbaugeschwindigkeit"
+  bee:
+    summary: "Regeneration bei Blumen oder Feldfrüchten."
+    value-hi: "Regen II bei Blumen/Feldfrüchten"
+    value-lo: "Regen I bei Blumen/Feldfrüchten"
+    ms: "Blumen-Regeneration steigt auf Stufe II"
+  blue_dragon:
+    summary: "Mehr End-Schaden, Absorptionsschild, ab Level 50 reitbar."
+    value: "+%n% Schaden in der Dimension"
+  capybara:
+    summary: "Regeneration bei Wasser, stärker bei Regen."
+    value-hi: "Regen I bei Wasser, Regen II bei Regen"
+    value-lo: "Regen I bei Wasser"
+    ms: "Regen-Regeneration steigt auf Stufe II"
+  cat:
+    summary: "Verringert Fallschaden."
+    value: "%n%% Fallschaden"
+  chicken:
+    summary: "Gewährt Schwebe-Impulse und legt mit der Zeit Eier."
+    value: "Langsames Fallen; ~%n%% Ei-Chance pro Zyklus"
+  crab:
+    summary: "Mehr Schaden und Rüstung in Wassernähe."
+    value: "+%a% Schaden, +%b% Rüstung in Wassernähe"
+  crystal_golem:
+    summary: "Chance auf zusätzliche Erze und Kristalle beim Abbauen."
+    value: "%n%% extra Erz/Kristall-Drop"
+  dog:
+    summary: "Chance, getroffene Untote zu verwittern."
+    value: "%n%% Verwitterungs-Chance bei Untoten-Treffern"
+  dolphin:
+    summary: "Delfins Gunst und schnellere Bewegung im Wasser."
+    value: "+%n%% Wasserbewegung"
+  duck:
+    summary: "Schnelleres Schwimmen und kurzes Schweben in der Luft."
+    value: "+%n%% Wasserbewegung, kurzes Gleiten"
+  elder_guardian:
+    summary: "Schnelleres Abbauen unter Wasser."
+    value: "%n%% Unterwasser-Abbau"
+  ender_dragon:
+    summary: "Mehr Schaden in jeder Dimension, Absorptionsschild, ab Level 50 reitbar."
+    value: "+%n% Schaden in allen Dimensionen"
+  ghast:
+    summary: "Explosions-Rückstoßresistenz und Nether-Kill-XP."
+    value: "%n%% Explosionsresistenz"
+  goblin:
+    summary: "Günstigere Dorfbewohner-Trades und Chance, den verkauften Gegenstand oder ein paar Smaragde zu stibitzen (volle Rückerstattung erst mit Level 100)."
+    value: "Held %a%, bis zu %b%% Gratis-Trade-Chance"
+  lich:
+    summary: "Stiehlt Leben, wenn du Mobs tötest."
+    value: "%n% Leben pro Kill gestohlen"
+  moon_fox:
+    summary: "Tempo und Stärke bei Nacht."
+    value: "+%n% Tempo & Stärke bei Nacht"
+  otter:
+    summary: "Wasseratmung und schnelleres Schwimmen."
+    value: "+%n%% Wasserbewegung, Wasseratmung"
+  pixie:
+    summary: "Gewährt mit der Zeit zufällige kleine Buffs."
+    value: "%n%× zufälliger Buff%rank%"
+  shadow_dragon:
+    summary: "AoE-Ausbruch beim Angreifen (Bossleisten-Cooldown), ab Level 50 reitbar."
+    value: "%a% AoE-Schaden bei Treffer, %b%s Cooldown, %c% Block Radius"
+    ms-6: "Aura-Radius wächst auf 6 Blöcke"
+    ms-8: "Aura-Radius wächst auf 8 Blöcke"
+  ancient_elf:
+    summary: "Verkürzt Debuffs, blockt sie dann und hebt sie schließlich auf."
+    value-100: "Hebt alle Debuffs auf"
+    value-50: "Debuffs auf 2s begrenzt"
+    value-lo: "Debuffs auf 10s begrenzt"
+    ms-50: "Debuffs werden auf 2 Sekunden begrenzt"
+    ms-100: "Alle Debuffs werden aufgehoben"
+  hamster:
+    summary: "Höhere Schritthöhe."
+    value: "%n% Schritthöhe"
+  hedgehog:
+    summary: "Reflektiert etwas Nahkampfschaden."
+    value: "%n% reflektierter Schaden"
+  herobrine:
+    summary: "Mehr Leben, größere Reichweite, Donner-Aura."
+    value: "+%n% Herzen/Reichweiten-Stufe"
+  koala:
+    summary: "Regeneration bei Bäumen, stärker mit steigendem Level."
+    value: "%rank% bei Blättern/Stämmen"
+  mole:
+    summary: "Chance, jeden Block ohne Werkzeug-Haltbarkeitsverlust abzubauen (Axt, Spitzhacke, Schaufel)."
+    value: "%n%% Keine-Haltbarkeit-Chance bei jedem Block"
+  allay:
+    summary: "Zieht nahe fallengelassene Items direkt in dein Inventar."
+    value: "%n% Block Aufsammel-Radius"
+  cursed_plushie:
+    summary: "Ablenkungs-Attrappe: Feindliche Mobs verlieren manchmal das Interesse an dir."
+    value: "%n%% Mob-Ablenkungs-Chance"
+  owl:
+    summary: "Nachtsicht und erhöhtes Glück."
+    value: "+%n% Glück"
+  firefly:
+    summary: "Nachtsicht und ein Schild gegen feindliche Mob-Spawns, das mit dem Level wächst."
+    value: "%n% Block Kein-Spawn-Radius"
+  ferret:
+    summary: "Zeigt mit einer Spitzhacke in der Hand nahe Erze durch Wände und schaltet mit steigendem Level reichere Adern frei (Kohle bis Diamant)."
+    value-0: "zeigt bis zu Kohle"
+    value-1: "zeigt bis zu Kupfer"
+    value-2: "zeigt bis zu Eisen/Redstone"
+    value-3: "zeigt bis zu Gold/Quarz"
+    value-4: "zeigt bis zu Diamant/Smaragd"
+  kangaroo:
+    summary: "Doppelsprung: Schleiche in der Luft, um vorwärts und hoch zu schnellen."
+    value: "%n% Sprungkraft"
+  squirrel:
+    summary: "Sammelt Bonus-Setzlinge, Äpfel und Stöcke aus Blättern und Stämmen."
+    value: "%n%% Bonus-Sammel-Chance"
+  water_serpent:
+    summary: "Meisterangler: schnellere Bisse, Doppelfänge und See-Glück mit Angel in der Hand."
+    value: "%a%% Doppelfang, +%b% Glück"
+  scorpion:
+    summary: "Deine Nahkampftreffer vergiften und verlangsamen das Ziel; das Gift skaliert mit dem Level."
+    value: "Gift %a% für %b% Ticks"
+  mantis:
+    summary: "Größere Angriffsreichweite und Chance auf einen schweren Bonusschlag."
+    value: "+%a% Reichweite, %b%% Bonusschlag"
+  panther:
+    summary: "Ein Angriff aus dem Schleichen landet einen Rückenstich für Bonusschaden."
+    value: "+%n% Rückenstich-Schaden"
+  mimic:
+    summary: "Chance, einen eingehenden Treffer mit Resistenz und Absorption abzuwehren."
+    value: "%n%% Abwehr-Chance"
+  guardian_angel:
+    summary: "Periodische Absorption und Regeneration, plus ein Schild bei Todesnähe."
+    value: "Absorption %n%, Schild bei niedrigem Leben"
+  sugar_glider:
+    summary: "Gleite in der Luft: langsames Fallen und Steuern nach vorne beim Schleichen."
+    value: "+%n% Gleit-Schub"
+  lion:
+    summary: "Reitbares Boden-Reittier. Mehr Angriffsschaden und ein Brüllen, das nahe Feinde schwächt und zurückstößt."
+    value: "+%n% Schaden, periodisches Brüllen, Rechtsklick zum Reiten"
+  cave_spider:
+    summary: "Schaue eine Wand an, um sie zu erklimmen (nach unten schauen zum Absteigen); halte Schleichen zum Festkrallen und Drehen. Nimmt nie Fallschaden."
+    value: "Wandklettern + sicherer Fall"
+  snow_golem:
+    summary: "Bewirft nahe Feinde mit Schneebällen und schützt dich vor dem Einfrieren."
+    value: "%n% Schneebälle / Salve, kein Einfrieren"
+  arcane_fox:
+    summary: "Extra-Erfahrung von getöteten Mobs und abgebauten Erzen."
+    value: "+%n% Bonus-XP"
+  mechanist:
+    summary: "Zeigt nahe Spawner durch Wände an."
+    value: "%n% Block Spawner-Sicht"
+  kraken:
+    summary: "Zieht im Wasser nahe Feinde zu dir und zerquetscht sie."
+    value: "%a% Block Sog, %b% Schaden"
+  griffin:
+    summary: "Ein reitbares fliegendes Ross ab Level 50."
+    value-hi: "Flug freigeschaltet"
+    value-lo: "Flug ab Level 50"
+  yeti:
+    summary: "Friert Angreifer ein und verlangsamt sie; gedeiht in verschneiten Biomen."
+    value: "%n% Tick Einfrieren bei Angreifern"
+  raccoon:
+    summary: "Ein Mob-Treffer hat eine Chance, einen Bonus-Drop zu stibitzen."
+    value: "%n%% Taschendiebstahl-Chance"
+  golem_mason:
+    summary: "Größere Reichweite, und dein gehaltener Blockstapel füllt sich automatisch aus dem Inventar nach."
+    value: "+%n% Reichweite + Auto-Nachfüllen"
+  silk_moth:
+    summary: "Chance, Glas, Eis, Erz und Glowstone wie mit Behutsamkeit abzubauen."
+    value: "%n%% Behutsamkeit-Chance"
+  woodpecker:
+    summary: "Ein Stamm fällt den ganzen natürlichen Baum auf einmal (keine platzierten Stämme; nutzt Axt-Haltbarkeit)."
+    value-max: "ganzer Baum, jede Größe"
+    value-lo: "bis zu %n% Stämme"
+  badger:
+    summary: "Ein Erz jagt die ganze Ader (nutzt Spitzhacken-Haltbarkeit)."
+    value: "bis zu %n% Erz pro Ader"
+  salamander:
+    summary: "Chance, dass abgebaute Erze bereits zu Barren geschmolzen droppen."
+    value: "%n%% Auto-Schmelz-Chance"
+  magpie:
+    summary: "Zieht nahe XP-Kugeln an und gewährt einen kleinen Glücksbonus."
+    value: "+%n% Glück, XP-Kugel-Magnet"
+  scarecrow:
+    summary: "Geerntete Feldfrüchte pflanzen sich neu, nahe Feldfrüchte wachsen schneller, mit Bonus-Ertrag."
+    value: "%n%% Bonus-Ernteertrag"
+  panda:
+    summary: "Mehr Angriffs-Rückstoß, Held-Effekt im Bambus-Biom."
+    value: "+%n%% Rückstoß"
+  penguin:
+    summary: "Tempo in kalten Biomen, Frost-Eisspur, und lässt nahe ungeöffnete Behälter leuchten."
+    value: "+%a% Kälte-Tempo, %b% Block Behälter-Leuchten"
+  phoenix:
+    summary: "Feuerresistenz, verbrennt Untote, belebt dich wieder, ab Level 50 reitbar."
+    value: "%n%h Wiederbelebungs-Cooldown"
+    ms-18: "Wiederbelebungs-Cooldown auf 18h reduziert"
+    ms-12: "Wiederbelebungs-Cooldown auf 12h reduziert"
+  platypus:
+    summary: "Vergiftet Nah- und Fernkampf-Angreifer, während du nass bist (Wasser oder Regen)."
+    value: "%n% Tick Gift bei Angreifern, während du nass bist"
+  polar_bear:
+    summary: "Extra Rüstung in kalten Biomen."
+    value: "+%n% Rüstung in kalten Biomen"
+  pufferfish:
+    summary: "Wither-Aura gegen Untote, die mit dem Level wächst."
+    value: "%a% Block Wither-%b%-Aura"
+  rabbit:
+    summary: "Höhere Sprünge und sicherere Landungen."
+    value: "%n% Sprung"
+  reaper:
+    summary: "Angriffstempo, Untoten-Aura und Ernte-Buffs."
+    value: "%n% Angriffstempo"
+  red_dragon:
+    summary: "Mehr Nether-Schaden, Absorptionsschild, ab Level 50 reitbar."
+    value: "+%n% Schaden in der Dimension"
+  red_parrot:
+    summary: "Zeigt nahe feindliche Mobs an."
+    value: "%n% Block Sicht"
+  red_panda:
+    summary: "Wald-Bewegung und schnelleres Schleichen."
+    value: "+%a% Wald-Tempo, +%b% Schleichen"
+  snail:
+    summary: "Schnelleres Schleichen."
+    value: "%n% Schleich-Tempo"
+  spinosaurus:
+    summary: "Macht dich größer."
+    value: "%n%% Größe"
+  slime:
+    summary: "Federnde Bewegung mit sichereren Landungen."
+    value: "%a% sicherer Fall, %b% Sprung"
+  tiger:
+    summary: "Bewegungstempo und Flächenschaden."
+    value: "%n% Tempo"
+  turtle:
+    summary: "Rückstoßresistenz."
+    value: "+%n% Rückstoßresistenz"
+  unicorn:
+    summary: "Glück, leichte Heilung und Regenbogen-Magie."
+    value: "+%n% Glück"
+  warden:
+    summary: "Zeigt Untote an und wehrt Warden ab."
+    value: "%n% Block Sicht"
+  worm:
+    summary: "Abbaueffizienz."
+    value: "+%n% Abbaueffizienz"
+
+# Befehls-Hilfe, Admin-Rückmeldungen und Updater (Deutsch).
+help:
+  header: "Better Pets Befehle"
+  menu: "Öffne dein Pet-Menü"
+  scrap: "Gehaltene (oder alle) doppelten Pets zu Token verwerten"
+  shop: "Token für Skins, Auren, Spuren und Booster ausgeben"
+  top: "Ranglisten: meiste Pets, Gesamtsterne, Token"
+  trade: "Pets und Token mit einem anderen Spieler tauschen"
+  tokens: "Zeigt dein Pet-Token-Guthaben"
+  tokens-pass: "Token an einen anderen Spieler senden"
+  visible: "Aktives Pet zeigen oder verstecken"
+  mute: "Pet-Fund-/Booster-Nachrichten für dich umschalten"
+  set-name: "Aktives Pet umbenennen"
+  restore-name: "Standard-Pet-Namen wiederherstellen"
+  version: "Version, Module und Update-Prüfung anzeigen"
+  info: "Pet-Katalog öffnen"
+  chances: "Spawn-Chancen-GUI"
+  notify: "Fund-Nachrichten-GUI"
+  give: "Test-Pet-Items geben"
+  xpboost: "Pet-XP-Booster geben"
+  tokens-admin: "Pet-Token verwalten"
+  drop: "Pet-Quellen- und Booster-Drop-GUI"
+  modules: "GUI für optionale Module"
+  reload: "Config, Module und Modelle neu laden"
+  language: "Plugin-Sprache wechseln"
+  update: "Versionsprüfung / Download (siehe config)"
+admin:
+  reloaded: "Better Pets hat Config, Module, Modelle und aktive Pets neu geladen."
+  lang-usage: "Aktuelle Sprache: %code%. Verwendung: /pets language %codes%"
+  lang-unknown: "Unbekannte Sprache '%code%'. Verfügbar: %codes%"
+  lang-set: "Sprache auf '%code%' gesetzt. Menüs öffnen in der neuen Sprache neu."
+  modules-header: "Module:"
+  modules-experimental-note: "  (externe Module sind experimentell und deaktiviert)"
+  updater-disabled: "Der Auto-Updater ist deaktiviert. Setze update.repo in der config.yml, um ihn zu aktivieren."
+  update-checkonly: "Auto-Download ist aus (update.enabled: false). Nur die Versionsprüfung lief; lade es selbst von der Release-Seite herunter."
+  update-checking: "Suche nach einem Better-Pets-Update..."
+update:
+  disabled: "Update-Prüfung ist deaktiviert (setze update.repo in der config.yml, um sie zu aktivieren)."
+  unreachable: "Konnte nicht nach Updates suchen (GitHub nicht erreichbar)."
+  unreachable-red: "Konnte GitHub nicht erreichen, um nach Updates zu suchen."
+  available: "Eine neuere Version ist verfügbar: v%latest% (du hast v%current%)."
+  newer: "Du nutzt einen neueren Build (v%current%) als das aktuellste Release (v%latest%)."
+  latest: "Du bist auf der neuesten Version."
+  already-latest: "Du bist bereits auf der neuesten Version (v%current%)."
+  no-asset: "Release v%latest% hat keine herunterladbare Jar-Datei."
+  downloaded: "Better Pets v%latest% heruntergeladen (du hast v%current%)."
+  restart: "Starte den Server neu, um das Update anzuwenden."
+  failed: "Update-Download fehlgeschlagen - siehe Konsole für Details."

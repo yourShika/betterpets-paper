@@ -18,7 +18,7 @@
 # are supported). New keys are merged into your files on update, so custom text
 # survives upgrades.
 #   Change it here and run /pets reload, or switch live with:  /pets language <en|de|pl>
-language: en
+language: de
 
 
 # ═══ 2) GENERAL ═════════════════════════════════════════════════════════════

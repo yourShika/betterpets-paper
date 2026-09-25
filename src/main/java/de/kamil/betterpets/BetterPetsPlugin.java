@@ -3393,7 +3393,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ml("menu.asc.track-label", NamedTextColor.GRAY).append(Component.text(track.display(), NamedTextColor.AQUA)),
             ml("menu.track.desc." + track.name().toLowerCase(java.util.Locale.ROOT), NamedTextColor.DARK_GRAY),
             ml("menu.asc.ability-now", NamedTextColor.GRAY, "%stars%", Integer.toString(pet.stars()))
-                .append(Component.text(PetAbilities.value(definition.id(), pet.level(), pet.stars()), NamedTextColor.YELLOW))));
+                .append(Component.text(abilityValue(definition.id(), pet.level(), pet.stars()), NamedTextColor.YELLOW))));
         if (activePets.isFlyable(definition.id())) {
             final int flightPct = (int) Math.round(pet.stars() * getConfig().getDouble("flight-speed-per-star", 0.08) * 100);
             headerLore.add(ml("menu.asc.flight-header", NamedTextColor.GRAY)
@@ -4577,7 +4577,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             recalculateAllPetExp();
             storage.save();
         }
-        sender.sendMessage(Component.text("Better Pets reloaded config, modules, models, and active pets.", NamedTextColor.GREEN));
+        sender.sendMessage(lang.colored("admin.reloaded", NamedTextColor.GREEN));
         getLogger().info("Better Pets reload completed.");
     }
 
@@ -4587,20 +4587,20 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         if (args.length < 2) {
-            sender.sendMessage(Component.text("Current language: " + lang.activeCode()
-                + ". Usage: /pets language <" + String.join("|", lang.languageCodes()) + ">", NamedTextColor.YELLOW));
+            sender.sendMessage(lang.colored("admin.lang-usage", NamedTextColor.YELLOW,
+                "%code%", lang.activeCode(), "%codes%", String.join("|", lang.languageCodes())));
             return;
         }
         final String code = args[1].toLowerCase(Locale.ROOT);
         if (!lang.languageCodes().contains(code)) {
-            sender.sendMessage(Component.text("Unknown language '" + code + "'. Available: "
-                + String.join(", ", lang.languageCodes()), NamedTextColor.RED));
+            sender.sendMessage(lang.colored("admin.lang-unknown", NamedTextColor.RED,
+                "%code%", code, "%codes%", String.join(", ", lang.languageCodes())));
             return;
         }
         getConfig().set("language", code);
         saveConfig();
         lang.load();
-        sender.sendMessage(Component.text("Language set to '" + code + "'. Menus reopen in the new language.", NamedTextColor.GREEN));
+        sender.sendMessage(lang.colored("admin.lang-set", NamedTextColor.GREEN, "%code%", code));
         getLogger().info(sender.getName() + " changed the language to '" + code + "'.");
     }
 
@@ -4608,16 +4608,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final String version = getPluginMeta().getVersion();
         sender.sendMessage(Component.text("Better Pets ", NamedTextColor.GOLD)
             .append(Component.text("v" + version, NamedTextColor.AQUA)));
-        sender.sendMessage(Component.text("Modules:", NamedTextColor.GOLD));
+        sender.sendMessage(Component.text(mt("admin.modules-header"), NamedTextColor.GOLD));
         if (moduleManager != null) {
             for (final Module module : moduleManager.modules()) {
                 final boolean active = moduleManager.isActive(module.id());
                 sender.sendMessage(Component.text("  - " + module.displayName() + ": ", NamedTextColor.GRAY)
-                    .append(Component.text(active ? "ON" : "OFF", active ? NamedTextColor.GREEN : NamedTextColor.RED)));
+                    .append(Component.text(active ? mt("menu.common.on-label") : mt("menu.common.off-label"), active ? NamedTextColor.GREEN : NamedTextColor.RED)));
             }
         }
         if (!experimentalModulesEnabled()) {
-            sender.sendMessage(Component.text("  (external modules are experimental and disabled)", NamedTextColor.DARK_GRAY));
+            sender.sendMessage(Component.text(mt("admin.modules-experimental-note"), NamedTextColor.DARK_GRAY));
         }
         updater.checkLatestVersion(sender, version);
     }
@@ -4628,16 +4628,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         if (updater.repo().isEmpty()) {
-            sender.sendMessage(Component.text("The auto-updater is disabled. Set update.repo in config.yml to enable it.", NamedTextColor.RED));
+            sender.sendMessage(lang.colored("admin.updater-disabled", NamedTextColor.RED));
             return;
         }
         final String currentVersion = getPluginMeta().getVersion();
         if (!updater.autoEnabled()) {
-            sender.sendMessage(Component.text("Auto-download is off (update.enabled: false). Only the version check ran; download it yourself from the release page.", NamedTextColor.YELLOW));
+            sender.sendMessage(lang.colored("admin.update-checkonly", NamedTextColor.YELLOW));
             updater.checkLatestVersion(sender, currentVersion);
             return;
         }
-        sender.sendMessage(Component.text("Checking for a Better Pets update...", NamedTextColor.GOLD));
+        sender.sendMessage(lang.colored("admin.update-checking", NamedTextColor.GOLD));
         updater.downloadLatest(sender, currentVersion);
     }
 
@@ -4765,37 +4765,37 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void sendHelp(final CommandSender sender) {
         sender.sendMessage(Component.empty());
-        sender.sendMessage(Component.text("Better Pets Commands", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
-        helpLine(sender, "/pets", "Open your pet menu", NamedTextColor.GOLD);
-        helpLine(sender, "/pets scrap [all]", "Turn held (or all) duplicate pets into tokens", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets shop", "Spend tokens on skins, auras, trails and boosters", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets top", "Leaderboards: most pets, total stars, tokens", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets trade <player>", "Trade pets and tokens with another player", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets tokens", "Show your pet token balance", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets tokens pass <player> <amount>", "Send tokens to another player", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets visible | invisible", "Show or hide your active pet", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets mute", "Toggle pet find/booster broadcasts for yourself", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets set name <name>", "Rename your active pet", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets restore name", "Restore the default pet name", NamedTextColor.YELLOW);
-        helpLine(sender, "/pets version", "Show version, modules, and update check", NamedTextColor.AQUA);
+        sender.sendMessage(Component.text(mt("help.header"), NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+        helpLine(sender, "/pets", mt("help.menu"), NamedTextColor.GOLD);
+        helpLine(sender, "/pets scrap [all]", mt("help.scrap"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets shop", mt("help.shop"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets top", mt("help.top"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets trade <player>", mt("help.trade"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets tokens", mt("help.tokens"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets tokens pass <player> <amount>", mt("help.tokens-pass"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets visible | invisible", mt("help.visible"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets mute", mt("help.mute"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets set name <name>", mt("help.set-name"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets restore name", mt("help.restore-name"), NamedTextColor.YELLOW);
+        helpLine(sender, "/pets version", mt("help.version"), NamedTextColor.AQUA);
         if (has(sender, INFO_PERMISSION)) {
-            helpLine(sender, "/pets info", "Open the pet catalogue", NamedTextColor.YELLOW);
+            helpLine(sender, "/pets info", mt("help.info"), NamedTextColor.YELLOW);
         }
         if (has(sender, CHANCES_PERMISSION)) {
-            helpLine(sender, "/pets chances", "Spawn chance GUI", NamedTextColor.YELLOW);
-            helpLine(sender, "/pets notify", "Discovery broadcast GUI", NamedTextColor.YELLOW);
+            helpLine(sender, "/pets chances", mt("help.chances"), NamedTextColor.YELLOW);
+            helpLine(sender, "/pets notify", mt("help.notify"), NamedTextColor.YELLOW);
         }
         if (has(sender, GIVE_PERMISSION)) {
-            helpLine(sender, "/pets give <pet|all> [level] [player]", "Give test pet items", NamedTextColor.YELLOW);
-            helpLine(sender, "/pets xpboost give <x2-x5> <time> [player]", "Give Pet XP Boosters", NamedTextColor.LIGHT_PURPLE);
+            helpLine(sender, "/pets give <pet|all> [level] [player]", mt("help.give"), NamedTextColor.YELLOW);
+            helpLine(sender, "/pets xpboost give <x2-x5> <time> [player]", mt("help.xpboost"), NamedTextColor.LIGHT_PURPLE);
         }
         if (has(sender, ADMIN_PERMISSION)) {
-            helpLine(sender, "/pets tokens give|remove <player|all> <amount>", "Manage pet tokens", NamedTextColor.AQUA);
-            helpLine(sender, "/pets drop", "Pet source and booster drop GUI", NamedTextColor.AQUA);
-            helpLine(sender, "/pets modules", "Optional modules GUI", NamedTextColor.AQUA);
-            helpLine(sender, "/pets reload", "Reload config, modules, and models", NamedTextColor.AQUA);
-            helpLine(sender, "/pets language <en|de|pl>", "Switch the plugin language", NamedTextColor.AQUA);
-            helpLine(sender, "/pets update", "Version check / download (see config)", NamedTextColor.AQUA);
+            helpLine(sender, "/pets tokens give|remove <player|all> <amount>", mt("help.tokens-admin"), NamedTextColor.AQUA);
+            helpLine(sender, "/pets drop", mt("help.drop"), NamedTextColor.AQUA);
+            helpLine(sender, "/pets modules", mt("help.modules"), NamedTextColor.AQUA);
+            helpLine(sender, "/pets reload", mt("help.reload"), NamedTextColor.AQUA);
+            helpLine(sender, "/pets language <en|de|pl>", mt("help.language"), NamedTextColor.AQUA);
+            helpLine(sender, "/pets update", mt("help.update"), NamedTextColor.AQUA);
         }
         sender.sendMessage(Component.empty());
     }
@@ -4837,15 +4837,36 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private List<String> milestoneUnlocks(final String id, final int level) {
-        return PetAbilities.milestones(id, level);
+        final List<String> out = new ArrayList<>();
+        for (final PetAbilities.Msg msg : PetAbilities.milestoneMsgs(id, level)) {
+            out.add(renderAbility(msg));
+        }
+        return out;
     }
 
     private String abilitySummary(final String id) {
-        return PetAbilities.summary(id);
+        return renderAbility(PetAbilities.summaryMsg(id));
     }
 
     private String abilityValue(final String id, final int level) {
-        return PetAbilities.value(id, level);
+        return renderAbility(PetAbilities.valueMsg(id, level));
+    }
+
+    private String abilityValue(final String id, final int level, final int starTierBonus) {
+        return renderAbility(PetAbilities.valueMsg(id, level, starTierBonus));
+    }
+
+    /** Renders a pet-ability message in the active language, falling back to the bundled English template. */
+    private String renderAbility(final PetAbilities.Msg msg) {
+        String template = lang.rawOrNull(msg.key());
+        if (template == null) {
+            template = PetAbilities.englishTemplate(msg.key());
+        }
+        final List<String> repl = msg.repl();
+        for (int i = 0; i + 1 < repl.size(); i += 2) {
+            template = template.replace(repl.get(i), repl.get(i + 1));
+        }
+        return template;
     }
 
     private int pageCount(final int itemCount) {
