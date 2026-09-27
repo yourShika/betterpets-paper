@@ -2314,7 +2314,8 @@ public final class ActivePetManager {
     }
 
     public void handleSilkMoth(final org.bukkit.event.block.BlockBreakEvent event) {
-        final OwnedPet pet = activePetIfType(event.getPlayer(), "silk_moth");
+        final Player player = event.getPlayer();
+        final OwnedPet pet = activePetIfType(player, "silk_moth");
         if (pet == null) {
             return;
         }
@@ -2322,10 +2323,16 @@ public final class ActivePetManager {
             return;
         }
         final Block block = event.getBlock();
-        // The exact Silk-Touch drops for this block, computed with our own Silk-Touch pickaxe so it works with
-        // ANY tool (or none). An empty result means the block can't be Silk-Touched (e.g. bedrock, spawner) —
-        // leave the vanilla break untouched in that case.
-        final java.util.Collection<ItemStack> silk = block.getDrops(silkTouchProbe(), event.getPlayer());
+        // Blocks that REQUIRE the correct tool to drop anything (stone, ores, …) only Silk-Touch when the
+        // player is actually holding a suitable tool. Blocks you can break by hand and still harvest (grass,
+        // glass, ice, dirt, leaves, …) keep the Silk-Touch chance with any tool, even bare hands.
+        final ItemStack held = player.getInventory().getItemInMainHand();
+        if (block.getBlockData().requiresCorrectToolForDrops() && !block.isPreferredTool(held)) {
+            return;
+        }
+        // The exact Silk-Touch drops for this block, computed with our own Silk-Touch pickaxe. An empty result
+        // means the block can't be Silk-Touched (e.g. bedrock, spawner) — leave the vanilla break untouched.
+        final java.util.Collection<ItemStack> silk = block.getDrops(silkTouchProbe(), player);
         if (silk.isEmpty()) {
             return;
         }
