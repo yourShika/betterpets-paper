@@ -354,7 +354,7 @@ public final class PetAbilities {
             lvl -> Msg.of("ability.raccoon.value", "%n%", Math.round(Math.min(0.4, 0.1 + tier(lvl) * 0.015) * 100)));
         p(m, "golem_mason", "Longer reach, and your held block stack auto-refills from your inventory.", "+%n% reach + auto-refill",
             lvl -> Msg.of("ability.golem_mason.value", "%n%", dec(tier(lvl) * 0.05)));
-        p(m, "silk_moth", "A chance to mine glass, ice, ore and glowstone as if with Silk Touch.", "%n%% Silk Touch chance",
+        p(m, "silk_moth", "A chance to mine any block as if with Silk Touch — with any tool, even by hand.", "%n%% Silk Touch chance",
             lvl -> Msg.of("ability.silk_moth.value", "%n%", Math.round(Math.min(0.5, 0.12 + tier(lvl) * 0.02) * 100)));
         EN.put("ability.woodpecker.value-max", "whole tree, any size");
         EN.put("ability.woodpecker.value-lo", "up to %n% logs");

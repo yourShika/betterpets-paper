@@ -23,6 +23,7 @@ import org.bukkit.block.BlockState;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
 import org.bukkit.boss.BossBar;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -2298,30 +2299,42 @@ public final class ActivePetManager {
 
     // ---- Silk Moth: Silk-Touch chance -----------------------------------------------------------
 
+    // A Silk-Touch pickaxe used only to compute what a block would drop under Silk Touch. Never given to a
+    // player; it lets the Silk Moth apply Silk Touch to ANY block regardless of the tool the player actually
+    // used (even bare hands).
+    private static ItemStack silkTouchProbe;
+
+    private static ItemStack silkTouchProbe() {
+        if (silkTouchProbe == null) {
+            final ItemStack tool = new ItemStack(Material.NETHERITE_PICKAXE);
+            tool.addUnsafeEnchantment(Enchantment.SILK_TOUCH, 1);
+            silkTouchProbe = tool;
+        }
+        return silkTouchProbe;
+    }
+
     public void handleSilkMoth(final org.bukkit.event.block.BlockBreakEvent event) {
         final OwnedPet pet = activePetIfType(event.getPlayer(), "silk_moth");
         if (pet == null) {
             return;
         }
-        final Material type = event.getBlock().getType();
-        if (!isSilkTouchBlock(type)) {
-            return;
-        }
         if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.5, 0.12 + (abilityTier(pet) * 0.02))) {
             return;
         }
+        final Block block = event.getBlock();
+        // The exact Silk-Touch drops for this block, computed with our own Silk-Touch pickaxe so it works with
+        // ANY tool (or none). An empty result means the block can't be Silk-Touched (e.g. bedrock, spawner) —
+        // leave the vanilla break untouched in that case.
+        final java.util.Collection<ItemStack> silk = block.getDrops(silkTouchProbe(), event.getPlayer());
+        if (silk.isEmpty()) {
+            return;
+        }
         event.setDropItems(false);
-        final Location loc = event.getBlock().getLocation().add(0.5, 0.5, 0.5);
-        loc.getWorld().dropItemNaturally(loc, new ItemStack(type));
+        final Location loc = block.getLocation().add(0.5, 0.5, 0.5);
+        for (final ItemStack drop : silk) {
+            loc.getWorld().dropItemNaturally(loc, drop);
+        }
         loc.getWorld().spawnParticle(Particle.CLOUD, loc, 3, 0.2, 0.2, 0.2, 0.0);
-    }
-
-    private boolean isSilkTouchBlock(final Material material) {
-        final String n = material.name();
-        return n.endsWith("GLASS") || n.endsWith("GLASS_PANE") || n.endsWith("_ORE")
-            || material == Material.ICE || material == Material.PACKED_ICE || material == Material.BLUE_ICE
-            || material == Material.GLOWSTONE || material == Material.GRASS_BLOCK || material == Material.SEA_LANTERN
-            || material == Material.MYCELIUM || material == Material.PODZOL;
     }
 
     // ---- Salamander: auto-smelt -----------------------------------------------------------------

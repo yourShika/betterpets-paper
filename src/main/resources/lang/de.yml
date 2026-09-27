@@ -622,7 +622,7 @@ ability:
     summary: "Größere Reichweite, und dein gehaltener Blockstapel füllt sich automatisch aus dem Inventar nach."
     value: "+%n% Reichweite + Auto-Nachfüllen"
   silk_moth:
-    summary: "Chance, Glas, Eis, Erz und Glowstone wie mit Behutsamkeit abzubauen."
+    summary: "Chance, jeden Block wie mit Behutsamkeit abzubauen - mit jedem Werkzeug, sogar mit der Hand."
     value: "%n%% Behutsamkeit-Chance"
   woodpecker:
     summary: "Ein Stamm fällt den ganzen natürlichen Baum auf einmal (keine platzierten Stämme; nutzt Axt-Haltbarkeit)."
