@@ -1,5 +1,5 @@
 name: BetterPets
-version: '1.29.7'
+version: '1.29.8'
 main: de.kamil.betterpets.BetterPetsPlugin
 description: Better Pets converted fully to Paper plugin form.
 api-version: '26.2'
@@ -16,7 +16,7 @@ dependencies:
     Oraxen:
       load: BEFORE
       required: false
-      join-classpath: false
+      join-classpath: true
 authors:
   - Vanderflys
   - Kamil Bura

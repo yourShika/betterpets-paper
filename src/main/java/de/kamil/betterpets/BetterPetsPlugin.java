@@ -3374,8 +3374,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (definition == null) {
             return;
         }
-        // Galactic checkered backdrop (purple/black glass "starfield").
-        final ItemStack purple = itemFactory.control(Material.PURPLE_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        // Galactic checkered backdrop (purple/black glass "starfield") - both panes are dropped when the
+        // Oraxen skin is on so the panel artwork shows through instead.
+        final ItemStack purple = oxFiller(Material.PURPLE_STAINED_GLASS_PANE);
         final ItemStack black = oxFiller(Material.BLACK_STAINED_GLASS_PANE);
         for (int i = 0; i < inventory.getSize(); i++) {
             inventory.setItem(i, ((i + i / 9) % 2 == 0) ? black : purple);
