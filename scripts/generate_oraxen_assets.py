@@ -39,6 +39,9 @@ MENUS5 = GUI / "BetterPets_5_Menus"
 EXTRA = GUI / "BetterPets_Extra_Icons"
 # Corrected backgrounds: exact 176x222 panel at (40,17), all 10 menus in one flat folder.
 EXACT_GUI = GUI / "BetterPets_Exact_GUI"
+# Latest hand-fixed panels: fully-opaque panel (transparent gaps filled), only the real slot cells drawn.
+# Only covers the 6 menus that needed it; the rest fall back to EXACT_GUI.
+REITER = GUI / "BetterPets_Original_Reiter"
 
 # --- tunables --------------------------------------------------------------------------------------
 ASSET_VERSION = 1
@@ -88,9 +91,9 @@ ICONS = [
 
 # Where to look for each icon file, in order.
 ICON_SOURCES = [CORE / ICON_SIZE, EXTRA / ICON_SIZE]
-# Where to look for each menu background, in order. The corrected exact-geometry pack wins; the older
-# gui_256 variants stay as a fallback for any menu it does not include.
-GUI_SOURCES = [EXACT_GUI, CORE / GUI_VARIANT, MENUS5 / GUI_VARIANT]
+# Where to look for each menu background, in order: newest hand-fixed panels first, then the exact-geometry
+# pack, then the older gui_256 variants as a last resort.
+GUI_SOURCES = [REITER, EXACT_GUI, CORE / GUI_VARIANT, MENUS5 / GUI_VARIANT]
 
 
 def find(sources, name):
