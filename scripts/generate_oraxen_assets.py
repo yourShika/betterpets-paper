@@ -28,6 +28,7 @@ GUI = PLUGIN / "GUI"
 OUT = PLUGIN / "src/main/resources/oraxen"
 TEX_ICONS = OUT / "pack/textures/betterpets/icons"
 TEX_GUI = OUT / "pack/textures/betterpets/gui"
+MODELS_ICONS = OUT / "pack/models/betterpets/icons"
 FONT_DIR = OUT / "pack/font"
 ITEMS_DIR = OUT / "items"
 
@@ -102,7 +103,7 @@ def sha256(path: Path) -> str:
 
 
 def main():
-    for d in (TEX_ICONS, TEX_GUI, FONT_DIR, ITEMS_DIR):
+    for d in (TEX_ICONS, TEX_GUI, MODELS_ICONS, FONT_DIR, ITEMS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     warnings = []
@@ -120,6 +121,12 @@ def main():
             warnings.append("icon missing: " + name)
             continue
         shutil.copyfile(src, TEX_ICONS / (name + ".png"))
+        # Ship the item model too, so the plugin can point an item's item_model component straight at it
+        # (minecraft:betterpets/icons/<name>) - this renders even if Oraxen never registers our item.
+        (MODELS_ICONS / (name + ".json")).write_text(json.dumps({
+            "parent": "minecraft:item/generated",
+            "textures": {"layer0": "minecraft:betterpets/icons/" + name},
+        }, indent=2), encoding="utf-8")
         lines += [
             "betterpets_" + name + ":",
             '  displayname: "<gray>' + name.replace("_", " ").title() + '"',
