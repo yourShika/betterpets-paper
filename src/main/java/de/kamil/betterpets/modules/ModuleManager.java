@@ -75,6 +75,15 @@ public final class ModuleManager {
         }
     }
 
+    /** Activates a module if its required plugin is present, ignoring the persisted/experimental gate. */
+    public boolean enableIfAvailable(final String id) {
+        final Module module = modules.get(id);
+        if (module == null || isActive(id) || !module.isAvailable()) {
+            return false;
+        }
+        return activate(module, false);
+    }
+
     public boolean toggle(final String id) {
         final Module module = modules.get(id);
         if (module == null) {

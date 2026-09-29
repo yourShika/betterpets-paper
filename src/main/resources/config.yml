@@ -230,6 +230,21 @@ model-overrides: {}
 # /pets modules command is blocked and no external module can be activated.
 experimental-modules: false
 
+# Oraxen GUI skin (optional, cosmetic). When Oraxen is installed, Better Pets bundles custom menu
+# backgrounds and control-button icons and deploys them into Oraxen automatically. Unlike the modules
+# above this is safe, so it may run without experimental-modules. Needs one "/oraxen reload" after the
+# first start (or after an update) so Oraxen rebuilds its resource pack. Works fine without Oraxen: the
+# menus just use the normal vanilla items.
+#   gui-enabled:    master switch for the whole Oraxen skin.
+#   gui-background: draw the panel artwork behind each menu (font overlay).
+#   gui-icons:      re-skin the control buttons with the custom icons.
+# The panel/font overlay may need small offset tweaks in oraxen/pack/font/betterpets_menu.json for a
+# pixel-perfect fit (then /oraxen reload) - the shipped values are a good starting point.
+oraxen:
+  gui-enabled: true
+  gui-background: true
+  gui-icons: true
+
 
 # ═══ 11) AUTO-UPDATER ═══════════════════════════════════════════════════════
 # Admin only (/pets update and the /pets version check). Downloading and staging

@@ -1,0 +1,101 @@
+{
+  "providers": [
+    {
+      "type": "space",
+      "advances": {
+        "": -48,
+        "": -209
+      }
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/main.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/catalogue.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/customization.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/ascension.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/shop.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/shop_category.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/leaderboard.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/trade.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/pet_details.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    },
+    {
+      "type": "bitmap",
+      "file": "minecraft:betterpets/gui/variants.png",
+      "ascent": 29,
+      "height": 256,
+      "chars": [
+        ""
+      ]
+    }
+  ]
+}

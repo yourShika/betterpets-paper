@@ -111,6 +111,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private ActivePetManager activePets;
     private PetModelService modelService;
     private ModuleManager moduleManager;
+    private de.kamil.betterpets.modules.OraxenUi oraxenUi;
     private LangManager lang;
     private Updater updater;
     private NamespacedKey generatedChestKey;
@@ -207,11 +208,18 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         modelService = new PetModelService(this);
         moduleManager = new ModuleManager(this);
         moduleManager.register(new BetterModelModule(this, modelService));
+        moduleManager.register(new de.kamil.betterpets.modules.OraxenModule(this, currentJar()));
         moduleManager.load();
         if (experimentalModulesEnabled()) {
             moduleManager.enablePersistedAvailable();
         } else {
             getLogger().info("External modules are experimental and disabled (experimental-modules: false). Skipping module activation.");
+        }
+        // The Oraxen GUI skin is cosmetic and safe, so it may run without the experimental-modules gate,
+        // controlled by the config toggle instead.
+        oraxenUi = new de.kamil.betterpets.modules.OraxenUi(this, moduleManager);
+        if (getConfig().getBoolean("oraxen.gui-enabled", true)) {
+            moduleManager.enableIfAvailable(de.kamil.betterpets.modules.OraxenModule.ID);
         }
 
         activePets = new ActivePetManager(this, definitions, storage, itemFactory, modelService, lang);
@@ -342,7 +350,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final String title = tokensEnabled()
             ? "Better Pets   ✦ " + storage.data(player.getUniqueId()).tokens()
             : "Better Pets";
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(title));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("main", Texts.menuTitle(title)));
         holder.setInventory(inventory);
         renderMenu(player, inventory);
         player.openInventory(inventory);
@@ -1332,6 +1340,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ml("menu.common.close", NamedTextColor.RED),
             List.of(mg("menu.main.close-lore"))
         ));
+        final Map<Integer, String> icons = new HashMap<>(Map.of(
+            FILTER_SLOT, "filter_sort", 46, "catalogue", 48, "xp_booster", 49, "close",
+            50, data.visible() ? "visibility_on" : "visibility_off", 52, "despawn", 53, "pet_to_item"));
+        if (has(player, CHANCES_PERMISSION)) {
+            icons.put(47, "spawn_chances_admin");
+        }
+        if (holder.page() > 0) {
+            icons.put(45, "previous_page");
+        }
+        if (holder.page() + 1 < pages) {
+            icons.put(51, "next_page");
+        }
+        oxReskin(inventory, icons);
     }
 
     /** The single filter/sort item at slot 44: all four controls live on one item via click type. */
@@ -2800,7 +2821,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final InfoMenuHolder holder = new InfoMenuHolder();
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.catalogue")));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("catalogue", Texts.menuTitle(mt("menu.title.catalogue"))));
         holder.setInventory(inventory);
         renderInfoMenu(inventory, holder);
         player.openInventory(inventory);
@@ -2843,6 +2864,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ml("menu.common.close", NamedTextColor.RED),
             List.of(mg("menu.catalogue.close-lore"))
         ));
+        oxReskin(inventory, Map.of(45, "back", 48, "previous_page", 49, "close", 50, "next_page"));
     }
 
     private void handleInfoClick(final InventoryClickEvent event) {
@@ -2876,7 +2898,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void openPetDetailMenu(final Player player, final PetDefinition definition) {
         final PetDetailMenuHolder holder = new PetDetailMenuHolder(definition.id());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " " + mt("menu.title.details-suffix"), definition.rarityColor()));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("pet_details", Texts.rarityTitle(definition.name() + " " + mt("menu.title.details-suffix"), definition.rarityColor())));
         holder.setInventory(inventory);
 
         final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
@@ -2935,6 +2957,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ml("menu.common.close", NamedTextColor.RED),
             List.of()
         ));
+        oxReskin(inventory, Map.of(8, "ascension_info", 49, "back", 53, "close"));
         player.openInventory(inventory);
     }
 
@@ -2955,7 +2978,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void openVariantMenu(final Player player, final PetDefinition definition, final int page) {
         final VariantMenuHolder holder = new VariantMenuHolder(definition.id(), Math.max(0, page));
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(definition.name() + " " + mt("menu.title.variants-suffix"), definition.rarityColor()));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("variants", Texts.rarityTitle(definition.name() + " " + mt("menu.title.variants-suffix"), definition.rarityColor())));
         holder.setInventory(inventory);
         renderVariantMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -3008,6 +3031,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
         inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
+        oxReskin(inventory, Map.of(45, "back", 48, "previous_page", 49, "close", 50, "next_page"));
     }
 
     private void handleVariantClick(final InventoryClickEvent event, final VariantMenuHolder holder) {
@@ -3052,7 +3076,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final ShopMenuHolder holder = new ShopMenuHolder(category, Math.max(0, page));
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.shop")));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle(category.equals("main") ? "shop" : "shop_category", Texts.menuTitle(mt("menu.title.shop"))));
         holder.setInventory(inventory);
         renderShopMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -3107,6 +3131,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
         }
         inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
+        oxReskin(inventory, Map.ofEntries(
+            Map.entry(4, "token_balance"), Map.entry(20, "particle_color"), Map.entry(22, "trail"),
+            Map.entry(24, "nametag_style"), Map.entry(30, "xp_booster"), Map.entry(32, "shop_skins"),
+            Map.entry(45, "back"), Map.entry(48, "previous_page"), Map.entry(49, "close"), Map.entry(50, "next_page")));
     }
 
     private int shopPageCount(final String category) {
@@ -3323,8 +3351,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final AscensionMenuHolder holder = new AscensionMenuHolder(pet.uuid());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.title("✦ " + definition.name() + " " + mt("menu.title.ascension-suffix") + " ✦",
-            net.kyori.adventure.text.format.TextColor.color(0x9B5CFF), net.kyori.adventure.text.format.TextColor.color(0xE100FF)));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("ascension", Texts.title("✦ " + definition.name() + " " + mt("menu.title.ascension-suffix") + " ✦",
+            net.kyori.adventure.text.format.TextColor.color(0x9B5CFF), net.kyori.adventure.text.format.TextColor.color(0xE100FF))));
         holder.setInventory(inventory);
         renderAscensionMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -3406,6 +3434,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             headerLore));
         inventory.setItem(49, itemFactory.control(Material.BARRIER,
             ml("menu.common.back", NamedTextColor.RED), List.of(mg("menu.picker.back-lore"))));
+        final Map<Integer, String> asc = new HashMap<>(Map.of(4, "ascension_info", 49, "back"));
+        for (int n = 1; n <= OwnedPet.MAX_STARS; n++) {
+            asc.put(28 + n, pet.stars() >= n ? "ascension_reached" : pet.stars() + 1 == n ? "ascension_current" : "ascension_locked");
+        }
+        oxReskin(inventory, asc);
     }
 
     /** One-line plain-language description of what an ascension track does, for menu tooltips. */
@@ -3445,7 +3478,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     void openLeaderboardMenu(final Player player, final String category) {
         final LeaderboardMenuHolder holder = new LeaderboardMenuHolder(player.getUniqueId(), category);
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.leaderboard")));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("leaderboard", Texts.menuTitle(mt("menu.title.leaderboard"))));
         holder.setInventory(inventory);
         renderLeaderboardMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -3521,6 +3554,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 ? ml("menu.top.rank-line", NamedTextColor.GOLD, "%rank%", Integer.toString(myRank), "%value%", Integer.toString(myValue), "%unit%", unit)
                 : ml("menu.top.unranked", NamedTextColor.GRAY))));
         inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
+        oxReskin(inventory, Map.of(2, "leaderboard_pets", 4, "leaderboard_stars", 6, "leaderboard_tokens",
+            40, "your_rank", 49, "close"));
     }
 
     private ItemStack leaderboardCategoryButton(final String key, final String labelKey, final Material icon, final String active) {
@@ -3645,7 +3680,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void openTradeMenu(final Player initiator, final Player partner) {
         final TradeMenuHolder holder = new TradeMenuHolder(initiator.getUniqueId(), partner.getUniqueId());
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.menuTitle(mt("menu.title.trade")));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("trade", Texts.menuTitle(mt("menu.title.trade"))));
         holder.setInventory(inventory);
         renderTradeMenu(holder);
         // Both players view the SAME inventory instance, so every change stays in sync between them.
@@ -3688,6 +3723,12 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         inv.setItem(TRADE_PART_CONFIRM, confirmButton(holder.confirmed(holder.partner())));
         inv.setItem(TRADE_CLOSE, itemFactory.control(Material.BARRIER, ml("menu.trade.cancel", NamedTextColor.RED),
             List.of(mg("menu.trade.cancel-lore"))));
+        oxReskin(inv, Map.ofEntries(
+            Map.entry(TRADE_INIT_ADD, "trade_offer_pet"), Map.entry(TRADE_PART_ADD, "trade_offer_pet"),
+            Map.entry(TRADE_INIT_CLEAR, "trade_clear"), Map.entry(TRADE_PART_CLEAR, "trade_clear"),
+            Map.entry(TRADE_INIT_TOKENS, "token_balance"), Map.entry(TRADE_PART_TOKENS, "token_balance"),
+            Map.entry(TRADE_INIT_CONFIRM, "trade_confirm"), Map.entry(TRADE_PART_CONFIRM, "trade_confirm"),
+            Map.entry(TRADE_CLOSE, "trade_cancel")));
     }
 
     private ItemStack tradeHeader(final String name, final boolean confirmed) {
@@ -3895,7 +3936,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final CustomizeMenuHolder holder = new CustomizeMenuHolder(pet.uuid(), 0);
-        final Inventory inventory = Bukkit.createInventory(holder, 54, Texts.rarityTitle(mt("menu.title.customize-prefix") + " " + definition.name(), definition.rarityColor()));
+        final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("customization", Texts.rarityTitle(mt("menu.title.customize-prefix") + " " + definition.name(), definition.rarityColor())));
         holder.setInventory(inventory);
         renderCustomizeMenu(inventory, holder, player);
         player.openInventory(inventory);
@@ -3998,6 +4039,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
         inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
+        oxReskin(inventory, Map.of(
+            0, pet.particlesEnabled() ? "particles_on" : "particles_off", 2, "particle_color",
+            6, "trail", 8, "nametag_style", 45, "ascension_level", 48, "previous_page",
+            49, "close", 50, "next_page"));
     }
 
     private String cosmeticDisplay(final String category, final String id) {
@@ -5007,6 +5052,32 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     /** A plain translated menu string (for titles etc.), placeholders substituted, no styling. */
     private String mt(final String key, final String... repl) {
         return lang.raw(key, repl);
+    }
+
+    /** Prepends the Oraxen menu-background glyph to a title when the Oraxen GUI module is active. */
+    private Component oxTitle(final String menu, final Component visible) {
+        return oraxenUi == null ? visible : oraxenUi.title(menu, visible);
+    }
+
+    /** Re-skins a control button with its Oraxen icon when the Oraxen GUI module is active, else unchanged. */
+    private ItemStack oxIcon(final String iconId, final ItemStack item) {
+        return oraxenUi == null ? item : oraxenUi.icon(iconId, item);
+    }
+
+    /**
+     * Re-skins already-rendered control slots with their Oraxen icons in one pass (keeping each item's own
+     * name/lore). Called at the end of a menu's render with a slot -> icon-id map; a no-op without Oraxen.
+     */
+    private void oxReskin(final Inventory inventory, final Map<Integer, String> slotIcons) {
+        if (oraxenUi == null || !oraxenUi.active()) {
+            return;
+        }
+        for (final Map.Entry<Integer, String> entry : slotIcons.entrySet()) {
+            final ItemStack current = inventory.getItem(entry.getKey());
+            if (current != null && !current.getType().isAir()) {
+                inventory.setItem(entry.getKey(), oxIcon(entry.getValue(), current));
+            }
+        }
     }
 
     LangManager lang() {
