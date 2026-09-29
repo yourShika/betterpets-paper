@@ -36,21 +36,24 @@ ITEMS_DIR = OUT / "items"
 CORE = GUI / "BetterPets_UI_Assets (1)"
 MENUS5 = GUI / "BetterPets_5_Menus"
 EXTRA = GUI / "BetterPets_Extra_Icons"
+# Corrected backgrounds: exact 176x222 panel at (40,17), all 10 menus in one flat folder.
+EXACT_GUI = GUI / "BetterPets_Exact_GUI"
 
 # --- tunables --------------------------------------------------------------------------------------
 ASSET_VERSION = 1
 CMD_START = 3000                 # custom_model_data base for icons (kept clear of the backpack's 2300s)
 ICON_SIZE = "icons_32x32"        # source icon resolution to bundle (32x32 = crisp)
 GUI_VARIANT = "gui_256"          # background variant to bundle (256x256, panel origin 40,17)
-# Panel placement (tune in-game): raise FONT_ASCENT to move the panel UP, lower it to move DOWN.
-# Make SPACE_LEAD_ADV more negative to move the panel LEFT, less negative to move RIGHT (keep
-# LEAD + 257 + TAIL == 0 so the visible title stays put).
-FONT_ASCENT = 31
+# Panel placement. Derived from the exact art geometry (panel 176x222 at image (40,17), overlay
+# displacement (-40,-17)): LEAD -48 lands the panel's left edge on the container, ascent ~30 lands its
+# top. Tune in-game if needed: raise FONT_ASCENT to move the panel UP, lower to move DOWN; make
+# SPACE_LEAD_ADV more negative to move LEFT (keep LEAD + 257 + TAIL == 0 so the title stays put).
+FONT_ASCENT = 30
 FONT_HEIGHT = 256
 SPACE_LEAD = ""            # cursor shift BEFORE drawing the background
 SPACE_TAIL = ""            # cursor shift AFTER drawing the background
-SPACE_LEAD_ADV = -50             # horizontal lead (more negative = panel further left)
-SPACE_TAIL_ADV = -207            # horizontal tail (LEAD + 257 + TAIL == 0)
+SPACE_LEAD_ADV = -48             # horizontal lead (more negative = panel further left)
+SPACE_TAIL_ADV = -209            # horizontal tail (LEAD + 257 + TAIL == 0)
 
 # Menu backgrounds -> private-use glyph char. MUST match OraxenUi.MENU_GLYPH in Java.
 MENU_BACKGROUNDS = {
@@ -84,8 +87,9 @@ ICONS = [
 
 # Where to look for each icon file, in order.
 ICON_SOURCES = [CORE / ICON_SIZE, EXTRA / ICON_SIZE]
-# Where to look for each menu background, in order.
-GUI_SOURCES = [CORE / GUI_VARIANT, MENUS5 / GUI_VARIANT]
+# Where to look for each menu background, in order. The corrected exact-geometry pack wins; the older
+# gui_256 variants stay as a fallback for any menu it does not include.
+GUI_SOURCES = [EXACT_GUI, CORE / GUI_VARIANT, MENUS5 / GUI_VARIANT]
 
 
 def find(sources, name):
