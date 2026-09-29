@@ -113,7 +113,10 @@ public final class OraxenUi {
             if (from.hasLore()) {
                 to.lore(from.lore());
             }
-            to.setEnchantmentGlintOverride(from.getEnchantmentGlintOverride());
+            // getEnchantmentGlintOverride() throws unless hasEnchantmentGlintOverride() is true - guard it.
+            if (from.hasEnchantmentGlintOverride()) {
+                to.setEnchantmentGlintOverride(from.getEnchantmentGlintOverride());
+            }
             skinned.setItemMeta(to);
         }
         skinned.setAmount(Math.max(1, fallback.getAmount()));
