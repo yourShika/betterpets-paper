@@ -49,6 +49,8 @@ public final class OraxenUi {
     private Method getItemById;
     private Method builderBuild;
     private boolean reflectionTried;
+    private boolean warnedUnresolved;
+    private boolean warnedNoApi;
 
     public OraxenUi(final JavaPlugin plugin, final ModuleManager moduleManager) {
         this.plugin = plugin;
@@ -132,6 +134,13 @@ public final class OraxenUi {
             }
             final Object builder = getItemById.invoke(null, id);
             if (builder == null) {
+                if (!warnedUnresolved) {
+                    warnedUnresolved = true;
+                    plugin.getLogger().warning("Oraxen module: item '" + id + "' is not registered in Oraxen, so"
+                        + " the custom menu icons fall back to vanilla. Run \"/oraxen reload\" (or restart the"
+                        + " server) after the assets were deployed so Oraxen loads betterpets_gui_icons.yml."
+                        + " If it persists, check Oraxen's console for a load error on that file.");
+                }
                 return null;
             }
             if (builderBuild == null) {
@@ -140,6 +149,11 @@ public final class OraxenUi {
             final Object stack = builderBuild.invoke(builder);
             return stack instanceof ItemStack itemStack ? itemStack.clone() : null;
         } catch (final Throwable throwable) {
+            if (!warnedNoApi) {
+                warnedNoApi = true;
+                plugin.getLogger().warning("Oraxen module: could not build icon '" + id + "' via the Oraxen API ("
+                    + throwable.getClass().getSimpleName() + ": " + throwable.getMessage() + "). Menu icons stay vanilla.");
+            }
             return null;
         }
     }

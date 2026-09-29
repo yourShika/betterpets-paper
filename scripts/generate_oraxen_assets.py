@@ -41,12 +41,15 @@ ASSET_VERSION = 1
 CMD_START = 3000                 # custom_model_data base for icons (kept clear of the backpack's 2300s)
 ICON_SIZE = "icons_32x32"        # source icon resolution to bundle (32x32 = crisp)
 GUI_VARIANT = "gui_256"          # background variant to bundle (256x256, panel origin 40,17)
-FONT_ASCENT = 29                 # vertical placement of the 256px background glyph (tune in-game)
+# Panel placement (tune in-game): raise FONT_ASCENT to move the panel UP, lower it to move DOWN.
+# Make SPACE_LEAD_ADV more negative to move the panel LEFT, less negative to move RIGHT (keep
+# LEAD + 257 + TAIL == 0 so the visible title stays put).
+FONT_ASCENT = 34
 FONT_HEIGHT = 256
 SPACE_LEAD = ""            # cursor shift BEFORE drawing the background
 SPACE_TAIL = ""            # cursor shift AFTER drawing the background
-SPACE_LEAD_ADV = -48             # horizontal lead (tune in-game if the panel sits off to the side)
-SPACE_TAIL_ADV = -209            # horizontal tail (returns the cursor for the visible title)
+SPACE_LEAD_ADV = -54             # horizontal lead (more negative = panel further left)
+SPACE_TAIL_ADV = -203            # horizontal tail (LEAD + 257 + TAIL == 0)
 
 # Menu backgrounds -> private-use glyph char. MUST match OraxenUi.MENU_GLYPH in Java.
 MENU_BACKGROUNDS = {

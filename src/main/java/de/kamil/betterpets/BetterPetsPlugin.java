@@ -1266,7 +1266,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 inventory.setItem(petSlot, petMenuItem(definition, pet, pet.uuid().equals(data.activePetId())))
             );
         }
-        for (int slot = visiblePets; slot < MAIN_PETS_PER_PAGE; slot++) {
+        // With the Oraxen skin on, leave empty pet slots blank so the panel art (which draws its own slot
+        // grid) shows through instead of "Empty Pet Slot" glass.
+        for (int slot = visiblePets; !oxActive() && slot < MAIN_PETS_PER_PAGE; slot++) {
             inventory.setItem(slot, itemFactory.control(
                 Material.GRAY_STAINED_GLASS_PANE,
                 ml(filterOf(player.getUniqueId()).isActive() ? "menu.filter.no-match" : "menu.main.empty-slot", NamedTextColor.DARK_GRAY),
@@ -2901,7 +2903,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("pet_details", Texts.rarityTitle(definition.name() + " " + mt("menu.title.details-suffix"), definition.rarityColor())));
         holder.setInventory(inventory);
 
-        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        final ItemStack filler = oxFiller(Material.BLACK_STAINED_GLASS_PANE);
         for (int i = 0; i < inventory.getSize(); i++) {
             inventory.setItem(i, filler);
         }
@@ -3374,7 +3376,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         // Galactic checkered backdrop (purple/black glass "starfield").
         final ItemStack purple = itemFactory.control(Material.PURPLE_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
-        final ItemStack black = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        final ItemStack black = oxFiller(Material.BLACK_STAINED_GLASS_PANE);
         for (int i = 0; i < inventory.getSize(); i++) {
             inventory.setItem(i, ((i + i / 9) % 2 == 0) ? black : purple);
         }
@@ -3519,7 +3521,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private void renderLeaderboardMenu(final Inventory inventory, final LeaderboardMenuHolder holder, final Player viewer) {
-        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        final ItemStack filler = oxFiller(Material.BLACK_STAINED_GLASS_PANE);
         for (int i = 0; i < inventory.getSize(); i++) {
             inventory.setItem(i, filler);
         }
@@ -3692,8 +3694,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     private void renderTradeMenu(final TradeMenuHolder holder) {
         final Inventory inv = holder.getInventory();
-        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
-        final ItemStack divider = itemFactory.control(Material.GRAY_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        final ItemStack filler = oxFiller(Material.BLACK_STAINED_GLASS_PANE);
+        final ItemStack divider = oxFiller(Material.GRAY_STAINED_GLASS_PANE);
         for (int i = 0; i < inv.getSize(); i++) {
             inv.setItem(i, filler);
         }
@@ -3945,7 +3947,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private static final int CUSTOMIZE_PER_PAGE = 36;
 
     private void fillCustomizeBorder(final Inventory inventory) {
-        final ItemStack filler = itemFactory.control(Material.BLACK_STAINED_GLASS_PANE, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
+        final ItemStack filler = oxFiller(Material.BLACK_STAINED_GLASS_PANE);
         for (int i = 0; i < 9; i++) {
             inventory.setItem(i, filler);
         }
@@ -5062,6 +5064,19 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     /** Re-skins a control button with its Oraxen icon when the Oraxen GUI module is active, else unchanged. */
     private ItemStack oxIcon(final String iconId, final ItemStack item) {
         return oraxenUi == null ? item : oraxenUi.icon(iconId, item);
+    }
+
+    /** Whether the Oraxen GUI skin is currently active. */
+    private boolean oxActive() {
+        return oraxenUi != null && oraxenUi.active();
+    }
+
+    /**
+     * A decorative filler pane, or {@code null} (empty slot) when the Oraxen GUI is active — so the panel
+     * artwork shows through instead of being covered by glass. Setting a slot to null simply leaves it empty.
+     */
+    private ItemStack oxFiller(final Material material) {
+        return oxActive() ? null : itemFactory.control(material, Component.text(" ", NamedTextColor.DARK_GRAY), List.of());
     }
 
     /**
