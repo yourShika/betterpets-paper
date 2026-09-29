@@ -111,7 +111,11 @@ def sha256(path: Path) -> str:
 
 
 def main():
-    for d in (TEX_ICONS, TEX_GUI, MODELS_ICONS, ITEMDEFS_ICONS, FONT_DIR, ITEMS_DIR):
+    # Fresh icon-pack subtrees each run (drop stale manual models/item-defs from earlier experiments).
+    for stale in (OUT / "pack/models", OUT / "pack/items"):
+        if stale.exists():
+            shutil.rmtree(stale)
+    for d in (TEX_ICONS, TEX_GUI, FONT_DIR, ITEMS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     warnings = []
@@ -129,17 +133,6 @@ def main():
             warnings.append("icon missing: " + name)
             continue
         shutil.copyfile(src, TEX_ICONS / (name + ".png"))
-        # Ship the flat item model...
-        (MODELS_ICONS / (name + ".json")).write_text(json.dumps({
-            "parent": "minecraft:item/generated",
-            "textures": {"layer0": "minecraft:betterpets/icons/" + name},
-        }, indent=2), encoding="utf-8")
-        # ...and the 1.21.4+ item definition that the item_model component resolves to
-        # (minecraft:betterpets/icons/<name> -> assets/minecraft/items/betterpets/icons/<name>.json).
-        # Together these render the icon from the pack alone, with no Oraxen item registration needed.
-        (ITEMDEFS_ICONS / (name + ".json")).write_text(json.dumps({
-            "model": {"type": "minecraft:model", "model": "minecraft:betterpets/icons/" + name},
-        }, indent=2), encoding="utf-8")
         lines += [
             "betterpets_" + name + ":",
             '  displayname: "<gray>' + name.replace("_", " ").title() + '"',

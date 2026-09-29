@@ -43,6 +43,11 @@ public final class OraxenUi {
 
     private final JavaPlugin plugin;
     private final ModuleManager moduleManager;
+    // Reflected io.th0rgal.oraxen.api.OraxenItems#getItemById(String) (same approach the backpack uses).
+    private java.lang.reflect.Method getItemById;
+    private java.lang.reflect.Method builderBuild;
+    private boolean reflectionTried;
+    private boolean warnedUnresolved;
     private boolean warnedNoApi;
 
     public OraxenUi(final JavaPlugin plugin, final ModuleManager moduleManager) {
@@ -85,32 +90,70 @@ public final class OraxenUi {
     }
 
     /**
-     * Re-skins {@code fallback} with the bundled icon model, keeping its name/lore. Uses the vanilla
-     * {@code item_model} component pointing at {@code minecraft:betterpets/icons/<iconId>} — a model + texture
-     * that ship in the pack (copied verbatim like the working backgrounds). This deliberately does NOT rely
-     * on Oraxen registering our items, so the icons render as soon as the pack is (re)built, with no full
-     * server restart needed. Returns {@code fallback} unchanged when icons are off.
+     * Re-skins {@code fallback} with the Oraxen icon {@code betterpets_<iconId>} (keeping its name/lore) via
+     * {@code OraxenItems.getItemById(...).build()} — the exact mechanism the backpack uses, which is known to
+     * work on this server. Returns {@code fallback} unchanged when icons are off or the item is not (yet)
+     * registered in Oraxen (Oraxen only loads newly-added item files on a full server restart, not on
+     * {@code /oraxen reload}).
      */
     public ItemStack icon(final String iconId, final ItemStack fallback) {
         if (!iconsOn() || fallback == null) {
             return fallback;
         }
-        final ItemStack out = fallback.clone();
-        final ItemMeta meta = out.getItemMeta();
-        if (meta == null) {
+        final ItemStack skinned = oraxenItem("betterpets_" + iconId);
+        if (skinned == null) {
             return fallback;
         }
+        final ItemMeta from = fallback.getItemMeta();
+        final ItemMeta to = skinned.getItemMeta();
+        if (from != null && to != null) {
+            if (from.hasDisplayName()) {
+                to.displayName(from.displayName());
+            }
+            if (from.hasLore()) {
+                to.lore(from.lore());
+            }
+            to.setEnchantmentGlintOverride(from.getEnchantmentGlintOverride());
+            skinned.setItemMeta(to);
+        }
+        skinned.setAmount(Math.max(1, fallback.getAmount()));
+        return skinned;
+    }
+
+    /** Builds an Oraxen item by id via reflection, or {@code null} if Oraxen/the id is unavailable. */
+    private ItemStack oraxenItem(final String id) {
         try {
-            meta.setItemModel(new org.bukkit.NamespacedKey(org.bukkit.NamespacedKey.MINECRAFT, "betterpets/icons/" + iconId));
-            out.setItemMeta(meta);
-            return out;
+            if (!reflectionTried) {
+                reflectionTried = true;
+                getItemById = Class.forName("io.th0rgal.oraxen.api.OraxenItems").getMethod("getItemById", String.class);
+            }
+            if (getItemById == null) {
+                return null;
+            }
+            final Object builder = getItemById.invoke(null, id);
+            if (builder == null) {
+                if (!warnedUnresolved) {
+                    warnedUnresolved = true;
+                    plugin.getLogger().warning("Oraxen module: item '" + id + "' is not registered in Oraxen yet,"
+                        + " so the menu icons fall back to vanilla. Oraxen only loads NEW item files on a full"
+                        + " server restart (not on /oraxen reload) - stop and start the server once, then the"
+                        + " icons appear (this is why the backpack's icons already work: they were loaded at a"
+                        + " previous startup).");
+                }
+                return null;
+            }
+            if (builderBuild == null) {
+                builderBuild = builder.getClass().getMethod("build");
+            }
+            final Object stack = builderBuild.invoke(builder);
+            return stack instanceof ItemStack itemStack ? itemStack.clone() : null;
         } catch (final Throwable throwable) {
             if (!warnedNoApi) {
                 warnedNoApi = true;
-                plugin.getLogger().warning("Oraxen module: could not set item_model for '" + iconId + "' ("
+                plugin.getLogger().warning("Oraxen module: could not build icon '" + id + "' via the Oraxen API ("
                     + throwable.getClass().getSimpleName() + "). Menu icons stay vanilla.");
             }
-            return fallback;
+            return null;
         }
     }
 }
