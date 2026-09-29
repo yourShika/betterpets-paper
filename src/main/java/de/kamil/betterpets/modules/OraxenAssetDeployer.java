@@ -29,9 +29,8 @@ public final class OraxenAssetDeployer {
 
     private static final String BUNDLE = "oraxen/";
     private static final String ITEMS = "oraxen/items/";
+    private static final String PACK = "oraxen/pack/";
     private static final String TEX = "oraxen/pack/textures/";
-    private static final String MODELS = "oraxen/pack/models/";
-    private static final String FONT = "oraxen/pack/font/";
     private static final String MANIFEST = "oraxen/asset-manifest.properties";
     private static final String STATE_FILE = ".oraxen-asset-state.properties";
 
@@ -108,17 +107,13 @@ public final class OraxenAssetDeployer {
     }
 
     private static File targetFor(final File oraxenData, final String bundleName) {
+        // Oraxen item configs go to items/; everything under oraxen/pack/** (textures, models, font, and the
+        // 1.21.4+ item definitions) is copied verbatim into Oraxen's pack/ so it lands in the built pack.
         if (bundleName.startsWith(ITEMS)) {
             return new File(oraxenData, "items/" + bundleName.substring(ITEMS.length()));
         }
-        if (bundleName.startsWith(TEX)) {
-            return new File(oraxenData, "pack/textures/" + bundleName.substring(TEX.length()));
-        }
-        if (bundleName.startsWith(MODELS)) {
-            return new File(oraxenData, "pack/models/" + bundleName.substring(MODELS.length()));
-        }
-        if (bundleName.startsWith(FONT)) {
-            return new File(oraxenData, "pack/font/" + bundleName.substring(FONT.length()));
+        if (bundleName.startsWith(PACK)) {
+            return new File(oraxenData, "pack/" + bundleName.substring(PACK.length()));
         }
         return null;
     }

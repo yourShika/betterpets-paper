@@ -29,6 +29,7 @@ OUT = PLUGIN / "src/main/resources/oraxen"
 TEX_ICONS = OUT / "pack/textures/betterpets/icons"
 TEX_GUI = OUT / "pack/textures/betterpets/gui"
 MODELS_ICONS = OUT / "pack/models/betterpets/icons"
+ITEMDEFS_ICONS = OUT / "pack/items/betterpets/icons"   # 1.21.4+ item_model definitions
 FONT_DIR = OUT / "pack/font"
 ITEMS_DIR = OUT / "items"
 
@@ -107,7 +108,7 @@ def sha256(path: Path) -> str:
 
 
 def main():
-    for d in (TEX_ICONS, TEX_GUI, MODELS_ICONS, FONT_DIR, ITEMS_DIR):
+    for d in (TEX_ICONS, TEX_GUI, MODELS_ICONS, ITEMDEFS_ICONS, FONT_DIR, ITEMS_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
     warnings = []
@@ -125,11 +126,16 @@ def main():
             warnings.append("icon missing: " + name)
             continue
         shutil.copyfile(src, TEX_ICONS / (name + ".png"))
-        # Ship the item model too, so the plugin can point an item's item_model component straight at it
-        # (minecraft:betterpets/icons/<name>) - this renders even if Oraxen never registers our item.
+        # Ship the flat item model...
         (MODELS_ICONS / (name + ".json")).write_text(json.dumps({
             "parent": "minecraft:item/generated",
             "textures": {"layer0": "minecraft:betterpets/icons/" + name},
+        }, indent=2), encoding="utf-8")
+        # ...and the 1.21.4+ item definition that the item_model component resolves to
+        # (minecraft:betterpets/icons/<name> -> assets/minecraft/items/betterpets/icons/<name>.json).
+        # Together these render the icon from the pack alone, with no Oraxen item registration needed.
+        (ITEMDEFS_ICONS / (name + ".json")).write_text(json.dumps({
+            "model": {"type": "minecraft:model", "model": "minecraft:betterpets/icons/" + name},
         }, indent=2), encoding="utf-8")
         lines += [
             "betterpets_" + name + ":",
