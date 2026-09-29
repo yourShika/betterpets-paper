@@ -96,9 +96,15 @@ public final class OraxenAssetDeployer {
             return;
         }
         save(statePath, state);
+        final File itemsFile = new File(data, "items/betterpets_gui_icons.yml");
         plugin.getLogger().info("Oraxen module: deployed " + written + " asset file(s)"
             + (preserved > 0 ? ", preserved " + preserved + " edited texture(s)" : "")
-            + ". Run /oraxen reload to apply.");
+            + " into " + data.getName() + ".");
+        plugin.getLogger().info("Oraxen module: icon item file "
+            + (itemsFile.exists() ? "present (" + itemsFile.length() + " bytes) at " + itemsFile.getPath()
+                : "MISSING at " + itemsFile.getPath()) + ".");
+        plugin.getLogger().info("Oraxen module: if the menu ICONS still show vanilla items, do a FULL server "
+            + "restart (not just /oraxen reload) so Oraxen scans the new items file, then /oraxen reload once.");
     }
 
     private static File targetFor(final File oraxenData, final String bundleName) {

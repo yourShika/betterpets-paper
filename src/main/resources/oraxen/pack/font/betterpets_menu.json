@@ -3,14 +3,14 @@
     {
       "type": "space",
       "advances": {
-        "": -54,
-        "": -203
+        "": -50,
+        "": -207
       }
     },
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/main.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -19,7 +19,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/catalogue.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -28,7 +28,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/customization.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -37,7 +37,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/ascension.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -46,7 +46,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/shop.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -55,7 +55,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/shop_category.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -64,7 +64,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/leaderboard.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -73,7 +73,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/trade.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -82,7 +82,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/pet_details.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
@@ -91,7 +91,7 @@
     {
       "type": "bitmap",
       "file": "minecraft:betterpets/gui/variants.png",
-      "ascent": 34,
+      "ascent": 31,
       "height": 256,
       "chars": [
         ""
