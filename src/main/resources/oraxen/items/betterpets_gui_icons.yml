@@ -400,3 +400,43 @@ betterpets_admin_xp_minus:
     textures:
       - betterpets/icons/admin_xp_minus.png
     custom_model_data: 3039
+
+betterpets_level_progress_green:
+  displayname: "<gray>Level Progress Green"
+  material: PAPER
+  Pack:
+    generate_model: true
+    parent_model: "item/generated"
+    textures:
+      - betterpets/icons/level_progress_green.png
+    custom_model_data: 3040
+
+betterpets_level_progress_blue:
+  displayname: "<gray>Level Progress Blue"
+  material: PAPER
+  Pack:
+    generate_model: true
+    parent_model: "item/generated"
+    textures:
+      - betterpets/icons/level_progress_blue.png
+    custom_model_data: 3041
+
+betterpets_pet_ascension_info:
+  displayname: "<gray>Pet Ascension Info"
+  material: PAPER
+  Pack:
+    generate_model: true
+    parent_model: "item/generated"
+    textures:
+      - betterpets/icons/pet_ascension_info.png
+    custom_model_data: 3042
+
+betterpets_pet_variants:
+  displayname: "<gray>Pet Variants"
+  material: PAPER
+  Pack:
+    generate_model: true
+    parent_model: "item/generated"
+    textures:
+      - betterpets/icons/pet_variants.png
+    custom_model_data: 3043

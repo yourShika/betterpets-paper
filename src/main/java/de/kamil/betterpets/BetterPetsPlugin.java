@@ -2959,7 +2959,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             ml("menu.common.close", NamedTextColor.RED),
             List.of()
         ));
-        oxReskin(inventory, Map.of(8, "ascension_info", 49, "back", 53, "close"));
+        // Detail icons from BetterPets_Details_v2: green progress crystals for levels 1-40, blue for 50-100,
+        // the ascension star (slot 8), the variants tile (slot 45), plus back/close.
+        final Map<Integer, String> detailIcons = new HashMap<>();
+        detailIcons.put(8, "pet_ascension_info");
+        detailIcons.put(49, "back");
+        detailIcons.put(53, "close");
+        for (final int s : new int[]{10, 11, 12, 13, 14}) {
+            detailIcons.put(s, "level_progress_green");
+        }
+        for (final int s : new int[]{15, 16, 19, 20, 21, 22}) {
+            detailIcons.put(s, "level_progress_blue");
+        }
+        if (definition.hasVariants()) {
+            detailIcons.put(45, "pet_variants");
+        }
+        oxReskin(inventory, detailIcons);
         player.openInventory(inventory);
     }
 
@@ -3133,10 +3148,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
         }
         inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
-        oxReskin(inventory, Map.ofEntries(
-            Map.entry(4, "token_balance"), Map.entry(20, "particle_color"), Map.entry(22, "trail"),
-            Map.entry(24, "nametag_style"), Map.entry(30, "xp_booster"), Map.entry(32, "shop_skins"),
-            Map.entry(45, "back"), Map.entry(48, "previous_page"), Map.entry(49, "close"), Map.entry(50, "next_page")));
+        // Re-skin only the controls that actually belong to the CURRENT view. In a category view slots
+        // 20/22/24/30/32 hold cosmetic grid items (9-44), so they must NOT be reskinned to the main-menu
+        // option icons - otherwise the option textures visibly "stay" on top of the grid.
+        final Map<Integer, String> reskin = new HashMap<>();
+        reskin.put(4, "token_balance");
+        reskin.put(49, "close");
+        if (holder.category().equals("main")) {
+            reskin.put(20, "particle_color");
+            reskin.put(22, "trail");
+            reskin.put(24, "nametag_style");
+            reskin.put(30, "xp_booster");
+            reskin.put(32, "shop_skins");
+        } else {
+            reskin.put(45, "back");
+            reskin.put(48, "previous_page");
+            reskin.put(50, "next_page");
+        }
+        oxReskin(inventory, reskin);
     }
 
     private int shopPageCount(final String category) {
@@ -3262,16 +3291,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 default -> null;
             };
             if (target != null) {
-                holder.setCategory(target);
-                holder.setPage(0);
-                renderShopMenu(event.getView().getTopInventory(), holder, player);
+                // Reopen so the inventory title (and thus the Oraxen background panel) switches from the
+                // shop panel to the shop-options panel for the category view.
+                openShopMenu(player, target, 0);
             }
             return;
         }
         if (slot == 45) {
-            holder.setCategory("main");
-            holder.setPage(0);
-            renderShopMenu(event.getView().getTopInventory(), holder, player);
+            openShopMenu(player, "main", 0);
             return;
         }
         if (slot == 48 || slot == 50) {
@@ -4112,6 +4139,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 List.of(ml("menu.common.page", NamedTextColor.GRAY, "%page%", Integer.toString(holder.page() + 1), "%pages%", Integer.toString(pages)))));
         }
         inventory.setItem(49, itemFactory.control(Material.BARRIER, ml("menu.common.close", NamedTextColor.RED), List.of()));
+        oxReskin(inventory, Map.of(45, "back", 48, "previous_page", 49, "close", 50, "next_page"));
     }
 
     private void handleCustomizeClick(final InventoryClickEvent event, final CustomizeMenuHolder holder) {

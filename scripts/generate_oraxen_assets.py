@@ -42,11 +42,15 @@ EXACT_GUI = GUI / "BetterPets_Exact_GUI"
 # Latest hand-fixed panels: fully-opaque panel (transparent gaps filled), only the real slot cells drawn.
 # Only covers the 6 menus that needed it; the rest fall back to EXACT_GUI.
 REITER = GUI / "BetterPets_Original_Reiter"
+# Hand-fixed icon redraws (16x16 + 32x32) that override the base set (close/particles/visibility).
+FIXED = GUI / "BetterPets_Fixed_Icons"
+# Pet-details package: its own 176x222 panel + 4 detail icons (level progress, ascension, variants).
+DETAILS = GUI / "BetterPets_Details_v2"
 
 # --- tunables --------------------------------------------------------------------------------------
 ASSET_VERSION = 1
 CMD_START = 3000                 # custom_model_data base for icons (kept clear of the backpack's 2300s)
-ICON_SIZE = "icons_32x32"        # source icon resolution to bundle (32x32 = crisp)
+ICON_SIZE = "icons_16x16"        # source icon resolution to bundle (16x16 = native item texture size)
 GUI_VARIANT = "gui_256"          # background variant to bundle (256x256, panel origin 40,17)
 # Panel placement. Derived from the exact art geometry (panel 176x222 at image (40,17), overlay
 # displacement (-40,-17)): LEAD -48 lands the panel's left edge on the container, ascent ~30 lands its
@@ -87,13 +91,20 @@ ICONS = [
     "trade_token_plus", "trade_token_minus", "trade_empty_offer",
     "ascension_current", "ascension_locked", "ascension_reached",
     "admin_toggle_on", "admin_toggle_off", "admin_xp_plus", "admin_xp_minus",
+    # pet-details icons (BetterPets_Details_v2)
+    "level_progress_green", "level_progress_blue", "pet_ascension_info", "pet_variants",
 ]
 
-# Where to look for each icon file, in order.
-ICON_SOURCES = [CORE / ICON_SIZE, EXTRA / ICON_SIZE]
+# Where to look for each icon file, in order: hand-fixed redraws win, then the details package, then base.
+ICON_SOURCES = [FIXED / "16x16", DETAILS / "icons_16x16", CORE / ICON_SIZE, EXTRA / ICON_SIZE]
 # Where to look for each menu background, in order: newest hand-fixed panels first, then the exact-geometry
 # pack, then the older gui_256 variants as a last resort.
 GUI_SOURCES = [REITER, EXACT_GUI, CORE / GUI_VARIANT, MENUS5 / GUI_VARIANT]
+# Per-menu background overrides (a specific file, checked before GUI_SOURCES).
+MENU_SRC_OVERRIDE = {
+    "shop_category": GUI / "pet_shop_option.png",
+    "pet_details": DETAILS / "pet_details.png",
+}
 
 
 def find(sources, name):
@@ -154,7 +165,8 @@ def main():
         "advances": {SPACE_LEAD: SPACE_LEAD_ADV, SPACE_TAIL: SPACE_TAIL_ADV},
     }]
     for menu, glyph in MENU_BACKGROUNDS.items():
-        src = find(GUI_SOURCES, menu)
+        override = MENU_SRC_OVERRIDE.get(menu)
+        src = override if (override and override.exists()) else find(GUI_SOURCES, menu)
         if src is None:
             warnings.append("background missing: " + menu)
             continue
