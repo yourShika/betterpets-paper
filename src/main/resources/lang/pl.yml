@@ -14,6 +14,7 @@ messages:
   duplicate-pet: "Masz juz tego zwierzaka."
   pet-limit: "Osiagnales maksymalna liczbe zwierzakow."
   active-pet: "Przywolales %pet%."
+  pet-disabled: "%pet% jest wylaczony na tym serwerze i nie mozna go zalozyc."
   despawned: "Twoj aktywny zwierzak zostal usuniety."
   converted: "Zamieniono %pet% z powrotem na przedmiot."
   no-active-pet: "Nie masz aktywnego zwierzaka."

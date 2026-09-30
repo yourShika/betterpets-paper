@@ -122,6 +122,12 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     // Cached copy of pet-xp-multiplier; refreshed on enable/reload/change so the XP hot path (every XP
     // gain) does not re-parse the config each time.
     private double cachedXpMultiplier = 1.0;
+    // Pet ids (lowercase) turned off via config's disabled-pets: they never spawn and can't be equipped.
+    private java.util.Set<String> disabledPets = java.util.Set.of();
+    // Cached menu click sound (null = disabled) with its volume/pitch.
+    private Sound menuClickSound;
+    private float menuClickVolume = 0.4F;
+    private float menuClickPitch = 1.3F;
     private final Map<UUID, Long> menuCooldowns = new HashMap<>();
     // Per-tick accounting of XP already credited to the pet from experience orbs, so plain
     // (non-orb) XP gained in the same tick is not dropped when we de-duplicate orb pickups.
@@ -187,6 +193,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         lang.load();
         updater = new Updater(this);
         refreshXpMultiplierCache();
+        refreshDisabledPetsCache();
+        refreshMenuClickSound();
 
         definitions = PetDefinitions.load(this);
         getLogger().info("Loaded " + definitions.all().size() + " pet definitions.");
@@ -358,6 +366,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onInventoryClick(final InventoryClickEvent event) {
+        // Menu click sound: any button press inside a Better Pets menu (top inventory only, so moving items
+        // in the player's own inventory stays silent; item storages like the Alpaca are excluded).
+        final org.bukkit.inventory.InventoryHolder clickedHolder = event.getView().getTopInventory().getHolder();
+        if (event.getWhoClicked() instanceof Player soundTarget
+            && event.getRawSlot() >= 0
+            && event.getRawSlot() < event.getView().getTopInventory().getSize()
+            && isMenuButtonHolder(clickedHolder)) {
+            playMenuClick(soundTarget);
+        }
         if (!(event.getView().getTopInventory().getHolder() instanceof PetMenuHolder holder)) {
             if (event.getView().getTopInventory().getHolder() instanceof ChanceMenuHolder chanceHolder) {
                 handleChanceClick(event, chanceHolder);
@@ -410,6 +427,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
             final OwnedPet selectedPet = shown.get(petIndex);
             itemFactory.petUuid(event.getCurrentItem()).flatMap(data::findPet).filter(pet -> pet.uuid().equals(selectedPet.uuid())).ifPresent(pet -> {
+                if (isPetDisabled(pet.definitionId())) {
+                    // Disabled pet: owned but not usable. Keep it, just refuse to equip it.
+                    definitions.get(pet.definitionId()).ifPresent(definition ->
+                        player.sendMessage(message("messages.pet-disabled").replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name()))));
+                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
+                    return;
+                }
                 if (!pet.uuid().equals(data.activePetId()) && activeAlpacaStorageLocked(player, data)) {
                     return;
                 }
@@ -781,6 +805,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final PetDefinition definition = randomPetBySpawnChance(random, totalWeight);
+        if (definition == null) {
+            return;
+        }
         final ItemStack petItem = itemFactory.discoveryItem(definition);
         if (opener != null) {
             broadcastPetDiscovery(opener, definition);
@@ -4635,6 +4662,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         saveConfig();
         lang.load();
         refreshXpMultiplierCache();
+        refreshDisabledPetsCache();
+        refreshMenuClickSound();
         ensureSpawnChanceDefaults();
         if (moduleManager != null) {
             if (experimentalModulesEnabled()) {
@@ -4968,13 +4997,18 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return clampChance(getConfig().getDouble("spawn-chances." + definition.id(), definition.weight()));
     }
 
+    /** Actual roll weight of a pet: its configured spawn chance, or 0 when the pet is disabled in config. */
+    private double spawnWeight(final PetDefinition definition) {
+        return isPetDisabled(definition.id()) ? 0.0 : spawnChance(definition);
+    }
+
     private void setSpawnChance(final PetDefinition definition, final double chance) {
         getConfig().set("spawn-chances." + definition.id(), clampChance(chance));
         saveConfig();
     }
 
     private double totalSpawnChanceWeight() {
-        return definitions.all().stream().mapToDouble(this::spawnChance).sum();
+        return definitions.all().stream().mapToDouble(this::spawnWeight).sum();
     }
 
     private double petXpMultiplier() {
@@ -4983,6 +5017,71 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     void refreshXpMultiplierCache() {
         cachedXpMultiplier = clampXpMultiplier(getConfig().getDouble("pet-xp-multiplier", 1.0));
+    }
+
+    /** Reloads the config's disabled-pets list into the lookup cache (called on enable + reload). */
+    void refreshDisabledPetsCache() {
+        final java.util.Set<String> set = new java.util.HashSet<>();
+        for (final String id : getConfig().getStringList("disabled-pets")) {
+            if (id != null && !id.isBlank()) {
+                set.add(id.trim().toLowerCase(java.util.Locale.ROOT));
+            }
+        }
+        disabledPets = set;
+    }
+
+    /** Whether a pet type is turned off in config: it cannot spawn from any source and cannot be equipped. */
+    boolean isPetDisabled(final String petId) {
+        return petId != null && disabledPets.contains(petId.toLowerCase(java.util.Locale.ROOT));
+    }
+
+    /** Reloads the configured menu click sound (called on enable + reload). */
+    void refreshMenuClickSound() {
+        menuClickVolume = (float) getConfig().getDouble("gui.click-volume", 0.4);
+        menuClickPitch = (float) getConfig().getDouble("gui.click-pitch", 1.3);
+        final String name = getConfig().getString("gui.click-sound", "ui.button.click");
+        if (name == null || name.isBlank() || name.equalsIgnoreCase("none")) {
+            menuClickSound = null;
+            return;
+        }
+        menuClickSound = resolveSound(name, Sound.UI_BUTTON_CLICK);
+    }
+
+    /** Resolves a sound key ("ui.button.click" or "UI_BUTTON_CLICK") to a Sound, or the fallback if unknown. */
+    private Sound resolveSound(final String name, final Sound fallback) {
+        try {
+            final String raw = name.toLowerCase(java.util.Locale.ROOT);
+            final org.bukkit.NamespacedKey key = raw.contains(":")
+                ? org.bukkit.NamespacedKey.fromString(raw)
+                : org.bukkit.NamespacedKey.minecraft(raw.replace('_', '.'));
+            if (key != null) {
+                final Sound resolved = org.bukkit.Registry.SOUNDS.get(key);
+                if (resolved != null) {
+                    return resolved;
+                }
+            }
+        } catch (final Throwable ignored) {
+            // fall through to the fallback sound
+        }
+        return fallback;
+    }
+
+    /** Plays the configured menu click sound to the player, if one is set. */
+    private void playMenuClick(final Player player) {
+        if (menuClickSound != null) {
+            player.playSound(player.getLocation(), menuClickSound, menuClickVolume, menuClickPitch);
+        }
+    }
+
+    /** Whether the holder is a Better Pets button menu that should emit a click sound (excludes item storages). */
+    private static boolean isMenuButtonHolder(final org.bukkit.inventory.InventoryHolder holder) {
+        return holder instanceof PetMenuHolder || holder instanceof InfoMenuHolder
+            || holder instanceof PetDetailMenuHolder || holder instanceof CustomizeMenuHolder
+            || holder instanceof AscensionMenuHolder || holder instanceof ShopMenuHolder
+            || holder instanceof VariantMenuHolder || holder instanceof ChanceMenuHolder
+            || holder instanceof NotifyMenuHolder || holder instanceof XpMenuHolder
+            || holder instanceof DropMenuHolder || holder instanceof ModulesMenuHolder
+            || holder instanceof LeaderboardMenuHolder || holder instanceof TradeMenuHolder;
     }
 
     private void setPetXpMultiplier(final double value) {
@@ -5004,12 +5103,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private PetDefinition randomPetBySpawnChance(final Random random, final double totalWeight) {
         double roll = random.nextDouble(totalWeight);
         for (final PetDefinition definition : definitions.ordered()) {
-            roll -= spawnChance(definition);
-            if (roll <= 0.0) {
+            // Disabled pets contribute 0 weight, so they can never be selected here.
+            roll -= spawnWeight(definition);
+            if (roll <= 0.0 && !isPetDisabled(definition.id())) {
                 return definition;
             }
         }
-        return definitions.ordered().getFirst();
+        // Rounding fallback: return the first ENABLED pet (never a disabled one).
+        return definitions.ordered().stream().filter(d -> !isPetDisabled(d.id())).findFirst().orElse(null);
     }
 
     private double clampChance(final double value) {

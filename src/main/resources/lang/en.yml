@@ -13,6 +13,7 @@ messages:
   duplicate-pet: "You already have this pet."
   pet-limit: "You have reached the maximum amount of pets."
   active-pet: "You summoned %pet%."
+  pet-disabled: "%pet% is disabled on this server and cannot be equipped."
   despawned: "Your active pet has been despawned."
   converted: "Converted %pet% back to an item."
   no-active-pet: "You do not have an active pet."

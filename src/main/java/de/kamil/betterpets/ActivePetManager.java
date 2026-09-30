@@ -353,6 +353,15 @@ public final class ActivePetManager {
 
     public void spawn(final Player player, final OwnedPet pet) {
         despawn(player, false);
+        // A pet turned off in config cannot be summoned: clear it as the active pet (covers a pet that was
+        // active before it got disabled, e.g. on join re-summon or /pets reload) and do nothing else.
+        if (plugin instanceof BetterPetsPlugin betterPets && betterPets.isPetDisabled(pet.definitionId())) {
+            final PlayerPetData data = storage.data(player.getUniqueId());
+            if (pet.uuid().equals(data.activePetId())) {
+                data.setActivePet(null);
+            }
+            return;
+        }
         final PetDefinition definition = definitions.get(pet.definitionId()).orElse(null);
         if (definition == null) {
             return;

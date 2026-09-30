@@ -14,6 +14,7 @@ messages:
   duplicate-pet: "Du besitzt dieses Pet bereits."
   pet-limit: "Du hast die maximale Anzahl an Pets erreicht."
   active-pet: "Du hast %pet% beschworen."
+  pet-disabled: "%pet% ist auf diesem Server deaktiviert und kann nicht ausgeruestet werden."
   despawned: "Dein aktives Pet wurde entfernt."
   converted: "%pet% wurde wieder in einen Gegenstand umgewandelt."
   no-active-pet: "Du hast kein aktives Pet."

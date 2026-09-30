@@ -27,6 +27,29 @@ open-cooldown-ticks: 20
 # Maximum number of pets a single player can own.
 max-pets-per-player: 45
 
+# Sound played when a player clicks a button in any Better Pets menu.
+# click-sound accepts a Minecraft sound key (e.g. ui.button.click, block.note_block.pling)
+# or the enum-style name (UI_BUTTON_CLICK); set it to "none" to turn menu click sounds off.
+gui:
+  click-sound: ui.button.click
+  click-volume: 0.4
+  click-pitch: 1.3
+
+# Pets you do NOT want in use on this server. List their ids exactly as in pets.yml
+# (e.g. penguin, dragon). Default is empty = every pet is enabled.
+# A disabled pet:
+#   * never spawns again from ANY source (chests, vaults, trial spawners, fishing,
+#     wandering traders, mob drops, /pets drop, ...);
+#   * cannot be equipped/summoned - players who already own one keep it, but clicking
+#     it in the menu does nothing;
+#   * can still be converted back to an item and re-added to the /pets list, and can
+#     still be traded - it just can't be used until you re-enable it here.
+# Example:
+#   disabled-pets:
+#     - penguin
+#     - dragon
+disabled-pets: []
+
 
 # ═══ 3) PET FOLLOWING & ABILITIES ═══════════════════════════════════════════
 # How often (ticks) the active pet follows/updates. Lower = smoother, more CPU.
