@@ -104,6 +104,7 @@ GUI_SOURCES = [REITER, EXACT_GUI, CORE / GUI_VARIANT, MENUS5 / GUI_VARIANT]
 MENU_SRC_OVERRIDE = {
     "shop_category": GUI / "pet_shop_option.png",
     "pet_details": DETAILS / "pet_details.png",
+    "ascension": GUI / "ascension_256.png",   # improved 256x256 panel (ascension_320.png is the wider spare)
 }
 
 
