@@ -166,6 +166,7 @@ trade:
   complete: "<green>✦ Trade complete!</green>"
   cancelled: "<yellow>Trade cancelled — your items were returned.</yellow>"
   returned: "<yellow>Pets from an interrupted trade were returned to you.</yellow>"
+  tokens-short: "<yellow>Someone no longer has the tokens they offered. The offer was adjusted - please check it and confirm again.</yellow>"
 
 # ── Menu & item text (GUIs). All labels below are translatable. ──
 menu:

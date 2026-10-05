@@ -59,6 +59,11 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
     private static final int MAX_MESSAGES_PER_SECOND = 20;
     /** Hotbar changes this soon after a swallowed scroll notch belong to the same wheel gesture. */
     private static final long SCROLL_GESTURE_MILLIS = 250L;
+    private static final int HOTBAR_SIZE = 9;
+    /** Changes to the slots are written to disk this long after the first of them, in one go. */
+    private static final long SAVE_DELAY_TICKS = 60L;
+    /** A pet id longer than this cannot be a real one and is not looked at any further. */
+    private static final int MAX_PET_ID_LENGTH = 64;
 
     /** How a quick switch was triggered; decides which config toggle gates it and how feedback is shown. */
     enum Source {
@@ -93,6 +98,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
     private final Map<UUID, SwitchLimiter> limiters = new HashMap<>();
     private final Map<UUID, ModClient> modClients = new HashMap<>();
     private BukkitTask syncTask;
+    private boolean savePending;
     // Sneak+scroll state. Written on the main thread, read by the network thread, hence concurrent.
     // armedSlots: sneaking players for whom a wheel notch switches pets -> the hotbar slot they are on.
     private final Map<UUID, Integer> armedSlots = new ConcurrentHashMap<>();
@@ -140,6 +146,8 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             syncTask.cancel();
             syncTask = null;
         }
+        // The scheduler drops the pending task when the plugin goes down; its data is saved then anyway.
+        savePending = false;
         HandlerList.unregisterAll(this);
         Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, QuickslotProtocol.CHANNEL, this);
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, QuickslotProtocol.CHANNEL);
@@ -253,11 +261,11 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             actionBar(player, "messages.no-active-pet", NamedTextColor.GRAY);
             return false;
         }
-        if (plugin.alpacaStorageLocked(data)) {
-            actionBar(player, "messages.alpaca-storage-not-empty", NamedTextColor.RED);
+        if (throttled(player, source)) {
             return false;
         }
-        if (throttled(player, source)) {
+        if (!plugin.activePetMayLeave(player, data)) {
+            actionBar(player, "messages.alpaca-storage-not-empty", NamedTextColor.RED);
             return false;
         }
         // Like a quick switch, putting a pet away is not saved on the spot: the plugin's save rewrites
@@ -272,14 +280,27 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         return true;
     }
 
+    /**
+     * Quickslots are a shortcut for what the pet menu does, so they need the menu's permission as well as
+     * their own: a server that takes the menu away from someone (a rank, a world, a region - through
+     * its permission plugin) does not expect a key press to still summon pets there.
+     */
+    private boolean permitted(final CommandSender sender) {
+        return plugin.has(sender, PERMISSION) && plugin.has(sender, BetterPetsPlugin.USE_PERMISSION);
+    }
+
     /** Feature on, permission held, and this way of switching allowed on the server. */
     private boolean allowed(final Player player, final Source source) {
         if (!enabled) {
             actionBar(player, "quickslots.disabled", NamedTextColor.RED);
             return false;
         }
-        if (!plugin.has(player, PERMISSION)) {
+        if (!permitted(player)) {
             actionBar(player, "messages.no-permission", NamedTextColor.RED);
+            return false;
+        }
+        // No pet menu opens for a dead player either; the pet comes back with them.
+        if (player.isDead()) {
             return false;
         }
         final boolean methodOn = switch (source) {
@@ -360,15 +381,31 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             return "messages.pet-disabled";
         }
         data.setQuickslot(slot, petId);
-        plugin.requestSave();
+        saveSoon();
         refreshArming(player);
         return null;
     }
 
     private void clear(final Player player, final PlayerPetData data, final int slot) {
         data.setQuickslot(slot, null);
-        plugin.requestSave();
+        saveSoon();
         refreshArming(player);
+    }
+
+    /**
+     * Has the slots written to disk shortly - once, for however many changes arrive in the meantime.
+     * A save rewrites the whole data file, and a slot can be reassigned as fast as someone can click
+     * (or as fast as a client cares to send messages).
+     */
+    private void saveSoon() {
+        if (savePending) {
+            return;
+        }
+        savePending = true;
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            savePending = false;
+            plugin.requestSave();
+        }, SAVE_DELAY_TICKS);
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -381,7 +418,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             chat(player, "quickslots.disabled", NamedTextColor.RED);
             return;
         }
-        if (!plugin.has(player, PERMISSION)) {
+        if (!permitted(player)) {
             player.sendMessage(plugin.lang().component("messages.no-permission"));
             return;
         }
@@ -472,7 +509,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         }
         if (args[2].equalsIgnoreCase("all")) {
             data.clearQuickslots();
-            plugin.requestSave();
+            saveSoon();
             refreshArming(player);
             chat(player, "quickslots.cleared-all", NamedTextColor.GREEN);
             pushState(player);
@@ -505,7 +542,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             target = !scrollOn(data);
         }
         data.setQuickScroll(target);
-        plugin.requestSave();
+        saveSoon();
         refreshArming(player);
         chat(player, target ? "quickslots.scroll-on" : "quickslots.scroll-off", target ? NamedTextColor.GREEN : NamedTextColor.YELLOW);
     }
@@ -576,7 +613,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
 
     /** Tab completion for {@code /pets quick ...}; {@code args[0]} is the sub-command name itself. */
     List<String> suggest(final CommandSender sender, final String[] args) {
-        if (!enabled || !plugin.has(sender, PERMISSION)) {
+        if (!enabled || !permitted(sender)) {
             return List.of();
         }
         if (args.length == 2) {
@@ -671,7 +708,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
      * least one quickslot are ever affected, so nobody loses sneak+scroll on the hotbar by surprise.
      */
     private boolean scrollUsableBy(final Player player) {
-        if (!enabled || !sneakScrollEnabled || !scrollHookActive || !plugin.has(player, PERMISSION)) {
+        if (!enabled || !sneakScrollEnabled || !scrollHookActive || !permitted(player)) {
             return false;
         }
         final PlayerPetData data = data(player);
@@ -693,7 +730,9 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
     @Override
     public int interceptHeldSlot(final UUID playerId, final int newSlot) {
         final Integer heldSlot = armedSlots.get(playerId);
-        if (heldSlot == null) {
+        // Not a hotbar slot at all: nothing a real client sends. The server rejects it by itself, and it
+        // must neither be remembered as "where the player is" nor ever be sent back to a client.
+        if (heldSlot == null || newSlot < 0 || newSlot >= HOTBAR_SIZE) {
             return -1;
         }
         final long now = System.currentTimeMillis();
@@ -712,16 +751,39 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         }
         lastIntercept.put(playerId, now);
         try {
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                final Player player = Bukkit.getPlayer(playerId);
-                if (player != null) {
-                    cycle(player, direction, Source.SCROLL);
-                }
-            });
+            Bukkit.getScheduler().runTask(plugin, () -> afterSwallowedNotch(playerId, heldSlot, newSlot, direction));
         } catch (final RuntimeException pluginDisabling) {
             return -1;
         }
         return heldSlot;
+    }
+
+    /**
+     * Runs on the server thread after a wheel notch was swallowed on the network thread. The decision
+     * there was made on what this class remembered - that the player is sneaking, and which hotbar slot
+     * they are on. The server knows both for certain, so this checks before it switches pets: if either
+     * is not so (a sneak that ended without the event, another plugin moving the selection), the notch
+     * was an ordinary hotbar change after all and is carried out as one, which also puts the client
+     * back in step with the server.
+     */
+    private void afterSwallowedNotch(final UUID playerId, final int rememberedSlot, final int wantedSlot, final int direction) {
+        final Player player = Bukkit.getPlayer(playerId);
+        if (player == null) {
+            return;
+        }
+        final int serverSlot = player.getInventory().getHeldItemSlot();
+        if (player.isSneaking() && serverSlot == rememberedSlot && scrollUsableBy(player)) {
+            cycle(player, direction, Source.SCROLL);
+            return;
+        }
+        if (player.isSneaking() && scrollUsableBy(player)) {
+            // Still armed, but on another slot than remembered: stay where the server has the player.
+            armedSlots.put(playerId, serverSlot);
+            player.getInventory().setHeldItemSlot(serverSlot);
+        } else {
+            armedSlots.remove(playerId);
+            player.getInventory().setHeldItemSlot(wantedSlot);
+        }
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -752,7 +814,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         if (decoded == null) {
             return;
         }
-        final boolean usable = enabled && modEnabled && plugin.has(player, PERMISSION);
+        final boolean usable = enabled && modEnabled && permitted(player);
         switch (decoded) {
             case QuickslotProtocol.Hello hello ->
                 plugin.debug(player.getName() + " joined with the quickslot mod (protocol " + hello.version() + ").");
@@ -764,7 +826,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
                 client.petsSent = false;
             }
             case QuickslotProtocol.Assign assign -> {
-                if (usable) {
+                if (usable && assign.petId().length() <= MAX_PET_ID_LENGTH) {
                     final PlayerPetData data = data(player);
                     if (assign.petId().isBlank()) {
                         if (assign.slot() >= 0 && assign.slot() < slotCount) {
@@ -789,7 +851,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
 
     /** Tells a mod client that the main chest menu is about to open, so it can add its button to it. */
     void notifyMenuOpened(final Player player) {
-        if (enabled && modEnabled && modClients.containsKey(player.getUniqueId()) && plugin.has(player, PERMISSION)) {
+        if (enabled && modEnabled && modClients.containsKey(player.getUniqueId()) && permitted(player)) {
             send(player, new QuickslotProtocol.MenuOpened());
         }
     }
@@ -848,7 +910,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         final SwitchLimiter limiter = limiters.get(player.getUniqueId());
         return new QuickslotProtocol.State(
             QuickslotProtocol.VERSION,
-            enabled && modEnabled && plugin.has(player, PERMISSION),
+            enabled && modEnabled && permitted(player),
             slots,
             data.activePet().map(OwnedPet::definitionId).orElse(""),
             (int) Math.min(Integer.MAX_VALUE, limits.cooldownMillis()),

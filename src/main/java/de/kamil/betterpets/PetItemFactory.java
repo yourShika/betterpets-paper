@@ -33,6 +33,8 @@ public final class PetItemFactory {
     private final NamespacedKey petVariantKey;
     private final NamespacedKey petFusionKey;
     private final NamespacedKey petNametagKey;
+    private final NamespacedKey petTotemKey;
+    private final NamespacedKey displayOnlyKey;
     private final NamespacedKey boosterTierKey;
     private final NamespacedKey boosterMinutesKey;
     private final java.util.Random random = new java.util.Random();
@@ -48,6 +50,8 @@ public final class PetItemFactory {
         this.petVariantKey = new NamespacedKey(plugin, "pet_variant");
         this.petFusionKey = new NamespacedKey(plugin, "pet_fusion");
         this.petNametagKey = new NamespacedKey(plugin, "pet_nametag");
+        this.petTotemKey = new NamespacedKey(plugin, "pet_totem");
+        this.displayOnlyKey = new NamespacedKey(plugin, "display_only");
         this.boosterTierKey = new NamespacedKey(plugin, "booster_tier");
         this.boosterMinutesKey = new NamespacedKey(plugin, "booster_minutes");
     }
@@ -218,6 +222,28 @@ public final class PetItemFactory {
         return points == null ? 0 : Math.max(0, points);
     }
 
+    /** When the Phoenix on this item last revived its owner (epoch millis), or 0 if it never did. */
+    public long petLastTotem(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return 0L;
+        }
+        final Long millis = item.getItemMeta().getPersistentDataContainer().get(petTotemKey, PersistentDataType.LONG);
+        return millis == null ? 0L : Math.max(0L, millis);
+    }
+
+    /**
+     * Whether this is a picture of a pet rather than a pet: a head made to be shown in a menu (the
+     * catalogue, a skin gallery, a pet somebody owns). Those must never count as a pet item - not for
+     * taking in, scrapping or trading - should one ever find its way out of its menu.
+     */
+    public boolean isDisplayOnly(final ItemStack item) {
+        if (item == null || !item.hasItemMeta()) {
+            return false;
+        }
+        final PersistentDataContainer data = item.getItemMeta().getPersistentDataContainer();
+        return data.has(displayOnlyKey, PersistentDataType.BYTE) || data.has(petUuidKey, PersistentDataType.STRING);
+    }
+
     /** The chosen nametag-style cosmetic stored on a pet item, or empty if none. */
     public Optional<String> petNametagStyle(final ItemStack item) {
         if (item == null || !item.hasItemMeta()) {
@@ -283,6 +309,7 @@ public final class PetItemFactory {
             Component.text(definition.name() + " variant", NamedTextColor.GRAY).decoration(TextDecoration.ITALIC, false)
         ));
         applyPetIdentity(meta, definition, 1, variant);
+        meta.getPersistentDataContainer().set(displayOnlyKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
         return item;
     }
@@ -349,6 +376,10 @@ public final class PetItemFactory {
                 if (pet.nametagStyle() != null) {
                     meta.getPersistentDataContainer().set(petNametagKey, PersistentDataType.STRING, pet.nametagStyle());
                 }
+                // A Phoenix that has just revived someone is still recovering after a trip through an item.
+                if (pet.lastTotemMillis() > 0L) {
+                    meta.getPersistentDataContainer().set(petTotemKey, PersistentDataType.LONG, pet.lastTotemMillis());
+                }
             } else {
                 meta.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, pet.uuid().toString());
             }
@@ -364,6 +395,7 @@ public final class PetItemFactory {
         meta.displayName(title.decoration(TextDecoration.ITALIC, false));
         meta.lore(lore.stream().map(component -> component.decoration(TextDecoration.ITALIC, false)).toList());
         applyPetIdentity(meta, definition, 1, null);
+        meta.getPersistentDataContainer().set(displayOnlyKey, PersistentDataType.BYTE, (byte) 1);
         item.setItemMeta(meta);
         return item;
     }

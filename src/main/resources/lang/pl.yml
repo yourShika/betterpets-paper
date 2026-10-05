@@ -154,6 +154,7 @@ trade:
   complete: "<green>✦ Handel zakonczony!</green>"
   cancelled: "<yellow>Handel anulowany - Twoje przedmioty zwrocono.</yellow>"
   returned: "<yellow>Zwierzaki z przerwanego handlu zostaly Ci zwrocone.</yellow>"
+  tokens-short: "<yellow>Ktos nie ma juz oferowanych tokenow. Oferta zostala zmieniona - sprawdz ja i potwierdz ponownie.</yellow>"
 
 # ── Teksty menu i przedmiotow (GUI) ──
 menu:

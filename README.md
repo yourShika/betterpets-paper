@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.33.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.33.1-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -23,6 +23,41 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.33.1
+
+### 🔒 Security and bug fixes — please update
+
+The result of going through everything that hands out items, pets or tokens. No new features.
+
+**Duplication**
+
+* ⛏️ **Break bonuses** — Crystal Golem, the Gatherer star bonus, Arcane Fox experience and ore tokens — are now only paid for a block that is *used up*. Before, whatever could be put down again could be broken again for another roll: an ore mined with Silk Touch, Ancient Debris, a block of diamond, a filled cauldron, and worst of all a filled shulker box (set down by a dispenser, or simply still standing after a restart), which the Gatherer bonus handed out a second time with everything in it.
+  * Natural terrain and plants (logs, leaves, dirt, sand, stone, sugar cane, …) are still doubled, and a ripe crop now is even if you planted it yourself. A block that a piston pushed counts as placed.
+  * ⚠️ On purpose: **Ancient Debris and ores mined with Silk Touch give no bonus any more.**
+* 🛡️ **Bonuses are paid once the break, kill, trade or catch stands.** A protection plugin that cancels a break leaves the block in place — and used to leave the bonus drops behind every time, so a protected ore could be "mined" for ever. The fishing bonus is a second helping of the fish on the hook, never of what another plugin turns the catch into.
+* 🦙 **Alpaca storage:** the swap-with-off-hand key put a pet item into the storage, a pet item in an open storage was handed back as a copy with every save, and opening the storage a second time while it was open brought back whatever had been taken out.
+* 📖 **Menu heads are not pets.** Every Better Pets menu is closed when the plugin stops, and a head made for a menu can no longer be taken in, scrapped or traded. After a `/reload`, a catalogue that was still open let its heads be lifted out — each of them a pet.
+* 🧌 The **Goblin** no longer snatches a second copy of a pet or booster bought from the Wandering Trader.
+* 🎨 **Skins and name styles:** the skin a pet wears goes with the pet when it is converted, and is back in your collection when you take the pet in again — handing a pet to and fro used to copy a bought skin to everyone who held it. A name style is only kept if the new owner has it.
+* 🖌️ A suspicious block gets its one pet roll for good — no longer once per server restart.
+
+**Losing things**
+
+* 🦋 When the **Silk Moth** kicked in on a chest, barrel or furnace, **everything inside was gone** — and so was a torch, door or rail that sat on any block it (or the **Salamander**) acted on. Both used to tell the game to drop nothing at all and then dropped their own item. They now exchange just the block's own drops, which also makes them get along with plugins that collect drops. The Silk Moth leaves blocks that hold things alone (the ender chest excepted).
+* 🤝 **Trading:** when a trade window closes, both sides get their pets back at once (before, a tick later — and if the server went down in that moment, they were gone). A player who disconnects or dies in the middle gets theirs on the next join or respawn; until then they are kept in `pending-returns.yml`, where they used to live in memory only and did not survive a restart. A trade is no longer settled for fewer tokens than the window showed.
+* ✋ A pet in the **off hand** was placed as a decoration head (and gone as a pet once broken), a booster there was thrown as a plain bottle. Neither happens any more.
+* 🧱 The **Golem Mason** refill could overwrite whatever you had switched to in the same moment.
+
+**Abilities and quickslots**
+
+* 🔥 Converting a **Phoenix** to an item and back no longer resets its revive.
+* 🐉 Putting a pet away and summoning it again no longer resets the **Shadow Dragon** burst or the **Kangaroo** dash.
+* ⚡ Quickslots need the pet menu's permission (`betterpets.command.pets`) as well, respect the Alpaca's "empty first" rule while its storage is open, do nothing while you are dead, and save slot changes in one go instead of rewriting the data file per click. The convert confirmation now belongs to the pet it was asked for.
+
+Goes with **[Better Pets Quickslots 1.1.2](https://github.com/yourShika/betterpets-quickslots/releases/latest)** (wrapped tooltips, tidier handling of long names); older versions of the mod keep working.
 
 ---
 
@@ -341,7 +376,7 @@ See [Quickslots](#-quickslots) below for the details.
 | `betterpets.info`         | Allows opening the pet catalogue                                    |
 | `betterpets.chances`      | Allows editing spawn chances, broadcasts, and XP multiplier         |
 | `betterpets.give`         | Allows giving test pet items                                        |
-| `betterpets.quickslots`   | Allows filling and using pet quickslots (default: everyone)         |
+| `betterpets.quickslots`   | Allows filling and using pet quickslots (default: everyone). Needs `betterpets.command.pets` as well: whoever may not open the menu cannot summon pets by quickslot either |
 | `betterpets.admin`        | Grants all admin actions, including `/pets modules` and `/pets reload` |
 
 ---

@@ -227,6 +227,20 @@ public final class PlayerPetData {
             .add(variant.toLowerCase(Locale.ROOT));
     }
 
+    /**
+     * Takes a variant out of the player's collection again - for the skin a pet is wearing when it leaves
+     * its owner. The skin goes with the pet (the item says so) and comes back with it.
+     */
+    public void lockVariant(final String petId, final String variant) {
+        if (petId == null || variant == null) {
+            return;
+        }
+        final Set<String> set = unlockedVariants.get(petId.toLowerCase(Locale.ROOT));
+        if (set != null) {
+            set.remove(variant.toLowerCase(Locale.ROOT));
+        }
+    }
+
     public boolean isVariantUnlocked(final String petId, final String variant) {
         if (petId == null || variant == null) {
             return false;

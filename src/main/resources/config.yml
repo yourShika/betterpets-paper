@@ -188,8 +188,10 @@ tokens:
     epic: 3
     legendary: 4
     mythical: 5
-  # Mining an ore has a small chance to drop a few tokens directly (survival/adventure only,
-  # never for player-placed ores). Amount is a random min..max. broadcast announces the find in chat.
+  # Mining an ore has a small chance to drop a few tokens directly (survival/adventure only).
+  # Only for an ore that is mined out: not with Silk Touch (the ore comes back as a block), not
+  # for ancient debris, never for player-placed ores. Amount is a random min..max. broadcast
+  # announces the find in chat.
   ore-tokens:
     enabled: true
     chance-percent: 3.0

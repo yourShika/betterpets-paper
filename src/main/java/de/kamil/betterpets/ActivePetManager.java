@@ -158,8 +158,22 @@ public final class ActivePetManager {
         Material.EMERALD_ORE,
         Material.DEEPSLATE_EMERALD_ORE,
         Material.NETHER_QUARTZ_ORE,
-        Material.ANCIENT_DEBRIS,
+        // No ancient debris: it always drops as itself, and a block that can be put down again never
+        // earns anything on top (see bonusDrops).
         Material.AMETHYST_CLUSTER
+    );
+    // Crops that are planted young and have to grow: breaking a ripe one is a harvest, even though it
+    // hands its own seed back.
+    private static final Set<Material> OTHER_CROPS = EnumSet.of(
+        Material.NETHER_WART, Material.COCOA, Material.SWEET_BERRY_BUSH
+    );
+    // Plentiful natural blocks whose drops can be put down again (most drop as themselves). Doubling
+    // them is what a gathering bonus is for, and putting them back to break them again gains nothing
+    // anyone would want. See isPlentiful for the rest of the list.
+    private static final Set<Material> PLENTIFUL_BLOCKS = EnumSet.of(
+        Material.GRAVEL, Material.END_STONE, Material.SANDSTONE, Material.RED_SANDSTONE,
+        Material.SOUL_SAND, Material.SOUL_SOIL,
+        Material.PUMPKIN, Material.CACTUS, Material.SUGAR_CANE, Material.BAMBOO, Material.KELP, Material.KELP_PLANT
     );
 
     // Container types the Penguin's Treasure Sense scans for. A still-present loot table means the
@@ -224,6 +238,9 @@ public final class ActivePetManager {
     private final Map<UUID, Long> kangarooCooldowns = new HashMap<>();
     // Positions of blocks players placed this session, so chain/gatherer bonuses never duplicate them.
     private final Set<Long> playerPlaced = new HashSet<>();
+    // ... and of blocks a piston moved. Kept apart, so that a machine that never stops pushing can only
+    // ever fill (and so empty) its own list, not the one above.
+    private final Set<Long> pistonMoved = new HashSet<>();
     // True while a multi-block ability (Woodpecker/Badger) is breaking, so our own block-break handlers skip re-entry.
     private boolean chainBreaking;
     // Pet-applied potion effects, used to strip infinite leftovers after an unclean shutdown.
@@ -417,7 +434,9 @@ public final class ActivePetManager {
 
     public void despawn(final Player player, final boolean clearActive) {
         mountConfirms.remove(player.getUniqueId());
-        kangarooCooldowns.remove(player.getUniqueId());
+        // A cooldown belongs to the player, not to the pet being out: it runs on while the pet is away, or
+        // putting the pet away and summoning it again (one key press each with quickslots) would reset it.
+        forgetIfOver(kangarooCooldowns, player.getUniqueId());
         stopRide(player, false);
         clearReveal(player);
         clearChestGlow(player);
@@ -981,13 +1000,84 @@ public final class ActivePetManager {
         if (pet == null || pet.stars() <= 0 || Ascension.track(pet.definitionId()) != Ascension.Track.GATHERER) {
             return;
         }
-        if (wasPlayerPlaced(block) || ThreadLocalRandom.current().nextDouble() >= pet.stars() * 0.06) {
+        // A ripe crop was planted by someone - that is how crops come about - and still is a harvest.
+        final boolean harvest = isRipeCrop(block);
+        if ((!harvest && wasPlayerPlaced(block)) || ThreadLocalRandom.current().nextDouble() >= pet.stars() * 0.06) {
             return;
         }
         final Location loc = block.getLocation().add(0.5, 0.5, 0.5);
-        for (final ItemStack drop : block.getDrops(player.getInventory().getItemInMainHand(), player)) {
+        for (final ItemStack drop : bonusDrops(player, block, true)) {
             loc.getWorld().dropItemNaturally(loc, drop);
         }
+    }
+
+    /**
+     * What breaking {@code block} may hand out a second time - nothing, if the break does not qualify.
+     *
+     * <p>A bonus is only safe for what a block is used up into. Whatever can be put down as a block
+     * again can be broken again, as often as someone likes: an ore mined with Silk Touch, ancient
+     * debris, a block of diamond - and a shulker box, which comes back with everything in it. Keeping
+     * track of the blocks players placed does not close that: the list is kept in memory, so it is
+     * empty after every restart, and it never hears of a block a piston pushed or a dispenser set down.
+     * So the rule looks at the drops instead:</p>
+     * <ul>
+     *   <li>a block that keeps things inside (anything with a block entity) earns nothing;</li>
+     *   <li>a block with a drop that can be placed again earns nothing - unless {@code plentifulToo}
+     *       and it is ordinary terrain or a plant, where a second one is the whole point and worth
+     *       nobody's trouble;</li>
+     *   <li>a ripe crop always counts: it gives its seed back, but it had to grow first.</li>
+     * </ul>
+     */
+    private Collection<ItemStack> bonusDrops(final Player player, final Block block, final boolean plentifulToo) {
+        if (block.getState(false) instanceof org.bukkit.block.TileState) {
+            return List.of();
+        }
+        final Collection<ItemStack> drops = block.getDrops(player.getInventory().getItemInMainHand(), player);
+        if (drops.isEmpty() || isRipeCrop(block) || !canBePlacedAgain(block, drops)) {
+            return drops;
+        }
+        return plentifulToo && isPlentiful(block.getType()) ? drops : List.of();
+    }
+
+    /**
+     * Whether one of the drops can be put down as a block again: the item that places this very block
+     * (which need not be a block by name - seeds, redstone dust, cocoa beans), or any block item at all.
+     * The second half is for blocks that are a state of another one: a cauldron full of water drops the
+     * cauldron it was made from, and is the same thing again with the next bucket.
+     */
+    private static boolean canBePlacedAgain(final Block block, final Collection<ItemStack> drops) {
+        final Material itself = block.getBlockData().getPlacementMaterial();
+        for (final ItemStack drop : drops) {
+            if (drop.getType() == itself || drop.getType().isBlock()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isRipeCrop(final Block block) {
+        final Material type = block.getType();
+        return (org.bukkit.Tag.CROPS.isTagged(type) || OTHER_CROPS.contains(type))
+            && block.getBlockData() instanceof org.bukkit.block.data.Ageable crop
+            && crop.getAge() >= crop.getMaximumAge();
+    }
+
+    private static boolean isPlentiful(final Material type) {
+        return PLENTIFUL_BLOCKS.contains(type)
+            || org.bukkit.Tag.LOGS.isTagged(type)
+            || org.bukkit.Tag.LEAVES.isTagged(type)
+            || org.bukkit.Tag.DIRT.isTagged(type)
+            || org.bukkit.Tag.SAND.isTagged(type)
+            || org.bukkit.Tag.BASE_STONE_OVERWORLD.isTagged(type)
+            || org.bukkit.Tag.BASE_STONE_NETHER.isTagged(type);
+    }
+
+    /**
+     * Whether this break uses the block up - turns it into something else - which is what a reward for
+     * mining an ore asks for. An ore that comes back as an ore can be mined again tomorrow.
+     */
+    public boolean breakUsesUp(final Player player, final Block block) {
+        return !bonusDrops(player, block, false).isEmpty();
     }
 
     /** Records a block a player placed, so gatherer/chain bonuses never duplicate placed valuables. */
@@ -998,12 +1088,33 @@ public final class ActivePetManager {
         playerPlaced.add(blockKey(block.getX(), block.getY(), block.getZ()));
     }
 
+    /**
+     * Records where a piston is moving blocks to: a block that was pushed somewhere has been put there
+     * just as one a player set down. Both neighbours along the piston's line are marked, so that this
+     * does not depend on which way the event's direction points for a retraction - a mark too many
+     * only ever costs a bonus.
+     */
+    public void noteMovedBlocks(final List<Block> blocks, final org.bukkit.block.BlockFace direction) {
+        if (pistonMoved.size() > 50_000) {
+            pistonMoved.clear();
+        }
+        for (final Block block : blocks) {
+            final Block ahead = block.getRelative(direction);
+            final Block behind = block.getRelative(direction.getOppositeFace());
+            pistonMoved.add(blockKey(ahead.getX(), ahead.getY(), ahead.getZ()));
+            pistonMoved.add(blockKey(behind.getX(), behind.getY(), behind.getZ()));
+        }
+    }
+
     public void forgetPlacedBlock(final Block block) {
-        playerPlaced.remove(blockKey(block.getX(), block.getY(), block.getZ()));
+        final long key = blockKey(block.getX(), block.getY(), block.getZ());
+        playerPlaced.remove(key);
+        pistonMoved.remove(key);
     }
 
     private boolean wasPlayerPlaced(final Block block) {
-        return playerPlaced.contains(blockKey(block.getX(), block.getY(), block.getZ()));
+        final long key = blockKey(block.getX(), block.getY(), block.getZ());
+        return playerPlaced.contains(key) || pistonMoved.contains(key);
     }
 
     /** Public view of the placed-block tracker, so the ore-token drop never rewards placed ores. */
@@ -1020,22 +1131,6 @@ public final class ActivePetManager {
         final org.bukkit.event.block.BlockBreakEvent event = new org.bukkit.event.block.BlockBreakEvent(block, player);
         Bukkit.getPluginManager().callEvent(event);
         return !event.isCancelled();
-    }
-
-    /** Aquatic track: a starred aquatic pet has a per-star chance to double a fishing catch. */
-    public void handleAquaticFishBonus(final org.bukkit.event.player.PlayerFishEvent event) {
-        if (event.getState() != org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_FISH
-            || !(event.getCaught() instanceof Item caught)) {
-            return;
-        }
-        final Player player = event.getPlayer();
-        final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
-        if (pet == null || pet.stars() <= 0 || Ascension.track(pet.definitionId()) != Ascension.Track.AQUATIC) {
-            return;
-        }
-        if (ThreadLocalRandom.current().nextDouble() < pet.stars() * 0.08) {
-            player.getWorld().dropItemNaturally(player.getLocation(), caught.getItemStack().clone());
-        }
     }
 
     /** The active Goblin's level, or 0 if the player has no active Goblin. */
@@ -1760,12 +1855,25 @@ public final class ActivePetManager {
         }
     }
 
+    /**
+     * Takes the Shadow Dragon's boss bar away. The cooldown of its burst is NOT reset with it: this runs
+     * whenever the dragon is not the pet that is out, and a cooldown that restarted there could be skipped
+     * by switching to another pet and straight back.
+     */
     private void clearShadowBar(final Player player) {
         final BossBar bar = shadowBars.remove(player.getUniqueId());
         if (bar != null) {
             bar.removeAll();
         }
-        shadowAoeReadyAt.remove(player.getUniqueId());
+        forgetIfOver(shadowAoeReadyAt, player.getUniqueId());
+    }
+
+    /** Drops a player's entry from a map of "ready again at" times, but only once that time has passed. */
+    private static void forgetIfOver(final Map<UUID, Long> readyAt, final UUID player) {
+        final Long time = readyAt.get(player);
+        if (time != null && time <= System.currentTimeMillis()) {
+            readyAt.remove(player);
+        }
     }
 
     private Component petNickname(final PetDefinition definition, final OwnedPet pet) {
@@ -1873,8 +1981,9 @@ public final class ActivePetManager {
         if (ThreadLocalRandom.current().nextDouble() >= chance) {
             return;
         }
-        final ItemStack tool = player.getInventory().getItemInMainHand();
-        final Collection<ItemStack> drops = block.getDrops(tool, player);
+        // Only what the ore turns into: an ore that Silk Touch hands back as an ore could be put down and
+        // mined for another roll, again and again.
+        final Collection<ItemStack> drops = bonusDrops(player, block, false);
         if (drops.isEmpty()) {
             return;
         }
@@ -2273,7 +2382,8 @@ public final class ActivePetManager {
         final Material type = block.getType();
         final boolean leaves = org.bukkit.Tag.LEAVES.isTagged(type);
         final boolean logs = org.bukkit.Tag.LOGS.isTagged(type);
-        if (!leaves && !logs) {
+        // Nothing to forage from a log or a hedge someone built.
+        if ((!leaves && !logs) || wasPlayerPlaced(block)) {
             return;
         }
         final double chance = Math.min(0.6, 0.12 + (abilityTier(pet) * 0.02));
@@ -2292,8 +2402,10 @@ public final class ActivePetManager {
         if (pet == null || !pet.definitionId().equals("arcane_fox")) {
             return;
         }
-        final Material type = block.getType();
-        if (!type.name().endsWith("_ORE") && type != Material.ANCIENT_DEBRIS) {
+        // Like the game's own experience for ores: only for an ore that is mined out. One that Silk Touch
+        // hands back as an ore could be put down and mined again without end - and so could ancient
+        // debris, which never drops as anything but itself.
+        if (!block.getType().name().endsWith("_ORE") || !breakUsesUp(player, block)) {
             return;
         }
         player.giveExp(1 + (abilityTier(pet) / 2));
@@ -2322,35 +2434,42 @@ public final class ActivePetManager {
         return silkTouchProbe;
     }
 
-    public void handleSilkMoth(final org.bukkit.event.block.BlockBreakEvent event) {
+    /**
+     * @return {@code true} if the block was mined as if with Silk Touch: it then came back whole, whatever
+     *         the tool in the player's hand would have made of it
+     */
+    public boolean handleSilkMoth(final org.bukkit.event.block.BlockBreakEvent event) {
         final Player player = event.getPlayer();
         final OwnedPet pet = activePetIfType(player, "silk_moth");
         if (pet == null) {
-            return;
+            return false;
         }
         if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.5, 0.12 + (abilityTier(pet) * 0.02))) {
-            return;
+            return false;
         }
         final Block block = event.getBlock();
+        // Not where another plugin has taken the drops into its own hands, and not for a block that holds
+        // things: what Silk Touch makes of one is a copy of what is inside (a bee nest with its bees),
+        // while breaking it sets the originals free as well. An ender chest holds nothing itself.
+        if (!event.isDropItems()
+            || (block.getType() != Material.ENDER_CHEST && block.getState(false) instanceof org.bukkit.block.TileState)) {
+            return false;
+        }
         // Blocks that REQUIRE the correct tool to drop anything (stone, ores, …) only Silk-Touch when the
         // player is actually holding a suitable tool. Blocks you can break by hand and still harvest (grass,
         // glass, ice, dirt, leaves, …) keep the Silk-Touch chance with any tool, even bare hands.
         final ItemStack held = player.getInventory().getItemInMainHand();
         if (block.getBlockData().requiresCorrectToolForDrops() && !block.isPreferredTool(held)) {
-            return;
+            return false;
         }
         // The exact Silk-Touch drops for this block, computed with our own Silk-Touch pickaxe. An empty result
         // means the block can't be Silk-Touched (e.g. bedrock, spawner) — leave the vanilla break untouched.
         final java.util.Collection<ItemStack> silk = block.getDrops(silkTouchProbe(), player);
         if (silk.isEmpty()) {
-            return;
+            return false;
         }
-        event.setDropItems(false);
-        final Location loc = block.getLocation().add(0.5, 0.5, 0.5);
-        for (final ItemStack drop : silk) {
-            loc.getWorld().dropItemNaturally(loc, drop);
-        }
-        loc.getWorld().spawnParticle(Particle.CLOUD, loc, 3, 0.2, 0.2, 0.2, 0.0);
+        noteDropSwap(block, new java.util.ArrayList<>(silk), !block.getDrops(held, player).isEmpty());
+        return true;
     }
 
     // ---- Salamander: auto-smelt -----------------------------------------------------------------
@@ -2359,25 +2478,99 @@ public final class ActivePetManager {
         final Player player = event.getPlayer();
         final OwnedPet pet = activePetIfType(player, "salamander");
         final Block block = event.getBlock();
-        if (pet == null || !SALAMANDER_ORES.contains(block.getType())) {
+        if (pet == null || !SALAMANDER_ORES.contains(block.getType()) || !event.isDropItems()) {
             return;
         }
         if (ThreadLocalRandom.current().nextDouble() >= Math.min(0.8, 0.25 + (abilityTier(pet) * 0.03))) {
             return;
         }
-        // Use the block's real drops for the held tool, so Fortune (and Silk Touch) still apply, then
-        // smelt each raw drop into its ingot. Non-raw drops (e.g. Silk-Touched ore) fall through unchanged.
-        final java.util.Collection<ItemStack> drops = block.getDrops(player.getInventory().getItemInMainHand(), player);
-        if (drops.isEmpty()) {
+        // Whatever the ore really drops for the held tool (Fortune's extra pieces included) is smelted as
+        // it falls. What is not raw - an ore that Silk Touch kept whole - falls as it is.
+        noteDropSwap(block, null, true);
+    }
+
+    // ---- Exchanging a block's drops (Silk Moth, Salamander) -------------------------------------
+    //
+    // Both change what a block drops. Telling the break event not to drop anything is the wrong tool
+    // for that: the server then throws away everything the break set free - the torch that sat on the
+    // block as well as the block's own drops - and whoever else looks after drops (auto pickup, another
+    // plugin's bonus) has either not had its say yet or has already handed the ordinary ones out. So
+    // the break only notes what is to happen, and the exchange is made where the server presents the
+    // finished drops: in BlockDropItemEvent, which only comes if the block really went.
+
+    /**
+     * What is to become of a block's own drops once it is broken; {@code instead == null} smelts them.
+     * {@code dropsExpected}: whether the block was going to drop anything by itself (glass does not).
+     */
+    private record DropSwap(UUID world, Material type, List<ItemStack> instead, boolean dropsExpected, int tick) {
+    }
+
+    private final Map<Long, DropSwap> dropSwaps = new HashMap<>();
+
+    private void noteDropSwap(final Block block, final List<ItemStack> instead, final boolean dropsExpected) {
+        final int now = Bukkit.getCurrentTick();
+        // A break and its drops are one and the same moment; anything older never came to pass.
+        dropSwaps.values().removeIf(swap -> swap.tick() != now);
+        dropSwaps.put(blockKey(block.getX(), block.getY(), block.getZ()),
+            new DropSwap(block.getWorld().getUID(), block.getType(), instead, dropsExpected, now));
+    }
+
+    /** Carries out what the Silk Moth or the Salamander arranged for this block while it was being broken. */
+    public void handleBlockDrops(final org.bukkit.event.block.BlockDropItemEvent event) {
+        if (dropSwaps.isEmpty()) {
             return;
         }
-        event.setDropItems(false);
-        final Location loc = block.getLocation().add(0.5, 0.5, 0.5);
-        for (final ItemStack drop : drops) {
-            final Material smelted = SALAMANDER_RAW_SMELT.get(drop.getType());
-            loc.getWorld().dropItemNaturally(loc, smelted != null ? new ItemStack(smelted, drop.getAmount()) : drop);
+        final Block block = event.getBlock();
+        final DropSwap swap = dropSwaps.remove(blockKey(block.getX(), block.getY(), block.getZ()));
+        if (swap == null || swap.tick() != Bukkit.getCurrentTick() || !swap.world().equals(block.getWorld().getUID())
+            || event.getBlockState().getType() != swap.type() || block.getType() == swap.type()) {
+            // Not this break - or the block is still standing, so nothing was broken after all.
+            return;
         }
-        loc.getWorld().spawnParticle(Particle.FLAME, loc, 8, 0.2, 0.2, 0.2, 0.02);
+        // The block's own drops appear inside the space it took up. What else the break set free fell
+        // where that stood - a torch on the block, next to it - and is left alone.
+        final List<Item> own = new java.util.ArrayList<>();
+        for (final Item item : event.getItems()) {
+            final Location at = item.getLocation();
+            if (at.getBlockX() == block.getX() && at.getBlockY() == block.getY() && at.getBlockZ() == block.getZ()) {
+                own.add(item);
+            }
+        }
+        final Location center = block.getLocation().add(0.5, 0.5, 0.5);
+        if (swap.instead() == null) {
+            boolean smelted = false;
+            for (final Item item : own) {
+                final ItemStack raw = item.getItemStack();
+                final Material ingot = SALAMANDER_RAW_SMELT.get(raw.getType());
+                if (ingot != null) {
+                    item.setItemStack(new ItemStack(ingot, raw.getAmount()));
+                    smelted = true;
+                }
+            }
+            if (smelted) {
+                block.getWorld().spawnParticle(Particle.FLAME, center, 8, 0.2, 0.2, 0.2, 0.02);
+            }
+            return;
+        }
+        // Silk Touch: the block itself takes the place of what it breaks into. If there should have been
+        // drops and there are none, somebody else has taken them already - then the block on top of
+        // them would be one thing too many.
+        if (own.isEmpty() && swap.dropsExpected()) {
+            return;
+        }
+        // It moves into the drops that are already there, so that plugins which collect drops find it.
+        final java.util.Iterator<ItemStack> whole = swap.instead().iterator();
+        for (final Item item : own) {
+            if (whole.hasNext()) {
+                item.setItemStack(whole.next());
+            } else {
+                event.getItems().remove(item);
+            }
+        }
+        while (whole.hasNext()) {
+            block.getWorld().dropItemNaturally(center, whole.next());
+        }
+        block.getWorld().spawnParticle(Particle.CLOUD, center, 3, 0.2, 0.2, 0.2, 0.0);
     }
 
     // ---- Woodpecker: tree feller ----------------------------------------------------------------
@@ -2569,10 +2762,17 @@ public final class ActivePetManager {
             return;
         }
         final Material material = used.getType();
+        final int heldSlot = player.getInventory().getHeldItemSlot();
         Bukkit.getScheduler().runTask(plugin, () -> {
             final org.bukkit.inventory.PlayerInventory inv = player.getInventory();
+            // The stack goes into the hand that ran empty - and only if it is that hand and still empty.
+            // A tick has passed: the player may have scrolled on to another slot, or picked something up
+            // into the free one, and whatever is in the hand now must not be overwritten.
+            if (hand != org.bukkit.inventory.EquipmentSlot.OFF_HAND && inv.getHeldItemSlot() != heldSlot) {
+                return;
+            }
             final ItemStack current = hand == org.bukkit.inventory.EquipmentSlot.OFF_HAND ? inv.getItemInOffHand() : inv.getItemInMainHand();
-            if (current != null && current.getType() == material && current.getAmount() > 0) {
+            if (current != null && !current.getType().isAir()) {
                 return;
             }
             for (int i = 0; i < inv.getStorageContents().length; i++) {
@@ -2592,29 +2792,46 @@ public final class ActivePetManager {
 
     // ---- Water Serpent: master angler -----------------------------------------------------------
 
-    /** Speeds up bites while casting and rolls a bonus catch when a Water Serpent owner reels one in. */
-    public void handleWaterSerpentFish(final org.bukkit.event.player.PlayerFishEvent event) {
+    /**
+     * What a pet makes of a fishing event: the Water Serpent shortens the wait when the line is cast, and
+     * a catch may earn a second helping - one from the Water Serpent, one from a starred pet of the
+     * Aquatic track.
+     *
+     * <p>The copies are of the fish on the hook, so this is asked before any other plugin has seen the
+     * event - not of whatever a fishing plugin later turns the catch into (a reward of its own, a key).
+     * They are only handed out once the catch stands; the plugin's two fishing listeners see to both.</p>
+     */
+    public List<ItemStack> prepareFishing(final org.bukkit.event.player.PlayerFishEvent event) {
         final Player player = event.getPlayer();
         final OwnedPet pet = storage.data(player.getUniqueId()).activePet().orElse(null);
-        if (pet == null || !pet.definitionId().equals("water_serpent")) {
-            return;
+        if (pet == null) {
+            return List.of();
         }
+        final boolean serpent = pet.definitionId().equals("water_serpent");
         final int tier = abilityTier(pet);
         if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.FISHING) {
-            final org.bukkit.entity.FishHook hook = event.getHook();
-            final int minWait = Math.max(20, 100 - (tier * 3));
-            final int maxWait = Math.max(minWait + 20, 300 - (tier * 6));
-            hook.setMinWaitTime(minWait);
-            hook.setMaxWaitTime(maxWait);
-            return;
-        }
-        if (event.getState() == org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_FISH
-            && event.getCaught() instanceof Item caught) {
-            final double chance = Math.min(0.5, 0.1 + (tier * 0.02));
-            if (ThreadLocalRandom.current().nextDouble() < chance) {
-                player.getWorld().dropItemNaturally(player.getLocation(), caught.getItemStack().clone());
+            if (serpent) {
+                final org.bukkit.entity.FishHook hook = event.getHook();
+                final int minWait = Math.max(20, 100 - (tier * 3));
+                final int maxWait = Math.max(minWait + 20, 300 - (tier * 6));
+                hook.setMinWaitTime(minWait);
+                hook.setMaxWaitTime(maxWait);
             }
+            return List.of();
         }
+        if (event.getState() != org.bukkit.event.player.PlayerFishEvent.State.CAUGHT_FISH
+            || !(event.getCaught() instanceof Item caught)) {
+            return List.of();
+        }
+        final List<ItemStack> bonus = new java.util.ArrayList<>(2);
+        if (serpent && ThreadLocalRandom.current().nextDouble() < Math.min(0.5, 0.1 + (tier * 0.02))) {
+            bonus.add(caught.getItemStack().clone());
+        }
+        if (pet.stars() > 0 && Ascension.track(pet.definitionId()) == Ascension.Track.AQUATIC
+            && ThreadLocalRandom.current().nextDouble() < pet.stars() * 0.08) {
+            bonus.add(caught.getItemStack().clone());
+        }
+        return bonus;
     }
 
     /** A visible protective-shield burst around the player (used by the Mimic's ward). */

@@ -154,6 +154,7 @@ trade:
   complete: "<green>✦ Handel abgeschlossen!</green>"
   cancelled: "<yellow>Handel abgebrochen - deine Items wurden zurückgegeben.</yellow>"
   returned: "<yellow>Pets aus einem unterbrochenen Handel wurden dir zurückgegeben.</yellow>"
+  tokens-short: "<yellow>Jemand hat die angebotenen Tokens nicht mehr. Das Angebot wurde angepasst - bitte prüfen und erneut bestätigen.</yellow>"
 
 # ── Menü- & Item-Texte (GUIs) ──
 menu:

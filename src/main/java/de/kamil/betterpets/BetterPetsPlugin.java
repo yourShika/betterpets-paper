@@ -35,6 +35,7 @@ import org.bukkit.entity.Player;
 import org.bukkit.entity.Projectile;
 import org.bukkit.entity.WanderingTrader;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.BlockBreakEvent;
@@ -98,7 +99,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return instance;
     }
 
-    private static final String USE_PERMISSION = "betterpets.command.pets";
+    static final String USE_PERMISSION = "betterpets.command.pets";
     private static final String GIVE_PERMISSION = "betterpets.give";
     private static final String CHANCES_PERMISSION = "betterpets.chances";
     private static final String INFO_PERMISSION = "betterpets.info";
@@ -117,6 +118,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private Updater updater;
     private NamespacedKey generatedChestKey;
     private NamespacedKey containerOpenedKey;
+    private NamespacedKey brushRolledKey;
     private NamespacedKey announceOnPickupKey;
     private BukkitTask saveTask;
     private boolean savePending;
@@ -136,9 +138,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private final Map<UUID, Long> brushCooldowns = new HashMap<>();
     // Suspicious blocks (world:x:y:z) already rolled for a pet, so right-click spam can't re-roll one block.
     private final Set<String> brushedBlocks = new HashSet<>();
-    // "Convert To Item" needs a second confirming click within this window (see Q1 in review).
-    private final Map<UUID, Long> convertConfirms = new HashMap<>();
+    // "Convert To Item" needs a second confirming click within this window (see Q1 in review). The
+    // confirmation is for one particular pet: with another pet out by the second click (a quickslot
+    // switch takes one key press) it counts as a first click for that pet, not as its confirmation.
+    private final Map<UUID, ConvertConfirm> convertConfirms = new HashMap<>();
     private static final long CONVERT_CONFIRM_MILLIS = 5000L;
+
+    private record ConvertConfirm(UUID pet, long until) {
+    }
     // Players currently typing a numeric value in chat (spawn chance / XP multiplier). Read from the
     // async chat thread and written on the main thread, so it must be concurrent.
     private final Map<UUID, PendingInput> pendingInputs = new java.util.concurrent.ConcurrentHashMap<>();
@@ -168,8 +175,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
     // Pending /pets trade requests: target player id -> who asked + when it expires.
     private final Map<UUID, TradeRequest> tradeRequests = new HashMap<>();
-    // Pets held for players who disconnected mid-trade; handed back on their next join so nothing is ever lost.
+    // Pets from a trade that could not go straight back to their owner, who was dead at that moment or
+    // gone. Handed over as soon as the owner is there and alive (join, respawn) - and written to
+    // pending-returns.yml until then, so that not even a restart in between loses them.
     private final Map<UUID, List<ItemStack>> pendingTradeReturns = new HashMap<>();
+    // The bonus a pet earned on the fishing event that is being dispatched right now (see onPlayerFishFirst).
+    private PlayerFishEvent fishBonusFor;
+    private List<ItemStack> fishBonus = List.of();
     private static final long TRADE_REQUEST_TIMEOUT_MILLIS = 60_000L;
     // Extra pet XP per ascension star (0.06 = +6%/star, +30% at ★5). Capped against the booster by xp-max-multiplier.
     private static final double ASCENSION_XP_PER_STAR = 0.06;
@@ -207,11 +219,13 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         itemFactory = new PetItemFactory(this, lang);
         generatedChestKey = new NamespacedKey(this, "pet_loot_generated");
         containerOpenedKey = new NamespacedKey(this, "container_opened");
+        brushRolledKey = new NamespacedKey(this, "brush_rolled");
         announceOnPickupKey = new NamespacedKey(this, "announce_on_pickup");
         storage = new PetStorage(this);
         storage.load();
         recalculateAllPetExp();
         assignMissingVariants();
+        loadPendingTradeReturns();
         getLogger().info("Loaded pet storage for " + storage.playerCount() + " player(s).");
 
         modelService = new PetModelService(this);
@@ -278,11 +292,28 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @Override
     public void onDisable() {
         getLogger().info("Stopping Better Pets.");
-        // Return any pets still parked in open trade windows to their owners (their inventories are saved
-        // by vanilla on shutdown) so a restart/reload never destroys offered pets.
+        // No menu of ours stays open past this point. While the plugin is off (and after a reload, when its
+        // classes are new ones that no longer recognise the old windows) nothing would stop a click from
+        // lifting the heads out of them - and a catalogue head taken out is a pet for free.
         for (final Player online : Bukkit.getOnlinePlayers()) {
-            if (online.getOpenInventory().getTopInventory().getHolder() instanceof TradeMenuHolder holder) {
-                cancelTrade(holder);
+            try {
+                final InventoryHolder open = online.getOpenInventory().getTopInventory().getHolder();
+                if (open instanceof TradeMenuHolder holder) {
+                    // Returns the pets parked in the trade to their owners (their inventories are saved by
+                    // the server on shutdown), then closes both windows. Also for a trade that was called
+                    // off a moment ago and whose windows were to be closed by a task that will not run now.
+                    holder.markSettled();
+                    finishCancelledTrade(holder);
+                } else if (open instanceof AlpacaStorageHolder) {
+                    // Our own close listener is not called any more at this point, so write it back by hand.
+                    saveOpenAlpacaStorage(online);
+                    online.closeInventory();
+                } else if (open != null && open.getClass().getPackageName().equals(getClass().getPackageName())) {
+                    online.closeInventory();
+                }
+            } catch (final RuntimeException exception) {
+                // Whatever goes wrong with one window must not keep the data below from being saved.
+                getLogger().warning("Could not close the open menu of " + online.getName() + ": " + exception.getMessage());
             }
         }
         if (saveTask != null) {
@@ -601,9 +632,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         // closeInventory() calls here are a no-op.
         if (event.getInventory().getHolder() instanceof TradeMenuHolder tradeHolder) {
             if (!tradeHolder.settled()) {
-                // Defer one tick: closing this viewer's window while completeTrade is closing the other's must
-                // not re-enter mid-loop, and getPlayer lookups stay valid for returning items.
-                Bukkit.getScheduler().runTask(this, () -> cancelTrade(tradeHolder));
+                // The deal is off from this moment - nobody can still confirm it - and both sides' pets
+                // go back right now, not a tick later: by then the player who closed the window may be
+                // gone (a window also closes because its player is disconnecting), and the plugin itself
+                // may have been stopped, with nobody left to do the rest.
+                tradeHolder.markSettled();
+                final UUID closerId = event.getPlayer().getUniqueId();
+                // Someone who is leaving gets them on the next join instead of into the inventory now:
+                // if that turned out to be full, the pets would lie on the ground with nobody there.
+                final Player closer = event.getReason() != InventoryCloseEvent.Reason.DISCONNECT
+                    && event.getPlayer() instanceof Player player ? player : null;
+                returnOfferedItems(tradeHolder, closerId, closer);
+                final UUID otherId = tradeHolder.isInitiator(closerId) ? tradeHolder.partner() : tradeHolder.initiator();
+                returnOfferedItems(tradeHolder, otherId, Bukkit.getPlayer(otherId));
+                // Only telling both and shutting the other window waits a tick: a window must not be
+                // closed from inside another one's close.
+                Bukkit.getScheduler().runTask(this, () -> finishCancelledTrade(tradeHolder));
             }
             return;
         }
@@ -656,10 +700,16 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerInteract(final PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) {
+        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
-        if (event.getAction() != Action.RIGHT_CLICK_AIR && event.getAction() != Action.RIGHT_CLICK_BLOCK) {
+        if (event.getHand() != EquipmentSlot.HAND) {
+            // Pets and boosters are used from the main hand. Left to the game, the other hand would put a
+            // pet's head down as a decoration block - which drops as a plain head when broken, the pet
+            // gone - and throw a booster as an ordinary bottle of experience.
+            if (event.getHand() == EquipmentSlot.OFF_HAND && isProtectedBetterPetsItem(event.getItem())) {
+                event.setCancelled(true);
+            }
             return;
         }
         rememberLootOpener(event);
@@ -672,12 +722,26 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
 
         final Optional<String> petId = itemFactory.petId(item);
-        if (petId.isEmpty() || itemFactory.petUuid(item).isPresent()) {
+        if (petId.isEmpty()) {
             return;
         }
-
+        // A pet's head is never a block to build with, whatever kind of pet item this is.
         event.setCancelled(true);
+        if (itemFactory.isDisplayOnly(item)) {
+            return;
+        }
         addPetFromItem(event.getPlayer(), item, petId.get());
+    }
+
+    /**
+     * Last line of defence for the above: whatever way a pet's head or a booster came to be placed as a
+     * block, it does not happen. A placed head keeps its skin but none of what makes it a pet.
+     */
+    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
+    public void onPetItemPlace(final org.bukkit.event.block.BlockPlaceEvent event) {
+        if (isProtectedBetterPetsItem(event.getItemInHand())) {
+            event.setCancelled(true);
+        }
     }
 
     private void consumeBooster(final Player player, final ItemStack item) {
@@ -792,7 +856,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onLootGenerate(final LootGenerateEvent event) {
         if (event.isPlugin() || !petSourceEnabled("chest")) {
             return;
@@ -935,6 +999,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void onPlayerRespawn(final PlayerRespawnEvent event) {
         Bukkit.getScheduler().runTaskLater(this, () -> activePets.spawnSavedActivePet(event.getPlayer()), 20L);
+        // Pets from a trade this player died in the middle of: back once they are alive again.
+        final UUID id = event.getPlayer().getUniqueId();
+        Bukkit.getScheduler().runTask(this, () -> deliverPendingTradeReturns(Bukkit.getPlayer(id)));
     }
 
     @EventHandler
@@ -1041,7 +1108,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    @EventHandler
+    // MONITOR + ignoreCancelled: a death another plugin calls off (the mob lives on) earns nothing.
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onEntityDeath(final EntityDeathEvent event) {
         final Player killer = event.getEntity().getKiller();
         if (killer != null) {
@@ -1151,7 +1219,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
     }
 
-    @EventHandler(ignoreCancelled = true)
+    // MONITOR: everything in here pays out - extra drops, experience, tokens - and what has been paid
+    // cannot be taken back. So it runs once every other plugin has had its say: a protection plugin that
+    // cancels the break (leaving the block in place, to be "broken" again) must not leave the bonus behind.
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(final BlockBreakEvent event) {
         // Re-entry guard: our own Woodpecker/Badger chain-break fires BlockBreakEvents for protection checks.
         if (activePets.isChainBreaking()) {
@@ -1162,15 +1233,35 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         activePets.handleSquirrelForage(event.getPlayer(), event.getBlock());
         activePets.handleArcaneFoxMine(event.getPlayer(), event.getBlock());
         activePets.handleMechanistBlockBreak(event.getPlayer(), event.getBlock());
-        activePets.handleSilkMoth(event);
+        final boolean keptWhole = activePets.handleSilkMoth(event);
         activePets.handleSalamanderSmelt(event);
         activePets.handleWoodpecker(event.getPlayer(), event.getBlock());
         activePets.handleBadgerVein(event.getPlayer(), event.getBlock());
         activePets.handleScarecrow(event.getPlayer(), event.getBlock());
-        activePets.handleGathererBonus(event.getPlayer(), event.getBlock());
-        maybeOreTokenDrop(event.getPlayer(), event.getBlock());
+        // A block the Silk Moth handed back whole was not used up, whatever the tool would have made of it.
+        if (!keptWhole) {
+            activePets.handleGathererBonus(event.getPlayer(), event.getBlock());
+            maybeOreTokenDrop(event.getPlayer(), event.getBlock());
+        }
         // Now that all break bonuses have run, forget this position so the placed-block set stays bounded.
         activePets.forgetPlacedBlock(event.getBlock());
+    }
+
+    // The Silk Moth and the Salamander exchange a block's drops here, once it has really been broken.
+    // First of all, so that plugins which collect the drops find the exchanged ones.
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    public void onBlockDropItem(final org.bukkit.event.block.BlockDropItemEvent event) {
+        activePets.handleBlockDrops(event);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPistonExtend(final org.bukkit.event.block.BlockPistonExtendEvent event) {
+        activePets.noteMovedBlocks(event.getBlocks(), event.getDirection());
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onPistonRetract(final org.bukkit.event.block.BlockPistonRetractEvent event) {
+        activePets.noteMovedBlocks(event.getBlocks(), event.getDirection());
     }
 
     private boolean isOre(final Material type) {
@@ -1191,6 +1282,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final double chance = getConfig().getDouble("tokens.ore-tokens.chance-percent", 3.0);
         if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
+            return;
+        }
+        // Tokens are for an ore that is mined out. One that comes back as an ore (Silk Touch; ancient
+        // debris always does) could be put down and mined again for roll after roll.
+        if (!activePets.breakUsesUp(player, block)) {
             return;
         }
         final int min = Math.max(1, getConfig().getInt("tokens.ore-tokens.min", 1));
@@ -1514,6 +1610,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             player.sendMessage(message("messages.no-permission"));
             return;
         }
+        // If the storage is already open, what is in it right now is in that window - it is only written
+        // back when the window closes. Filling a second window from the pet's saved contents would bring
+        // back everything that was taken out of the first one.
+        saveOpenAlpacaStorage(player);
         final int size = alpacaStorageSize(ownedPet.level());
         final AlpacaStorageHolder holder = new AlpacaStorageHolder(player.getUniqueId(), pet.uuid(), size);
         final Inventory inventory = Bukkit.createInventory(holder, size, Texts.menuTitle(mt("menu.title.alpaca-storage")));
@@ -1539,13 +1639,27 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             player.sendMessage(message("messages.no-pet-storage"));
             return;
         }
+        // The swap-with-off-hand key (F) over a storage slot: its own click type, with no hotbar button.
+        if (event.getRawSlot() < topSize && event.getClick() == ClickType.SWAP_OFFHAND
+            && itemFactory.petId(player.getInventory().getItemInOffHand()).isPresent()) {
+            event.setCancelled(true);
+            player.sendMessage(message("messages.no-pet-storage"));
+            return;
+        }
         if (event.isShiftClick() && event.getRawSlot() >= topSize && itemFactory.petId(event.getCurrentItem()).isPresent()) {
             event.setCancelled(true);
             player.sendMessage(message("messages.no-pet-storage"));
         }
     }
 
-    private ItemStack[] sanitizeAlpacaContents(final Player player, final ItemStack[] contents, final int size) {
+    /**
+     * What of an open Alpaca storage is to be saved. A pet item that found its way in despite the click
+     * handling is handed back to the player - and taken OUT of the window while doing so: this runs on
+     * every save, with the window possibly staying open, and an item that was merely copied out would be
+     * handed back again on each of them.
+     */
+    private ItemStack[] sanitizeAlpacaContents(final Player player, final Inventory inventory, final int size) {
+        final ItemStack[] contents = inventory.getContents();
         final ItemStack[] sanitized = new ItemStack[Math.max(0, Math.min(OwnedPet.STORAGE_SIZE, size))];
         for (int i = 0; i < Math.min(sanitized.length, contents.length); i++) {
             final ItemStack item = contents[i];
@@ -1553,6 +1667,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 continue;
             }
             if (itemFactory.petId(item).isPresent()) {
+                inventory.setItem(i, null);
                 giveOrDrop(player, item);
                 player.sendMessage(message("messages.no-pet-storage"));
                 continue;
@@ -1585,7 +1700,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 return;
             }
             final ItemStack[] merged = pet.storageContents();
-            final ItemStack[] visible = sanitizeAlpacaContents(player, inventory.getContents(), holder.size());
+            final ItemStack[] visible = sanitizeAlpacaContents(player, inventory, holder.size());
             for (int i = 0; i < visible.length; i++) {
                 merged[i] = visible[i];
             }
@@ -1612,6 +1727,30 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return active != null && active.definitionId().equals("alpaca") && active.hasStoredItems();
     }
 
+    /**
+     * Whether the active pet may be put away or swapped out right now - the question every way of doing
+     * that has to ask (the menu, and each quickslot method).
+     *
+     * <p>An Alpaca has to be empty first, and what counts is what is in its storage at this moment. While
+     * the storage is open on the player's screen its contents only exist in that window (they are written
+     * back when it closes), and a quickslot switch can arrive with the window still open. So the window is
+     * written back before the check - and closed if the Alpaca does leave, or items could still be put
+     * into an Alpaca that is no longer out.</p>
+     */
+    boolean activePetMayLeave(final Player player, final PlayerPetData data) {
+        final boolean storageOpen = player.getOpenInventory().getTopInventory().getHolder() instanceof AlpacaStorageHolder;
+        if (storageOpen) {
+            saveOpenAlpacaStorage(player);
+        }
+        if (alpacaStorageLocked(data)) {
+            return false;
+        }
+        if (storageOpen) {
+            player.closeInventory();
+        }
+        return true;
+    }
+
     /** Why {@link #summonPet} did or did not bring the pet out. */
     enum SummonResult {
         SUMMONED, DISABLED, STORAGE_LOCKED
@@ -1627,7 +1766,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (isPetDisabled(pet.definitionId())) {
             return SummonResult.DISABLED;
         }
-        if (!pet.uuid().equals(data.activePetId()) && alpacaStorageLocked(data)) {
+        if (!pet.uuid().equals(data.activePetId()) && !activePetMayLeave(player, data)) {
             return SummonResult.STORAGE_LOCKED;
         }
         ensureVariant(data, pet);
@@ -1670,9 +1809,15 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         itemFactory.petCustomName(item).ifPresent(pet::setCustomName);
         pet.recalculateNextLevelExp(petXpMultiplier());
         pet.setExp(itemFactory.petExp(item));
-        // Restore ascension progress and the nametag style so convert/trade never wipes them.
+        // Restore ascension progress and the nametag style so convert/trade never wipes them. The style
+        // only if this player has it: styles are bought per player, and a pet handed round would
+        // otherwise carry one to everybody who takes it in.
         pet.setFusionPoints(itemFactory.petFusionPoints(item));
-        itemFactory.petNametagStyle(item).ifPresent(pet::setNametagStyle);
+        itemFactory.petNametagStyle(item)
+            .filter(style -> data.hasCosmetic("nametag", style))
+            .ifPresent(pet::setNametagStyle);
+        // A Phoenix that revived someone is still recovering: the trip through an item does not reset it.
+        pet.setLastTotemMillis(itemFactory.petLastTotem(item));
         // Keep the exact variant the loot/give item advertised; otherwise roll a fresh one.
         final String itemVariant = itemFactory.petVariant(item).orElse(null);
         if (itemVariant != null && definition.variants().containsKey(itemVariant.toLowerCase(Locale.ROOT))) {
@@ -1914,10 +2059,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return randomPetBySpawnChance(ThreadLocalRandom.current(), totalWeight);
     }
 
-    @EventHandler
+    // Fishing is looked at twice. First, before any other plugin: what a pet doubles is the fish on the
+    // hook, not whatever a fishing plugin turns the catch into afterwards (a reward of its own, a key).
+    @EventHandler(priority = EventPriority.LOWEST)
+    public void onPlayerFishFirst(final PlayerFishEvent event) {
+        fishBonusFor = event;
+        fishBonus = activePets.prepareFishing(event);
+    }
+
+    // ... and then after the plugins that decide whether there is a catch at all: one they cancel earns
+    // nothing, and it is only here that the bonus is handed out and a pet may take the fish's place.
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onPlayerFish(final PlayerFishEvent event) {
-        activePets.handleWaterSerpentFish(event);
-        activePets.handleAquaticFishBonus(event);
+        final List<ItemStack> bonus = fishBonusFor == event ? fishBonus : List.of();
+        fishBonusFor = null;
+        fishBonus = List.of();
+        for (final ItemStack item : bonus) {
+            event.getPlayer().getWorld().dropItemNaturally(event.getPlayer().getLocation(), item);
+        }
         if (event.getState() != PlayerFishEvent.State.CAUGHT_FISH || !petSourceEnabled("fishing")) {
             return;
         }
@@ -1936,7 +2095,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         announcePet(event.getPlayer(), definition, "fished", "");
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onBrushSuspicious(final PlayerInteractEvent event) {
         if (event.getHand() != EquipmentSlot.HAND || event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
@@ -1961,7 +2120,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final String blockKey = block.getWorld().getUID() + ":" + block.getX() + ":" + block.getY() + ":" + block.getZ();
-        if (brushedBlocks.contains(blockKey)) {
+        if (brushedBlocks.contains(blockKey) || brushable.getPersistentDataContainer().has(brushRolledKey, PersistentDataType.BYTE)) {
             return;
         }
         final long now = System.currentTimeMillis();
@@ -1974,12 +2133,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             brushedBlocks.clear();
         }
         brushedBlocks.add(blockKey);
+        // The list above is gone with the next restart. The block itself remembers too, or a block that
+        // is only ever tapped, never brushed out, would get a new roll after each one.
+        brushable.getPersistentDataContainer().set(brushRolledKey, PersistentDataType.BYTE, (byte) 1);
         final double chance = petSourceChance("brushing");
-        if (chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance) {
-            return;
-        }
-        final PetDefinition definition = rollSourcePet();
+        final PetDefinition definition = chance <= 0.0 || ThreadLocalRandom.current().nextDouble(100.0) >= chance
+            ? null : rollSourcePet();
         if (definition == null) {
+            brushable.update(true);
             return;
         }
         // Replace the item buried in the block so the pet is brushed out of the block naturally.
@@ -2028,7 +2189,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }, 1L);
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerTrade(final PlayerTradeEvent event) {
         if (event.isCancelled()) {
             return;
@@ -2063,7 +2224,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 paidEmeralds += ingredient.getAmount();
             }
         }
-        final boolean canStealItem = result != null && !result.getType().isAir() && result.getType() != Material.EMERALD;
+        // Not a pet or a booster: the trader's pet is a one-time deal, and a snatched copy would be a
+        // second pet for nothing.
+        final boolean canStealItem = result != null && !result.getType().isAir() && result.getType() != Material.EMERALD
+            && !isProtectedBetterPetsItem(result);
 
         final ItemStack loot;
         final String desc;
@@ -2095,7 +2259,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         });
     }
 
-    @EventHandler
+    @EventHandler(ignoreCancelled = true)
     public void onBlockDispenseLoot(final BlockDispenseLootEvent event) {
         final Material type = event.getBlock().getType();
         final String source;
@@ -2366,6 +2530,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
     /** Token value of a single unit of a pet item, or 0 if it is not a scrappable pet item. */
     private int scrapValue(final ItemStack item) {
+        // A head out of a menu is a picture of a pet, not a pet: worth nothing.
+        if (itemFactory.isDisplayOnly(item)) {
+            return 0;
+        }
         return itemFactory.petId(item).flatMap(definitions::get).map(def -> tokenValueForRarity(def.rarity())).orElse(0);
     }
 
@@ -2668,9 +2836,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
 
         // Require a confirming second click within a few seconds, so a misclick never deletes a pet.
         final long now = System.currentTimeMillis();
-        final Long armedUntil = convertConfirms.get(player.getUniqueId());
-        if (armedUntil == null || now > armedUntil) {
-            convertConfirms.put(player.getUniqueId(), now + CONVERT_CONFIRM_MILLIS);
+        final ConvertConfirm armed = convertConfirms.get(player.getUniqueId());
+        if (armed == null || now > armed.until() || !armed.pet().equals(pet.uuid())) {
+            convertConfirms.put(player.getUniqueId(), new ConvertConfirm(pet.uuid(), now + CONVERT_CONFIRM_MILLIS));
             player.sendMessage(lang.colored("convert.confirm", NamedTextColor.GOLD, "%pet%", definition.name()));
             player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_HAT, 0.8F, 1.2F);
             return;
@@ -2678,6 +2846,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         convertConfirms.remove(player.getUniqueId());
 
         data.removePet(pet.uuid());
+        // The skin the pet wears leaves with it, and is back in the collection when the pet is taken in
+        // again. If it stayed behind as well, handing a pet to and fro would copy a bought skin to
+        // everyone who held it.
+        data.lockVariant(pet.definitionId(), pet.variant());
         activePets.despawn(player, false);
         giveOrDrop(player, itemFactory.discoveryItem(definition, pet));
         requestSave();
@@ -3916,6 +4088,10 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (!holder.isInitiator(id) && !holder.partner().equals(id)) {
             return;
         }
+        // Done or called off, with the window on its way out: nothing can be added to this deal any more.
+        if (holder.settled()) {
+            return;
+        }
         final int slot = event.getRawSlot();
         if (slot == TRADE_CLOSE) {
             player.closeInventory();
@@ -3956,7 +4132,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         final ItemStack held = player.getInventory().getItemInMainHand();
-        if (held.getType().isAir() || itemFactory.petId(held).isEmpty()) {
+        if (held.getType().isAir() || itemFactory.petId(held).isEmpty() || itemFactory.isDisplayOnly(held)) {
             player.sendMessage(lang.colored("trade.not-a-pet", NamedTextColor.RED));
             return;
         }
@@ -3999,8 +4175,22 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         final PlayerPetData initData = storage.data(holder.initiator());
         final PlayerPetData partData = storage.data(holder.partner());
-        final int initTokens = Math.min(holder.tokensOf(holder.initiator()), initData.tokens());
-        final int partTokens = Math.min(holder.tokensOf(holder.partner()), partData.tokens());
+        final int initTokens = holder.tokensOf(holder.initiator());
+        final int partTokens = holder.tokensOf(holder.partner());
+        // Both agreed to what the window shows. If someone no longer has the tokens they offered (spent
+        // or passed on since), the deal is not quietly settled for less: the offer is cut down to what
+        // is there, and both have to look at it and confirm again.
+        if (initTokens > initData.tokens() || partTokens > partData.tokens()) {
+            holder.setTokensOf(holder.initiator(), Math.min(initTokens, initData.tokens()));
+            holder.setTokensOf(holder.partner(), Math.min(partTokens, partData.tokens()));
+            resetTradeConfirmations(holder);
+            renderTradeMenu(holder);
+            for (final Player p : new Player[]{initiator, partner}) {
+                p.sendMessage(lang.component("trade.tokens-short"));
+                p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.8F, 0.7F);
+            }
+            return;
+        }
         // Move tokens.
         initData.addTokens(-initTokens);
         partData.addTokens(-partTokens);
@@ -4030,39 +4220,50 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             return;
         }
         holder.markSettled();
-        returnOfferedItems(holder, holder.initiator());
-        returnOfferedItems(holder, holder.partner());
+        finishCancelledTrade(holder);
+    }
+
+    /** The second half of calling a trade off, once it is marked settled: pets back, both told, windows shut. */
+    private void finishCancelledTrade(final TradeMenuHolder holder) {
+        returnOfferedItems(holder, holder.initiator(), Bukkit.getPlayer(holder.initiator()));
+        returnOfferedItems(holder, holder.partner(), Bukkit.getPlayer(holder.partner()));
         for (final UUID id : new UUID[]{holder.initiator(), holder.partner()}) {
             final Player p = Bukkit.getPlayer(id);
             if (p != null) {
                 p.sendMessage(lang.colored("trade.cancelled", NamedTextColor.YELLOW));
-                if (p.getOpenInventory().getTopInventory().getHolder() instanceof TradeMenuHolder) {
+                if (p.getOpenInventory().getTopInventory().getHolder() == holder) {
                     p.closeInventory();
                 }
             }
         }
     }
 
-    private void returnOfferedItems(final TradeMenuHolder holder, final UUID id) {
+    private void returnOfferedItems(final TradeMenuHolder holder, final UUID id, final Player owner) {
         final List<ItemStack> items = holder.itemsOf(id);
         if (items.isEmpty()) {
             return;
         }
-        final Player owner = Bukkit.getPlayer(id);
-        for (final ItemStack item : items) {
-            if (owner != null) {
+        // Straight back into the inventory - unless the owner is gone, or dead: a window also closes
+        // because its player is dying, and what is put into a dying player's inventory is wiped with the
+        // rest of it a moment later. Then the pets wait for them.
+        if (owner != null && !owner.isDead()) {
+            for (final ItemStack item : items) {
                 giveOrDrop(owner, item);
-            } else {
-                // Owner went offline mid-trade: hold their pet(s) and hand them back on next join. Never lost.
-                pendingTradeReturns.computeIfAbsent(id, k -> new ArrayList<>()).add(item);
             }
+        } else {
+            pendingTradeReturns.computeIfAbsent(id, k -> new ArrayList<>()).addAll(items);
+            savePendingTradeReturns();
         }
         items.clear();
     }
 
-    /** Gives back any pets that were held for a player who disconnected mid-trade. Called on join. */
+    /** Hands over the pets that waited for this player, if they can take them now. Called on join and respawn. */
     private void deliverPendingTradeReturns(final Player player) {
+        if (player == null || player.isDead() || !pendingTradeReturns.containsKey(player.getUniqueId())) {
+            return;
+        }
         final List<ItemStack> pending = pendingTradeReturns.remove(player.getUniqueId());
+        savePendingTradeReturns();
         if (pending == null || pending.isEmpty()) {
             return;
         }
@@ -4070,6 +4271,66 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             giveOrDrop(player, item);
         }
         player.sendMessage(lang.colored("trade.returned", NamedTextColor.YELLOW));
+    }
+
+    private java.io.File pendingReturnsFile() {
+        return new java.io.File(getDataFolder(), "pending-returns.yml");
+    }
+
+    /** Writes the waiting pets to their file - or removes the file once nobody is waited for. */
+    private void savePendingTradeReturns() {
+        final java.io.File file = pendingReturnsFile();
+        try {
+            if (pendingTradeReturns.isEmpty()) {
+                java.nio.file.Files.deleteIfExists(file.toPath());
+                return;
+            }
+            final org.bukkit.configuration.file.YamlConfiguration yaml = new org.bukkit.configuration.file.YamlConfiguration();
+            for (final Map.Entry<UUID, List<ItemStack>> entry : pendingTradeReturns.entrySet()) {
+                yaml.set(entry.getKey().toString(), java.util.Base64.getEncoder().encodeToString(
+                    ItemStack.serializeItemsAsBytes(entry.getValue().toArray(new ItemStack[0]))));
+            }
+            yaml.save(file);
+        } catch (final java.io.IOException | RuntimeException exception) {
+            getLogger().warning("Could not write " + file.getName() + ": " + exception.getMessage());
+        }
+    }
+
+    private void loadPendingTradeReturns() {
+        final java.io.File file = pendingReturnsFile();
+        if (!file.isFile()) {
+            return;
+        }
+        final org.bukkit.configuration.file.YamlConfiguration yaml = org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(file);
+        boolean unreadable = false;
+        for (final String key : yaml.getKeys(false)) {
+            try {
+                final List<ItemStack> items = new ArrayList<>();
+                for (final ItemStack item : ItemStack.deserializeItemsFromBytes(java.util.Base64.getDecoder().decode(yaml.getString(key, "")))) {
+                    if (item != null && !item.getType().isAir()) {
+                        items.add(item);
+                    }
+                }
+                if (!items.isEmpty()) {
+                    pendingTradeReturns.put(UUID.fromString(key), items);
+                }
+            } catch (final RuntimeException exception) {
+                unreadable = true;
+                getLogger().warning("Could not read the pets held for " + key + " in " + file.getName() + ": " + exception.getMessage());
+            }
+        }
+        if (unreadable) {
+            // The file is rewritten the next time something changes; keep what could not be read.
+            try {
+                java.nio.file.Files.copy(file.toPath(), new java.io.File(getDataFolder(), "pending-returns.unreadable.yml").toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            } catch (final java.io.IOException exception) {
+                getLogger().warning("Could not keep a copy of " + file.getName() + ": " + exception.getMessage());
+            }
+        }
+        if (!pendingTradeReturns.isEmpty()) {
+            getLogger().info("Holding pets from interrupted trades for " + pendingTradeReturns.size() + " player(s).");
+        }
     }
 
     private void openCustomizeMenu(final Player player, final OwnedPet pet) {

@@ -149,6 +149,16 @@ public final class PetTests {
         data.unlockVariant("axolotl", "gold");
         eq("axolotl unlocked count is 2", data.unlockedVariants("axolotl").size(), 2);
         eq("unknown pet has none", data.unlockedVariants("griffin").size(), 0);
+
+        // The skin a pet wears leaves the collection with the pet (convert), and comes back with it.
+        data.lockVariant("AXOLOTL", "Wild");
+        eq("worn skin gone once the pet left", data.isVariantUnlocked("axolotl", "wild"), false);
+        eq("the other skins stay", data.isVariantUnlocked("axolotl", "gold"), true);
+        data.lockVariant("axolotl", null);
+        data.lockVariant("griffin", "wild");
+        data.lockVariant(null, "gold");
+        eq("locking nothing changes nothing", data.unlockedVariants("axolotl").size(), 1);
+        eq("back with the pet", data.unlockVariant("axolotl", "wild"), true);
     }
 
     private static void fusionStars() {
