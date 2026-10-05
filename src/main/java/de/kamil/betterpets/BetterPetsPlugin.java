@@ -112,6 +112,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     private PetModelService modelService;
     private ModuleManager moduleManager;
     private de.kamil.betterpets.modules.OraxenUi oraxenUi;
+    private QuickslotManager quickslots;
     private LangManager lang;
     private Updater updater;
     private NamespacedKey generatedChestKey;
@@ -214,25 +215,24 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         getLogger().info("Loaded pet storage for " + storage.playerCount() + " player(s).");
 
         modelService = new PetModelService(this);
+        quickslots = new QuickslotManager(this);
         moduleManager = new ModuleManager(this);
         moduleManager.register(new BetterModelModule(this, modelService));
         moduleManager.register(new de.kamil.betterpets.modules.OraxenModule(this, currentJar()));
+        moduleManager.register(new de.kamil.betterpets.modules.PacketEventsModule(this, quickslots));
         moduleManager.load();
         if (experimentalModulesEnabled()) {
             moduleManager.enablePersistedAvailable();
         } else {
             getLogger().info("External modules are experimental and disabled (experimental-modules: false). Skipping module activation.");
         }
-        // The Oraxen GUI skin is cosmetic and safe, so it may run without the experimental-modules gate,
-        // controlled by the config toggle instead.
         oraxenUi = new de.kamil.betterpets.modules.OraxenUi(this, moduleManager);
-        if (getConfig().getBoolean("oraxen.gui-enabled", true)) {
-            moduleManager.enableIfAvailable(de.kamil.betterpets.modules.OraxenModule.ID);
-        }
+        applyStandaloneModules();
 
         activePets = new ActivePetManager(this, definitions, storage, itemFactory, modelService, lang);
         activePets.start();
         getLogger().info("Registered Java abilities for " + definitions.all().size() + " pet(s).");
+        quickslots.start();
 
         getServer().getPluginManager().registerEvents(this, this);
         getLifecycleManager().registerEventHandler(LifecycleEvents.COMMANDS, event ->
@@ -295,6 +295,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         if (moduleManager != null) {
             moduleManager.shutdown();
         }
+        if (quickslots != null) {
+            quickslots.stop();
+        }
         if (storage != null) {
             saveOpenAlpacaStorages();
             storage.save();
@@ -303,7 +306,31 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         instance = null;
     }
 
-    /** Adds any config options that are missing from an older config.yml, keeping the user's values. */
+    /**
+     * (Re)applies the modules that follow their own config toggle instead of the experimental-modules gate:
+     * the Oraxen GUI skin (cosmetic) and the PacketEvents hook behind sneak+scroll quickslots. Called on
+     * enable and after every reload, because reloading the module manager switches off whatever
+     * modules.yml does not list.
+     */
+    private void applyStandaloneModules() {
+        syncStandaloneModule(de.kamil.betterpets.modules.OraxenModule.ID, getConfig().getBoolean("oraxen.gui-enabled", true));
+        syncStandaloneModule(de.kamil.betterpets.modules.PacketEventsModule.ID, quickslots.sneakScrollWanted());
+    }
+
+    private void syncStandaloneModule(final String id, final boolean wanted) {
+        if (wanted) {
+            moduleManager.enableIfAvailable(id);
+        } else if (!moduleManager.isRequestedEnabled(id)) {
+            // Only switch it off if an admin did not turn it on by hand in /pets modules.
+            moduleManager.disableIfActive(id);
+        }
+    }
+
+    /**
+     * Adds any config options that are missing from an older config.yml, keeping the user's values - and
+     * brings each option's documentation along, so what an update adds is explained in the server's
+     * existing file too instead of showing up as a bare, uncommented key.
+     */
     private void repairConfig() {
         final java.io.InputStream defaultStream = getResource("config.yml");
         if (defaultStream == null) {
@@ -312,17 +339,34 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final org.bukkit.configuration.file.YamlConfiguration defaults =
             org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(
                 new java.io.InputStreamReader(defaultStream, java.nio.charset.StandardCharsets.UTF_8));
+        final org.bukkit.configuration.file.FileConfiguration config = getConfig();
+        // An admin who stripped every comment from the file wants it that way; leave such a file bare.
+        final boolean documented = config.getKeys(true).stream().anyMatch(key -> !config.getComments(key).isEmpty());
         int added = 0;
+        int explained = 0;
+        // getKeys(true) lists a section before its children, so a brand-new section is created first and
+        // its options are then filled in beneath it. isSet (unlike contains) ignores the bundled defaults,
+        // i.e. it tells whether the option really is in the server's file.
         for (final String key : defaults.getKeys(true)) {
-            if (defaults.isConfigurationSection(key) || getConfig().contains(key)) {
-                continue;
+            final boolean missing = !config.isSet(key);
+            if (missing) {
+                if (defaults.isConfigurationSection(key)) {
+                    config.createSection(key);
+                } else {
+                    config.set(key, defaults.get(key));
+                    added++;
+                }
             }
-            getConfig().set(key, defaults.get(key));
-            added++;
+            // Also covers options an earlier version already added without their comments.
+            final List<String> comments = defaults.getComments(key);
+            if (documented && !comments.isEmpty() && config.getComments(key).isEmpty()) {
+                config.setComments(key, comments);
+                explained++;
+            }
         }
-        if (added > 0) {
+        if (added > 0 || explained > 0) {
             saveConfig();
-            getLogger().info("Repaired " + added + " missing config option(s) from defaults.");
+            getLogger().info("Repaired config.yml: added " + added + " missing option(s), documented " + explained + ".");
         }
     }
 
@@ -361,6 +405,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         final Inventory inventory = Bukkit.createInventory(holder, 54, oxTitle("main", Texts.menuTitle(title)));
         holder.setInventory(inventory);
         renderMenu(player, inventory);
+        // Lets the quickslot mod (if the player runs it) put its button onto the menu that opens next.
+        quickslots.notifyMenuOpened(player);
         player.openInventory(inventory);
     }
 
@@ -427,25 +473,23 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             }
             final OwnedPet selectedPet = shown.get(petIndex);
             itemFactory.petUuid(event.getCurrentItem()).flatMap(data::findPet).filter(pet -> pet.uuid().equals(selectedPet.uuid())).ifPresent(pet -> {
-                if (isPetDisabled(pet.definitionId())) {
-                    // Disabled pet: owned but not usable. Keep it, just refuse to equip it.
-                    definitions.get(pet.definitionId()).ifPresent(definition ->
-                        player.sendMessage(message("messages.pet-disabled").replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name()))));
-                    player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
-                    return;
+                switch (summonPet(player, data, pet)) {
+                    case DISABLED -> {
+                        // Disabled pet: owned but not usable. Keep it, just refuse to equip it.
+                        definitions.get(pet.definitionId()).ifPresent(definition ->
+                            player.sendMessage(message("messages.pet-disabled").replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name()))));
+                        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7F, 0.8F);
+                    }
+                    case STORAGE_LOCKED -> player.sendMessage(message("messages.alpaca-storage-not-empty"));
+                    case SUMMONED -> {
+                        requestSave();
+                        definitions.get(pet.definitionId()).ifPresent(definition ->
+                            player.sendMessage(message("messages.active-pet").replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name())))
+                        );
+                        player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.6F);
+                        renderMenu(player, event.getView().getTopInventory());
+                    }
                 }
-                if (!pet.uuid().equals(data.activePetId()) && activeAlpacaStorageLocked(player, data)) {
-                    return;
-                }
-                ensureVariant(data, pet);
-                data.setActivePet(pet.uuid());
-                activePets.spawn(player, pet);
-                requestSave();
-                definitions.get(pet.definitionId()).ifPresent(definition ->
-                    player.sendMessage(message("messages.active-pet").replaceText(builder -> builder.matchLiteral("%pet%").replacement(definition.name())))
-                );
-                player.playSound(player.getLocation(), Sound.ENTITY_PLAYER_LEVELUP, 0.7F, 1.6F);
-                renderMenu(player, event.getView().getTopInventory());
             });
             return;
         }
@@ -1555,12 +1599,53 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     }
 
     private boolean activeAlpacaStorageLocked(final Player player, final PlayerPetData data) {
-        final OwnedPet active = data.activePet().orElse(null);
-        if (active == null || !active.definitionId().equals("alpaca") || !active.hasStoredItems()) {
+        if (!alpacaStorageLocked(data)) {
             return false;
         }
         player.sendMessage(message("messages.alpaca-storage-not-empty"));
         return true;
+    }
+
+    /** True while the active pet is an Alpaca that still carries items: it must be emptied before it may leave. */
+    boolean alpacaStorageLocked(final PlayerPetData data) {
+        final OwnedPet active = data.activePet().orElse(null);
+        return active != null && active.definitionId().equals("alpaca") && active.hasStoredItems();
+    }
+
+    /** Why {@link #summonPet} did or did not bring the pet out. */
+    enum SummonResult {
+        SUMMONED, DISABLED, STORAGE_LOCKED
+    }
+
+    /**
+     * Makes {@code pet} the player's active pet, applying every equip rule. The one place a pet gets
+     * summoned from - the menu and every quickslot method go through here, so they cannot drift apart.
+     * Sends no messages and does not save; the caller reports the result its own way (chat, action bar)
+     * and decides whether the change is worth an immediate save.
+     */
+    SummonResult summonPet(final Player player, final PlayerPetData data, final OwnedPet pet) {
+        if (isPetDisabled(pet.definitionId())) {
+            return SummonResult.DISABLED;
+        }
+        if (!pet.uuid().equals(data.activePetId()) && alpacaStorageLocked(data)) {
+            return SummonResult.STORAGE_LOCKED;
+        }
+        ensureVariant(data, pet);
+        data.setActivePet(pet.uuid());
+        activePets.spawn(player, pet);
+        return SummonResult.SUMMONED;
+    }
+
+    PetStorage petStorage() {
+        return storage;
+    }
+
+    PetDefinitions petDefinitions() {
+        return definitions;
+    }
+
+    ActivePetManager activePetManager() {
+        return activePets;
     }
 
     private void addPetFromItem(final Player player, final ItemStack item, final String petId) {
@@ -2826,7 +2911,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return Optional.of((int) Math.max(1L, (totalSeconds + 59L) / 60L));
     }
 
-    private boolean has(final CommandSender sender, final String permission) {
+    boolean has(final CommandSender sender, final String permission) {
         return sender.hasPermission(permission) || sender.hasPermission(ADMIN_PERMISSION);
     }
 
@@ -4664,6 +4749,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         refreshXpMultiplierCache();
         refreshDisabledPetsCache();
         refreshMenuClickSound();
+        quickslots.refresh();
         ensureSpawnChanceDefaults();
         if (moduleManager != null) {
             if (experimentalModulesEnabled()) {
@@ -4671,6 +4757,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             } else {
                 moduleManager.shutdown();
             }
+            // Both branches above switch off the modules that run on their own config toggle (the Oraxen
+            // GUI skin used to stay off after a reload because of that) - bring those back.
+            applyStandaloneModules();
         }
         if (experimentalModulesEnabled() && modelService != null && modelService.isEnabled()) {
             modelService.reloadModels();
@@ -4876,6 +4965,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         helpLine(sender, "/pets shop", mt("help.shop"), NamedTextColor.YELLOW);
         helpLine(sender, "/pets top", mt("help.top"), NamedTextColor.YELLOW);
         helpLine(sender, "/pets trade <player>", mt("help.trade"), NamedTextColor.YELLOW);
+        if (getConfig().getBoolean("quickslots.enabled", true) && has(sender, QuickslotManager.PERMISSION)) {
+            helpLine(sender, "/pets quick", mt("help.quick"), NamedTextColor.YELLOW);
+        }
         helpLine(sender, "/pets tokens", mt("help.tokens"), NamedTextColor.YELLOW);
         helpLine(sender, "/pets tokens pass <player> <amount>", mt("help.tokens-pass"), NamedTextColor.YELLOW);
         helpLine(sender, "/pets visible | invisible", mt("help.visible"), NamedTextColor.YELLOW);
@@ -4949,11 +5041,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         return out;
     }
 
-    private String abilitySummary(final String id) {
+    String abilitySummary(final String id) {
         return renderAbility(PetAbilities.summaryMsg(id));
     }
 
-    private String abilityValue(final String id, final int level) {
+    String abilityValue(final String id, final int level) {
         return renderAbility(PetAbilities.valueMsg(id, level));
     }
 
@@ -5375,6 +5467,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 plugin.handleTradeCommand(player, args);
                 return;
             }
+            // "slot"/"slots" already open the token shop (the old slot machine), hence "quick".
+            if (args.length > 0 && isQuickslotCommand(args[0])) {
+                plugin.quickslots.handleCommand(player, args);
+                return;
+            }
 
             if (args.length >= 1 && args[0].equalsIgnoreCase("set") && args.length >= 2 && args[1].equalsIgnoreCase("name")) {
                 if (args.length < 3) {
@@ -5406,6 +5503,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 suggestions.add("shop");
                 suggestions.add("top");
                 suggestions.add("trade");
+                suggestions.add("quick");
                 suggestions.add("set");
                 suggestions.add("restore");
                 if (plugin.has(stack.getSender(), GIVE_PERMISSION)) {
@@ -5429,6 +5527,9 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                     suggestions.add("update");
                 }
                 return suggestions;
+            }
+            if (args.length >= 2 && isQuickslotCommand(args[0])) {
+                return plugin.quickslots.suggest(stack.getSender(), args);
             }
             if (args.length == 2 && (args[0].equalsIgnoreCase("set") || args[0].equalsIgnoreCase("restore"))) {
                 return List.of("name");
@@ -5493,6 +5594,11 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 return Bukkit.getOnlinePlayers().stream().map(Player::getName).toList();
             }
             return List.of();
+        }
+
+        private static boolean isQuickslotCommand(final String name) {
+            return name.equalsIgnoreCase("quick") || name.equalsIgnoreCase("quickslot")
+                || name.equalsIgnoreCase("quickslots") || name.equalsIgnoreCase("qs");
         }
 
         @Override

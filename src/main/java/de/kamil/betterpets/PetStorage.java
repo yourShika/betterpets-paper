@@ -124,6 +124,21 @@ public final class PetStorage {
                     }
                 }
 
+                // Quickslots (slot number 1..9 -> pet definition id) and the sneak+scroll preference.
+                final ConfigurationSection quickslots = section.getConfigurationSection("quickslots");
+                if (quickslots != null) {
+                    for (final String slotText : quickslots.getKeys(false)) {
+                        try {
+                            data.setQuickslot(Integer.parseInt(slotText) - 1, quickslots.getString(slotText));
+                        } catch (final NumberFormatException badSlot) {
+                            plugin.getLogger().warning("Ignoring invalid quickslot '" + slotText + "' for " + uuidText + ".");
+                        }
+                    }
+                }
+                if (section.isBoolean("quick-scroll")) {
+                    data.setQuickScroll(section.getBoolean("quick-scroll"));
+                }
+
                 if (data.activePet().isEmpty()) {
                     data.setActivePet(null);
                 }
@@ -175,6 +190,13 @@ public final class PetStorage {
             config.set(base + ".active", data.activePetId() == null ? null : data.activePetId().toString());
             config.set(base + ".booster-tier", data.boosterTier());
             config.set(base + ".booster-remaining-millis", data.boosterRemainingMillis());
+            for (int slot = 0; slot < PlayerPetData.MAX_QUICKSLOTS; slot++) {
+                if (data.quickslot(slot) != null) {
+                    config.set(base + ".quickslots." + (slot + 1), data.quickslot(slot));
+                }
+            }
+            // Only written once the player made a choice; absent = follow the server default.
+            config.set(base + ".quick-scroll", data.quickScroll());
             for (final Map.Entry<String, java.util.Set<String>> unlocked : data.unlockedVariantsByPet().entrySet()) {
                 if (!unlocked.getValue().isEmpty()) {
                     config.set(base + ".unlocked-variants." + unlocked.getKey(), new java.util.ArrayList<>(unlocked.getValue()));

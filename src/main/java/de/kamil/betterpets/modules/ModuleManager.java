@@ -84,6 +84,14 @@ public final class ModuleManager {
         return activate(module, false);
     }
 
+    /** Deactivates a module if it is running, without touching what modules.yml requests. */
+    public void disableIfActive(final String id) {
+        final Module module = modules.get(id);
+        if (module != null && isActive(id)) {
+            deactivate(module, false);
+        }
+    }
+
     public boolean toggle(final String id) {
         final Module module = modules.get(id);
         if (module == null) {

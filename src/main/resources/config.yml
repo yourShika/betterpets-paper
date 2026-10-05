@@ -4,7 +4,8 @@
 # ║  Every option is documented below. Missing options are added automatically ║
 # ║  on start and your existing values are kept, so updates never wipe your     ║
 # ║  settings. Sections:                                                        ║
-# ║    1) Language      2) General        3) Pet following & abilities          ║
+# ║    1) Language      2) General (2b Quickslots)                              ║
+# ║    3) Pet following & abilities                                             ║
 # ║    4) XP & boosters 5) Flight         6) Pet sources                        ║
 # ║    7) Broadcasts    8) Storage        9) 3D models                          ║
 # ║   10) Modules      11) Auto-updater  12) Debug                              ║
@@ -49,6 +50,43 @@ gui:
 #     - penguin
 #     - dragon
 disabled-pets: []
+
+
+# ═══ 2b) QUICKSLOTS ═════════════════════════════════════════════════════════
+# Quickslots let a player park pets in numbered slots and switch between them
+# without opening the menu. Slots are filled with
+#     /pets quick set <slot> [pet]      (no pet named = the pet that is out)
+# or in the slot screen of the optional Fabric mod. A slot remembers the pet
+# TYPE, so it keeps working after the pet was converted to an item and back.
+quickslots:
+  # Master switch for the whole feature.
+  enabled: true
+  # How many quickslots every player has (1 - 9).
+  slots: 5
+  # Minimum time (ticks, 20 = 1 second) between two quick switches.
+  switch-cooldown-ticks: 10
+  # Using the slot of the pet that is already out puts that pet away again.
+  same-slot-puts-away: true
+
+  # Which ways of switching are allowed on this server - turn off whatever you
+  # do not want. Filling slots (/pets quick set|clear|list) always works.
+  methods:
+    # /pets quick <slot> | next | prev | off
+    commands: true
+    # Sneak and turn the mouse wheel to step through your quickslots.
+    # NEEDS the PacketEvents plugin (2.13.0+ for Minecraft 26.2). Without it
+    # this method simply stays off; nothing else is affected.
+    sneak-scroll: true
+    # The "Better Pets Quickslots" Fabric mod: freely bindable keys, a slot
+    # screen and a Quickslots button in the /pets menu. Players without the
+    # mod are not affected in any way.
+    mod: true
+
+  sneak-scroll:
+    # Whether sneak+scroll starts switched on for players. Everyone can change
+    # it for themselves with  /pets quick scroll on|off.  It only ever takes
+    # over the wheel of players who have filled at least one quickslot.
+    default-on: true
 
 
 # ═══ 3) PET FOLLOWING & ABILITIES ═══════════════════════════════════════════

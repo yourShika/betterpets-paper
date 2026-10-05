@@ -11,6 +11,9 @@ $paperApi = Join-Path $root "lib\paper-api-$paperVersion.jar"
 $externalLibraryRoot = 'C:\Users\Kamil Bura\Desktop\Neuer Ordner (6)\libraries'
 $compileOnlyLibs = Join-Path $root 'target\compile-libs'
 $betterModelVersion = '3.2.0'
+# PacketEvents is optional at runtime (sneak+scroll quickslots); its API is only needed to compile the
+# hook. 2.13.0 is the first release that supports Minecraft 26.2.
+$packetEventsVersion = '2.13.0'
 
 if (-not (Test-Path -LiteralPath $paperApi)) {
     New-Item -ItemType Directory -Force (Split-Path -Parent $paperApi) | Out-Null
@@ -52,6 +55,9 @@ $betterModelBukkitApi = Ensure-CompileJar `
 $betterModelApi = Ensure-CompileJar `
     "https://repo.maven.apache.org/maven2/io/github/toxicity188/bettermodel-api/$betterModelVersion/bettermodel-api-$betterModelVersion.jar" `
     "bettermodel-api-$betterModelVersion.jar"
+$packetEventsApi = Ensure-CompileJar `
+    "https://repo.codemc.io/repository/maven-releases/com/github/retrooper/packetevents-api/$packetEventsVersion/packetevents-api-$packetEventsVersion.jar" `
+    "packetevents-api-$packetEventsVersion.jar"
 
 # Adventure 5.x, matching what Paper 26.2 is compiled against.
 $adventureJars = @()
@@ -63,7 +69,7 @@ foreach ($artifact in @('adventure-api', 'adventure-key', 'adventure-text-minime
 
 # Order matters: Paper + Adventure 5.x must precede the external server-library folder,
 # which still contains older Adventure 4.x jars that would otherwise shadow them.
-$classpathJars = @($paperApi) + $adventureJars + @($betterModelBukkitApi, $betterModelApi)
+$classpathJars = @($paperApi) + $adventureJars + @($betterModelBukkitApi, $betterModelApi, $packetEventsApi)
 if (Test-Path -LiteralPath $externalLibraryRoot) {
     $classpathJars += Get-ChildItem -Path $externalLibraryRoot -Recurse -Filter '*.jar' | ForEach-Object { $_.FullName }
 }

@@ -31,6 +31,15 @@ public final class PlayerPetData {
     private int tokens;
     // Last known player name, refreshed on join, so leaderboards can show names without blocking UUID lookups.
     private String playerName;
+    // Quickslots: the pet (by definition id, lowercase) parked in each slot, null = empty. Keyed by the
+    // definition rather than the pet's UUID because a player owns at most one pet per definition and a
+    // pet gets a new UUID when it is converted to an item and added back - so a slot survives that trip.
+    private final String[] quickslots = new String[MAX_QUICKSLOTS];
+    // The player's own choice for the sneak+scroll quick switch; null = follow the server default.
+    private Boolean quickScroll;
+
+    /** Upper bound of quickslots a player can have (the server may allow fewer). */
+    public static final int MAX_QUICKSLOTS = 9;
 
     public List<OwnedPet> pets() {
         return pets;
@@ -129,8 +138,83 @@ public final class PlayerPetData {
     public boolean isEmpty() {
         return pets.isEmpty() && tokens == 0 && activePet == null && boosterTier == 0
             && playerName == null && visible && !broadcastsMuted
+            && quickScroll == null && !hasQuickslots()
             && unlockedVariants.values().stream().allMatch(java.util.Set::isEmpty)
             && unlockedCosmetics.values().stream().allMatch(java.util.Set::isEmpty);
+    }
+
+    /** The pet definition id parked in a quickslot (0-based), or null if the slot is empty or out of range. */
+    public String quickslot(final int index) {
+        return index >= 0 && index < MAX_QUICKSLOTS ? quickslots[index] : null;
+    }
+
+    /**
+     * Parks a pet definition in a quickslot ({@code null}/blank clears it). A pet lives in at most one
+     * slot, so assigning it somewhere else moves it there.
+     */
+    public void setQuickslot(final int index, final String petId) {
+        if (index < 0 || index >= MAX_QUICKSLOTS) {
+            return;
+        }
+        final String normalized = petId == null || petId.isBlank() ? null : petId.toLowerCase(Locale.ROOT);
+        if (normalized != null) {
+            for (int i = 0; i < MAX_QUICKSLOTS; i++) {
+                if (normalized.equals(quickslots[i])) {
+                    quickslots[i] = null;
+                }
+            }
+        }
+        quickslots[index] = normalized;
+    }
+
+    /** The quickslot (0-based) holding the given pet definition, or -1. */
+    public int quickslotOf(final String petId) {
+        if (petId == null) {
+            return -1;
+        }
+        final String normalized = petId.toLowerCase(Locale.ROOT);
+        for (int i = 0; i < MAX_QUICKSLOTS; i++) {
+            if (normalized.equals(quickslots[i])) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public boolean hasQuickslots() {
+        for (final String slot : quickslots) {
+            if (slot != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void clearQuickslots() {
+        java.util.Arrays.fill(quickslots, null);
+    }
+
+    /** The player's sneak+scroll preference, or null if they never chose (server default applies). */
+    public Boolean quickScroll() {
+        return quickScroll;
+    }
+
+    public void setQuickScroll(final Boolean quickScroll) {
+        this.quickScroll = quickScroll;
+    }
+
+    /** The owned pet of a definition (a player owns at most one), preferring the highest level if legacy data has several. */
+    public Optional<OwnedPet> findByDefinition(final String definitionId) {
+        if (definitionId == null) {
+            return Optional.empty();
+        }
+        OwnedPet best = null;
+        for (final OwnedPet pet : pets) {
+            if (pet.definitionId().equalsIgnoreCase(definitionId) && (best == null || pet.level() > best.level())) {
+                best = pet;
+            }
+        }
+        return Optional.ofNullable(best);
     }
 
     /** Unlocks a cosmetic variant for a pet definition (per player). Returns true if newly added. */

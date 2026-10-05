@@ -1,5 +1,8 @@
 package de.kamil.betterpets;
 
+import de.kamil.betterpets.quickslots.QuickslotLogic;
+import de.kamil.betterpets.quickslots.QuickslotProtocol;
+
 /**
  * Lightweight, dependency-free regression tests for the pure logic (no Bukkit server needed).
  * Run with test.ps1. Exits non-zero if any assertion fails, so it can gate a build.
@@ -22,6 +25,10 @@ public final class PetTests {
         fusionStars();
         starAbilityScaling();
         ascensionTracks();
+        quickslotData();
+        quickslotStepping();
+        quickslotScrollDirection();
+        quickslotProtocol();
 
         System.out.println();
         System.out.println("Passed: " + passed + "   Failed: " + failed);
@@ -181,6 +188,148 @@ public final class PetTests {
         eq("aquatic pet", Ascension.track("water_serpent"), Ascension.Track.AQUATIC);
         eq("mystic pet", Ascension.track("owl"), Ascension.Track.MYSTIC);
         eq("unknown defaults to mystic", Ascension.track("does_not_exist"), Ascension.Track.MYSTIC);
+    }
+
+    private static void quickslotData() {
+        final PlayerPetData data = new PlayerPetData();
+        eq("no quickslots initially", data.hasQuickslots(), false);
+        eq("fresh record is empty", data.isEmpty(), true);
+        data.setQuickslot(0, "Penguin");
+        eq("slot stores lowercase id", data.quickslot(0), "penguin");
+        eq("quickslotOf is case-insensitive", data.quickslotOf("PENGUIN"), 0);
+        eq("filled slot makes the record non-empty", data.isEmpty(), false);
+        // A pet lives in one slot only: parking it elsewhere moves it.
+        data.setQuickslot(3, "penguin");
+        eq("moved out of the old slot", data.quickslot(0), null);
+        eq("moved into the new slot", data.quickslotOf("penguin"), 3);
+        data.setQuickslot(1, "dragon");
+        data.setQuickslot(1, "tiger");
+        eq("assigning replaces the slot's pet", data.quickslot(1), "tiger");
+        eq("replaced pet is in no slot", data.quickslotOf("dragon"), -1);
+        data.setQuickslot(3, "  ");
+        eq("blank clears the slot", data.quickslot(3), null);
+        data.setQuickslot(-1, "cat");
+        data.setQuickslot(PlayerPetData.MAX_QUICKSLOTS, "cat");
+        eq("out-of-range writes are ignored", data.quickslotOf("cat"), -1);
+        eq("out-of-range reads are null", data.quickslot(99), null);
+        data.clearQuickslots();
+        eq("clearQuickslots empties everything", data.hasQuickslots(), false);
+
+        eq("scroll preference unset by default", data.quickScroll(), null);
+        data.setQuickScroll(false);
+        eq("a scroll choice makes the record non-empty", data.isEmpty(), false);
+
+        // A slot names the pet type, so it finds the pet again after a convert/re-add gave it a new UUID.
+        final PlayerPetData owner = new PlayerPetData();
+        owner.setQuickslot(0, "dog");
+        eq("slot pet not owned yet", owner.findByDefinition("dog").isPresent(), false);
+        owner.pets().add(OwnedPet.create("dog", 7));
+        eq("slot pet found once owned", owner.findByDefinition("DOG").map(OwnedPet::level).orElse(-1), 7);
+        owner.pets().add(OwnedPet.create("dog", 30));
+        eq("legacy duplicates resolve to the highest level", owner.findByDefinition("dog").map(OwnedPet::level).orElse(-1), 30);
+    }
+
+    private static void quickslotStepping() {
+        final boolean[] usable = {true, false, true, false, true};
+        eq("next from 0 skips the gap", QuickslotLogic.step(usable, 0, 1), 2);
+        eq("next from 4 wraps to 0", QuickslotLogic.step(usable, 4, 1), 0);
+        eq("prev from 0 wraps to 4", QuickslotLogic.step(usable, 0, -1), 4);
+        eq("prev from 2 goes to 0", QuickslotLogic.step(usable, 2, -1), 0);
+        eq("next from an unusable slot", QuickslotLogic.step(usable, 1, 1), 2);
+        eq("no active slot: next starts at the first", QuickslotLogic.step(usable, -1, 1), 0);
+        eq("no active slot: prev starts at the last", QuickslotLogic.step(usable, -1, -1), 4);
+        eq("out-of-range current counts as none", QuickslotLogic.step(usable, 9, 1), 0);
+        eq("nothing usable", QuickslotLogic.step(new boolean[]{false, false}, 0, 1), -1);
+        eq("no slots at all", QuickslotLogic.step(new boolean[0], -1, 1), -1);
+        eq("single usable slot returns itself", QuickslotLogic.step(new boolean[]{false, true, false}, 1, 1), 1);
+
+        eq("parseSlot is 1-based", QuickslotLogic.parseSlot("1", 5), 0);
+        eq("parseSlot upper bound", QuickslotLogic.parseSlot(" 5 ", 5), 4);
+        eq("parseSlot above the slot count", QuickslotLogic.parseSlot("6", 5), -1);
+        eq("parseSlot zero", QuickslotLogic.parseSlot("0", 5), -1);
+        eq("parseSlot text", QuickslotLogic.parseSlot("next", 5), -1);
+        eq("parseSlot null", QuickslotLogic.parseSlot(null, 5), -1);
+    }
+
+    private static void quickslotScrollDirection() {
+        eq("one slot right is a forward notch", QuickslotLogic.scrollDirection(3, 4), 1);
+        eq("one slot left is a backward notch", QuickslotLogic.scrollDirection(3, 2), -1);
+        eq("8 -> 0 wraps forward", QuickslotLogic.scrollDirection(8, 0), 1);
+        eq("0 -> 8 wraps backward", QuickslotLogic.scrollDirection(0, 8), -1);
+        // Number keys must stay normal hotbar changes: only a single-notch move counts as scrolling.
+        eq("a jump is not a scroll", QuickslotLogic.scrollDirection(0, 4), 0);
+        eq("two slots is not a scroll", QuickslotLogic.scrollDirection(2, 4), 0);
+        eq("same slot is not a scroll", QuickslotLogic.scrollDirection(5, 5), 0);
+    }
+
+    private static void quickslotProtocol() {
+        eq("channel id", QuickslotProtocol.CHANNEL,
+            QuickslotProtocol.CHANNEL_NAMESPACE + ":" + QuickslotProtocol.CHANNEL_PATH);
+        eq("slot cap matches the data model", QuickslotProtocol.MAX_SLOTS, PlayerPetData.MAX_QUICKSLOTS);
+        try {
+            // Every client message survives encode -> decode unchanged (records compare by value).
+            final java.util.List<QuickslotProtocol.ClientMessage> clientMessages = java.util.List.of(
+                new QuickslotProtocol.Hello(7),
+                new QuickslotProtocol.RequestPets(),
+                new QuickslotProtocol.Assign(4, "blue_dragon"),
+                new QuickslotProtocol.Assign(0, ""),
+                new QuickslotProtocol.Switch(8),
+                new QuickslotProtocol.Cycle(1),
+                new QuickslotProtocol.Cycle(-1),
+                new QuickslotProtocol.Despawn());
+            for (final var message : clientMessages) {
+                eq("client round-trip " + message, QuickslotProtocol.decodeClient(
+                    QuickslotProtocol.encode(message)), message);
+            }
+
+            final var pet = new QuickslotProtocol.Pet("penguin", "Pingu ❄", "Penguin", "Legendary",
+                0xFFAA00, 100, 5, true, "eyJ0ZXh0dXJlcyI6e319", "Treasure sense.\n+12 blocks");
+            final java.util.List<QuickslotProtocol.ServerMessage> serverMessages = java.util.List.of(
+                new QuickslotProtocol.State(1, true, java.util.List.of("penguin", "", "dog"), "dog", 500, true, -42),
+                new QuickslotProtocol.State(1, false, java.util.List.of(), "", 0, false, 0),
+                new QuickslotProtocol.Pets(99, java.util.List.of(pet, pet)),
+                new QuickslotProtocol.Pets(0, java.util.List.of()),
+                new QuickslotProtocol.OpenScreen(),
+                new QuickslotProtocol.MenuOpened());
+            for (final var message : serverMessages) {
+                eq("server round-trip " + message.getClass().getSimpleName(), QuickslotProtocol.decodeServer(
+                    QuickslotProtocol.encode(message)), message);
+            }
+
+            // Forward compatibility: an unknown opcode is ignored, trailing bytes from a newer peer too.
+            eq("unknown client opcode is ignored", QuickslotProtocol.decodeClient(new byte[]{(byte) 200}), null);
+            eq("unknown server opcode is ignored", QuickslotProtocol.decodeServer(new byte[]{(byte) 200}), null);
+            final byte[] switchBytes = QuickslotProtocol.encode(new QuickslotProtocol.Switch(2));
+            final byte[] extended = java.util.Arrays.copyOf(switchBytes, switchBytes.length + 5);
+            eq("trailing bytes are ignored", QuickslotProtocol.decodeClient(extended),
+                new QuickslotProtocol.Switch(2));
+        } catch (final java.io.IOException exception) {
+            eq("valid messages decode without an IOException", exception.toString(), "no exception");
+        }
+
+        // Malformed input must be reported, never half-read into a message.
+        boolean truncatedRejected = false;
+        try {
+            QuickslotProtocol.decodeClient(new byte[]{3, 1});
+        } catch (final java.io.IOException expected) {
+            truncatedRejected = true;
+        }
+        eq("truncated message is rejected", truncatedRejected, true);
+        boolean emptyRejected = false;
+        try {
+            QuickslotProtocol.decodeServer(new byte[0]);
+        } catch (final java.io.IOException expected) {
+            emptyRejected = true;
+        }
+        eq("empty message is rejected", emptyRejected, true);
+        boolean oversizedRejected = false;
+        try {
+            // A state claiming 200 slots: far above the cap, so it is refused rather than read.
+            QuickslotProtocol.decodeServer(new byte[]{1, 0, 0, 0, 1, 1, (byte) 200});
+        } catch (final java.io.IOException expected) {
+            oversizedRejected = true;
+        }
+        eq("oversized slot count is rejected", oversizedRejected, true);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

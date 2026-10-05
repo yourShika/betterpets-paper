@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.9.3-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.32.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -23,6 +23,29 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.32.0
+
+### ⚡ Quickslots — switch pets without opening the menu
+
+Park your favourite pets in numbered slots and swap between them instantly.
+
+* 🎛️ **Three ways to switch**, each of which a server can turn off in `config.yml`:
+  * **Commands** — `/pets quick <slot>`, `next`, `prev`, `off`.
+  * **Sneak + mouse wheel** — steps through your slots. Needs the **PacketEvents** plugin (2.13.0+); without it this method simply stays off.
+  * **[Better Pets Quickslots](https://github.com/yourShika/betterpets-quickslots)** — an optional Fabric mod with freely bindable keys, a slot screen and a Quickslots button in the `/pets` menu.
+* 📌 **Slots remember the pet type**, so a slot keeps working after the pet was converted to an item and added back.
+* 🧩 Fill slots with `/pets quick set <slot> [pet]` (no pet named = the pet that is out) and list them with `/pets quick`.
+* 🔒 New permission `betterpets.quickslots` (default: everyone).
+
+See [Quickslots](#-quickslots) below for the details.
+
+### 🛠️ Fixes
+
+* 🎨 The **Oraxen menu skin no longer switches off after `/pets reload`**.
+* 📝 Options added by an update now arrive in an existing `config.yml` **together with their explanatory comments** (they used to show up as bare keys).
 
 ---
 
@@ -246,10 +269,11 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 
 | Requirement         | Version / Info                                            |
 | ------------------- | --------------------------------------------------------- |
-| Minecraft / Paper   | `26.1.2`                                                  |
+| Minecraft / Paper   | `26.2`                                                    |
 | Java                | `21` (Java `25` recommended when using BetterModel 3.x)   |
 | Optional Dependency | LuckPerms for permission assignment                       |
 | Optional Dependency | BetterModel `3.x` for animated `.bbmodel` pets            |
+| Optional Dependency | PacketEvents `2.13.0+` for sneak + mouse wheel quickslots |
 
 ---
 
@@ -266,6 +290,7 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 * 🐉 Dragon mount flight unlocked from level 50
 * 🏛️ Chest loot integration for vanilla **and** custom structure containers
 * 🧩 Optional 3D pet rendering through BetterModel, with a clean head fallback
+* ⚡ Quickslots: switch pets by command, sneak + mouse wheel, or freely bindable keys (optional Fabric mod)
 
 ---
 
@@ -285,6 +310,11 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 | `/pets reload`                           | Reloads config, modules, models, pets    |
 | `/pets give <pet\|all> [level] [player]` | Gives test pet items                     |
 | `/pets xpboost give <x2-x5> <time> [player]` | Gives Pet XP Booster items          |
+| `/pets quick`                            | Lists your quickslots                    |
+| `/pets quick set <slot> [pet]`           | Parks a pet in a quickslot               |
+| `/pets quick clear <slot\|all>`          | Empties a quickslot                      |
+| `/pets quick <slot>\|next\|prev\|off`     | Switches pets / puts the pet away        |
+| `/pets quick scroll [on\|off]`           | Toggles sneak + mouse wheel for yourself |
 
 ---
 
@@ -296,7 +326,40 @@ Everything is handled directly through the plugin. Optional animated 3D models a
 | `betterpets.info`         | Allows opening the pet catalogue                                    |
 | `betterpets.chances`      | Allows editing spawn chances, broadcasts, and XP multiplier         |
 | `betterpets.give`         | Allows giving test pet items                                        |
+| `betterpets.quickslots`   | Allows filling and using pet quickslots (default: everyone)         |
 | `betterpets.admin`        | Grants all admin actions, including `/pets modules` and `/pets reload` |
+
+---
+
+## ⚡ Quickslots
+
+Quickslots let a player park pets in numbered slots and switch between them without opening the menu.
+Slots are filled with `/pets quick set <slot> [pet]` — or in the slot screen of the mod.
+
+| Method              | How                                                      | Needs                                                                                             |
+| ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Commands            | `/pets quick <slot>`, `next`, `prev`, `off`              | nothing                                                                                           |
+| Sneak + mouse wheel | hold sneak and scroll                                    | the [PacketEvents](https://github.com/retrooper/packetevents) plugin, `2.13.0+`                   |
+| Key bindings        | freely bindable keys, a slot screen, a button in `/pets` | the [Better Pets Quickslots](https://github.com/yourShika/betterpets-quickslots) Fabric mod (client) |
+
+```yaml
+quickslots:
+  enabled: true
+  slots: 5                    # 1 - 9 per player
+  switch-cooldown-ticks: 10
+  same-slot-puts-away: true   # using the slot of the pet that is out puts it away
+  methods:                    # turn off whatever you do not want on your server
+    commands: true
+    sneak-scroll: true        # only ever active with PacketEvents installed
+    mod: true
+  sneak-scroll:
+    default-on: true          # each player can toggle it: /pets quick scroll on|off
+```
+
+* A slot remembers the pet **type**, so it survives converting the pet to an item and adding it back.
+* Every method follows the same rules as the menu: a disabled pet cannot be summoned, and an Alpaca that still carries items cannot be swapped out.
+* Sneak + mouse wheel only ever takes over the wheel of players who filled at least one quickslot. A single wheel notch switches pets; number keys keep changing the hotbar as usual.
+* Players without the mod are not affected by it, and the mod does nothing on servers without this plugin.
 
 ---
 
@@ -438,7 +501,7 @@ Local fallback build script:
 The output jar is created at:
 
 ```text
-target/better-pets-26.1.2-plugin.jar
+target/better-pets-26.2-plugin.jar
 ```
 
 ---
@@ -446,7 +509,7 @@ target/better-pets-26.1.2-plugin.jar
 ## 📦 Installation
 
 1. Build the jar (or download it from the [latest release](https://github.com/yourShika/betterpets-paper/releases/latest)).
-2. Put `better-pets-26.1.2-plugin.jar` into the Paper server's `plugins` folder.
+2. Put `better-pets-26.2-plugin.jar` into the Paper server's `plugins` folder.
 3. Install **BetterModel** only if you want animated 3D models.
 4. Start the server once to generate config and storage files.
 5. Use LuckPerms or `paper-plugin.yml` defaults to assign permissions.
