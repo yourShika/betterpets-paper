@@ -640,8 +640,14 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
                 final UUID closerId = event.getPlayer().getUniqueId();
                 // Someone who is leaving gets them on the next join instead of into the inventory now:
                 // if that turned out to be full, the pets would lie on the ground with nobody there.
-                final Player closer = event.getReason() != InventoryCloseEvent.Reason.DISCONNECT
-                    && event.getPlayer() instanceof Player player ? player : null;
+                // A leaving player's window rarely closes with DISCONNECT, though. The server usually
+                // notices a moment earlier, while ticking the player, that the connection is gone and
+                // that the window "cannot be used" any more - which is also what it says about a player
+                // who is asleep. So in both cases the pets are put aside, and whoever turns out to be
+                // still there a tick later gets them at once (finishCancelledTrade).
+                final InventoryCloseEvent.Reason reason = event.getReason();
+                final boolean going = reason == InventoryCloseEvent.Reason.DISCONNECT || reason == InventoryCloseEvent.Reason.CANT_USE;
+                final Player closer = !going && event.getPlayer() instanceof Player player ? player : null;
                 returnOfferedItems(tradeHolder, closerId, closer);
                 final UUID otherId = tradeHolder.isInitiator(closerId) ? tradeHolder.partner() : tradeHolder.initiator();
                 returnOfferedItems(tradeHolder, otherId, Bukkit.getPlayer(otherId));
@@ -4230,6 +4236,8 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         for (final UUID id : new UUID[]{holder.initiator(), holder.partner()}) {
             final Player p = Bukkit.getPlayer(id);
             if (p != null) {
+                // What was put aside for someone who then turned out not to be leaving after all.
+                deliverPendingTradeReturns(p);
                 p.sendMessage(lang.colored("trade.cancelled", NamedTextColor.YELLOW));
                 if (p.getOpenInventory().getTopInventory().getHolder() == holder) {
                     p.closeInventory();

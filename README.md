@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.33.1-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.33.2-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -23,6 +23,20 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.33.2
+
+### 🧪 Run on a real server — and one fix that came out of it
+
+Everything in 1.33.1 had been reasoned through, reviewed and checked against the server's own code, but not run. Now it has been: a new end-to-end test ([`e2e/`](e2e/run-e2e.sh)) starts a real Paper 26.2 server with the plugin, has real game clients with the Quickslots mod join it, and then does as a player what 1.33.1 was about — breaks blocks with each of the pets concerned (shulker boxes, cauldrons, ores with and without Silk Touch, chests with things in them, blocks with a torch on top), fishes, reopens the Alpaca storage, converts pets and takes them in again, trades, dies and gets kicked in the middle of a trade, and restarts the server in between. **50 checks, all green.**
+
+It found one thing that reading alone had not:
+
+* 🤝 A player who is **kicked or loses the connection during a trade** got the pets they had offered put straight back into the inventory — and dropped where they stood if it was full. Paper closes the window of such a player as "cannot be used", a moment before it treats them as gone, so the plugin took them for someone who was still there. Their pets are now put aside and handed over on the next join, which is what 1.33.1 said it did.
+
+Nothing else changes.
 
 ---
 

@@ -1,0 +1,6 @@
+name: BetterPetsE2E
+version: '1.0'
+main: de.kamil.betterpets.e2e.E2EPlugin
+api-version: '26.2'
+description: End-to-end checks for Better Pets. Only ever installed on the throw-away test server.
+depend: [BetterPets]
