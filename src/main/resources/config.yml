@@ -68,6 +68,17 @@ quickslots:
   # Using the slot of the pet that is already out puts that pet away again.
   same-slot-puts-away: true
 
+  # Guard against hammering the switch (a held key, a macro, a spammed command).
+  # The cooldown above is the minimum gap between two switches; on top of it,
+  # too many switches in a short time lock quick switching for a moment.
+  spam-protection:
+    enabled: true
+    # More than this many switches inside the window ...
+    max-switches: 8
+    window-seconds: 10
+    # ... lock quick switching for this long.
+    lockout-seconds: 5
+
   # Which ways of switching are allowed on this server - turn off whatever you
   # do not want. Filling slots (/pets quick set|clear|list) always works.
   methods:

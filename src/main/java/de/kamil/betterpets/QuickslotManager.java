@@ -3,6 +3,7 @@ package de.kamil.betterpets;
 import de.kamil.betterpets.quickslots.HeldSlotInterceptor;
 import de.kamil.betterpets.quickslots.QuickslotLogic;
 import de.kamil.betterpets.quickslots.QuickslotProtocol;
+import de.kamil.betterpets.quickslots.SwitchLimiter;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
@@ -51,8 +52,11 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
 
     /** A mod may ask for the pet list at most this often; the list is pushed on its own whenever it changes. */
     private static final long REQUEST_MIN_INTERVAL_MILLIS = 500L;
-    /** Messages a single client may send per second before the rest are dropped. */
-    private static final int MAX_MESSAGES_PER_SECOND = 60;
+    /**
+     * Messages a single client may send per second before the rest are dropped unanswered. Honest use is
+     * a handful (a click per parked pet, a key press per switch); the mod itself never repeats a held key.
+     */
+    private static final int MAX_MESSAGES_PER_SECOND = 20;
     /** Hotbar changes this soon after a swallowed scroll notch belong to the same wheel gesture. */
     private static final long SCROLL_GESTURE_MILLIS = 250L;
 
@@ -80,12 +84,13 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
     private boolean commandsEnabled;
     private boolean sneakScrollEnabled;
     private boolean modEnabled;
-    private long cooldownMillis;
     private boolean sameSlotPutsAway;
     private boolean scrollDefaultOn;
+    private SwitchLimiter.Rules limits;
 
     // --- runtime ---
-    private final Map<UUID, Long> lastSwitch = new HashMap<>();
+    // One spam guard per player, created on their first quick switch with the limits of that moment.
+    private final Map<UUID, SwitchLimiter> limiters = new HashMap<>();
     private final Map<UUID, ModClient> modClients = new HashMap<>();
     private BukkitTask syncTask;
     // Sneak+scroll state. Written on the main thread, read by the network thread, hence concurrent.
@@ -107,10 +112,17 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         commandsEnabled = config.getBoolean("quickslots.methods.commands", true);
         sneakScrollEnabled = config.getBoolean("quickslots.methods.sneak-scroll", true);
         modEnabled = config.getBoolean("quickslots.methods.mod", true);
-        cooldownMillis = Math.max(0L, config.getLong("quickslots.switch-cooldown-ticks", 10L)) * 50L;
         sameSlotPutsAway = config.getBoolean("quickslots.same-slot-puts-away", true);
         scrollDefaultOn = config.getBoolean("quickslots.sneak-scroll.default-on", true);
-        // Anyone currently armed was armed under the old settings; they re-arm on their next sneak.
+        final boolean burstGuard = config.getBoolean("quickslots.spam-protection.enabled", true);
+        limits = new SwitchLimiter.Rules(
+            config.getLong("quickslots.switch-cooldown-ticks", 10L) * 50L,
+            burstGuard ? config.getInt("quickslots.spam-protection.max-switches", 8) : 0,
+            config.getLong("quickslots.spam-protection.window-seconds", 10L) * 1000L,
+            config.getLong("quickslots.spam-protection.lockout-seconds", 5L) * 1000L);
+        // The guards carry the old limits, and anyone currently armed was armed under the old settings
+        // (they re-arm on their next sneak).
+        limiters.clear();
         armedSlots.clear();
     }
 
@@ -134,7 +146,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         modClients.clear();
         armedSlots.clear();
         lastIntercept.clear();
-        lastSwitch.clear();
+        limiters.clear();
     }
 
     /** Whether the server wants the sneak+scroll method (the PacketEvents module is enabled for it). */
@@ -174,11 +186,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             actionBar(player, "quickslots.already-out", NamedTextColor.GRAY, "%pet%", displayName(pet));
             return false;
         }
-        if (onCooldown(player)) {
-            // A wheel naturally produces several notches; staying quiet there avoids action-bar spam.
-            if (source != Source.SCROLL) {
-                actionBar(player, "quickslots.cooldown", NamedTextColor.GRAY);
-            }
+        if (throttled(player, source)) {
             return false;
         }
         switch (plugin.summonPet(player, data, pet)) {
@@ -191,10 +199,10 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
                 return false;
             }
             case SUMMONED -> {
-                lastSwitch.put(player.getUniqueId(), System.currentTimeMillis());
                 player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.6F, 1.5F);
                 // The mod draws its own slot bar when the state changes, so its key presses need no text.
-                if (source != Source.MOD) {
+                // If this switch tripped the spam lock, that notice takes the action bar instead.
+                if (!noteSwitch(player) && source != Source.MOD) {
                     actionBar(player, "quickslots.switched", NamedTextColor.GREEN,
                         "%slot%", Integer.toString(slot + 1), "%pet%", displayName(pet), "%level%", Integer.toString(pet.level()));
                 }
@@ -249,19 +257,15 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             actionBar(player, "messages.alpaca-storage-not-empty", NamedTextColor.RED);
             return false;
         }
-        if (onCooldown(player)) {
-            if (source != Source.SCROLL) {
-                actionBar(player, "quickslots.cooldown", NamedTextColor.GRAY);
-            }
+        if (throttled(player, source)) {
             return false;
         }
         // Like a quick switch, putting a pet away is not saved on the spot: the plugin's save rewrites
         // the whole data file, which is too heavy for something a key can trigger twice a second. The
         // auto-save and the save on quit pick it up.
         plugin.activePetManager().despawn(player, true);
-        lastSwitch.put(player.getUniqueId(), System.currentTimeMillis());
         player.playSound(player.getLocation(), Sound.ENTITY_ITEM_PICKUP, 0.6F, 0.9F);
-        if (source != Source.MOD) {
+        if (!noteSwitch(player) && source != Source.MOD) {
             actionBar(player, "quickslots.put-away", NamedTextColor.GRAY);
         }
         pushState(player);
@@ -289,9 +293,51 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         return methodOn;
     }
 
-    private boolean onCooldown(final Player player) {
-        final Long last = lastSwitch.get(player.getUniqueId());
-        return last != null && System.currentTimeMillis() - last < cooldownMillis;
+    /**
+     * Refuses a switch that comes too soon after the last one or during a spam lock, and tells the
+     * player why.
+     */
+    private boolean throttled(final Player player, final Source source) {
+        final SwitchLimiter limiter = limiters.get(player.getUniqueId());
+        if (limiter == null) {
+            return false;
+        }
+        final long now = System.currentTimeMillis();
+        return switch (limiter.check(now)) {
+            case ALLOWED -> false;
+            case COOLDOWN -> {
+                // A wheel naturally produces several notches; staying quiet there avoids action-bar spam.
+                if (source != Source.SCROLL) {
+                    actionBar(player, "quickslots.cooldown", NamedTextColor.GRAY);
+                }
+                yield true;
+            }
+            case LOCKED -> {
+                actionBar(player, "quickslots.locked", NamedTextColor.RED, "%seconds%", seconds(limiter.lockRemaining(now)));
+                yield true;
+            }
+        };
+    }
+
+    /**
+     * Counts a switch that was carried out.
+     *
+     * @return {@code true} if it was one too many and quick switching is locked now (the player is told)
+     */
+    private boolean noteSwitch(final Player player) {
+        final long now = System.currentTimeMillis();
+        final SwitchLimiter limiter = limiters.computeIfAbsent(player.getUniqueId(), id -> new SwitchLimiter(limits));
+        if (!limiter.record(now)) {
+            return false;
+        }
+        actionBar(player, "quickslots.locked", NamedTextColor.RED, "%seconds%", seconds(limiter.lockRemaining(now)));
+        player.playSound(player.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.6F, 0.7F);
+        return true;
+    }
+
+    /** Milliseconds as whole seconds, rounded up - "locked for 0s" would read as not locked. */
+    private static String seconds(final long millis) {
+        return Long.toString((millis + 999L) / 1000L);
     }
 
     // ------------------------------------------------------------------------------------------------
@@ -607,7 +653,7 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
         final UUID id = event.getPlayer().getUniqueId();
         armedSlots.remove(id);
         lastIntercept.remove(id);
-        lastSwitch.remove(id);
+        limiters.remove(id);
         modClients.remove(id);
     }
 
@@ -782,7 +828,10 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             client.petsRevision = revision;
         }
         final QuickslotProtocol.State state = buildState(player, data, revision);
-        final int hash = state.hashCode();
+        // The remaining lock time shrinks by the millisecond; for "did anything change" only whether
+        // there is a lock counts, or a locked player would be sent the state on every single pass.
+        final int hash = java.util.Objects.hash(state.enabled(), state.slots(), state.activeId(), state.cooldownMillis(),
+            state.sameSlotDespawns(), state.petsRevision(), state.lockoutMillis() > 0);
         if (force || !client.stateSent || client.stateHash != hash) {
             send(player, state);
             client.stateSent = true;
@@ -796,14 +845,16 @@ final class QuickslotManager implements Listener, PluginMessageListener, HeldSlo
             final String petId = data.quickslot(slot);
             slots.add(petId == null ? "" : petId);
         }
+        final SwitchLimiter limiter = limiters.get(player.getUniqueId());
         return new QuickslotProtocol.State(
             QuickslotProtocol.VERSION,
             enabled && modEnabled && plugin.has(player, PERMISSION),
             slots,
             data.activePet().map(OwnedPet::definitionId).orElse(""),
-            (int) Math.min(Integer.MAX_VALUE, cooldownMillis),
+            (int) Math.min(Integer.MAX_VALUE, limits.cooldownMillis()),
             sameSlotPutsAway,
-            petsRevision);
+            petsRevision,
+            limiter == null ? 0 : (int) Math.min(Integer.MAX_VALUE, limiter.lockRemaining(System.currentTimeMillis())));
     }
 
     private List<QuickslotProtocol.Pet> buildPets(final PlayerPetData data) {

@@ -451,6 +451,7 @@ quickslots:
   missing-pet: "You do not own the %pet% from quickslot %slot% right now."
   already-out: "%pet% is already out."
   cooldown: "Not so fast..."
+  locked: "Too many switches - quickslots are locked for %seconds%s."
   switched: "▶ %pet%  <gray>[Lvl %level%]  ·  Slot %slot%"
   put-away: "Pet put away."
   none-assigned: "No quickslot filled yet - use /pets quick set <slot>."

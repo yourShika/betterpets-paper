@@ -439,6 +439,7 @@ quickslots:
   missing-pet: "Nie posiadasz teraz zwierzaka %pet% ze slotu %slot%."
   already-out: "%pet% jest juz przywolany."
   cooldown: "Nie tak szybko..."
+  locked: "Za duzo zmian - szybkie sloty sa zablokowane na %seconds%s."
   switched: "▶ %pet%  <gray>[Lvl %level%]  ·  Slot %slot%"
   put-away: "Zwierzak schowany."
   none-assigned: "Zaden szybki slot nie jest zajety - uzyj /pets quick set <slot>."

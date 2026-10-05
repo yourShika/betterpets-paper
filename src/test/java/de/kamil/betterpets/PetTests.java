@@ -2,6 +2,7 @@ package de.kamil.betterpets;
 
 import de.kamil.betterpets.quickslots.QuickslotLogic;
 import de.kamil.betterpets.quickslots.QuickslotProtocol;
+import de.kamil.betterpets.quickslots.SwitchLimiter;
 
 /**
  * Lightweight, dependency-free regression tests for the pure logic (no Bukkit server needed).
@@ -29,6 +30,7 @@ public final class PetTests {
         quickslotStepping();
         quickslotScrollDirection();
         quickslotProtocol();
+        quickslotSpamGuard();
 
         System.out.println();
         System.out.println("Passed: " + passed + "   Failed: " + failed);
@@ -285,8 +287,8 @@ public final class PetTests {
             final var pet = new QuickslotProtocol.Pet("penguin", "Pingu ❄", "Penguin", "Legendary",
                 0xFFAA00, 100, 5, true, "eyJ0ZXh0dXJlcyI6e319", "Treasure sense.\n+12 blocks");
             final java.util.List<QuickslotProtocol.ServerMessage> serverMessages = java.util.List.of(
-                new QuickslotProtocol.State(1, true, java.util.List.of("penguin", "", "dog"), "dog", 500, true, -42),
-                new QuickslotProtocol.State(1, false, java.util.List.of(), "", 0, false, 0),
+                new QuickslotProtocol.State(1, true, java.util.List.of("penguin", "", "dog"), "dog", 500, true, -42, 4200),
+                new QuickslotProtocol.State(1, false, java.util.List.of(), "", 0, false, 0, 0),
                 new QuickslotProtocol.Pets(99, java.util.List.of(pet, pet)),
                 new QuickslotProtocol.Pets(0, java.util.List.of()),
                 new QuickslotProtocol.OpenScreen(),
@@ -303,6 +305,14 @@ public final class PetTests {
             final byte[] extended = java.util.Arrays.copyOf(switchBytes, switchBytes.length + 5);
             eq("trailing bytes are ignored", QuickslotProtocol.decodeClient(extended),
                 new QuickslotProtocol.Switch(2));
+
+            // Backward compatibility: a state from a plugin that predates the lockout field simply ends
+            // four bytes earlier, and must read as "not locked" rather than fail.
+            final byte[] current = QuickslotProtocol.encode(
+                new QuickslotProtocol.State(1, true, java.util.List.of("penguin", ""), "penguin", 500, true, 7, 3000));
+            final byte[] legacy = java.util.Arrays.copyOf(current, current.length - Integer.BYTES);
+            eq("state without the lockout field still decodes", QuickslotProtocol.decodeServer(legacy),
+                new QuickslotProtocol.State(1, true, java.util.List.of("penguin", ""), "penguin", 500, true, 7, 0));
         } catch (final java.io.IOException exception) {
             eq("valid messages decode without an IOException", exception.toString(), "no exception");
         }
@@ -330,6 +340,61 @@ public final class PetTests {
             oversizedRejected = true;
         }
         eq("oversized slot count is rejected", oversizedRejected, true);
+    }
+
+    private static void quickslotSpamGuard() {
+        // 500 ms between switches; more than 3 switches inside 10 s lock for 5 s.
+        final SwitchLimiter limiter = new SwitchLimiter(new SwitchLimiter.Rules(500, 3, 10_000, 5_000));
+        eq("first switch is allowed", limiter.check(1_000), SwitchLimiter.Verdict.ALLOWED);
+        eq("check alone records nothing", limiter.check(1_000), SwitchLimiter.Verdict.ALLOWED);
+        eq("1st switch does not lock", limiter.record(1_000), false);
+        eq("right after a switch: cooldown", limiter.check(1_100), SwitchLimiter.Verdict.COOLDOWN);
+        eq("just before the cooldown ends", limiter.check(1_499), SwitchLimiter.Verdict.COOLDOWN);
+        eq("exactly at the cooldown", limiter.check(1_500), SwitchLimiter.Verdict.ALLOWED);
+        eq("2nd switch does not lock", limiter.record(1_500), false);
+        eq("3rd switch does not lock", limiter.record(2_000), false);
+        eq("not locked yet", limiter.lockRemaining(2_000), 0L);
+        eq("4th switch inside the window locks", limiter.record(2_500), true);
+        eq("locked right away", limiter.check(2_500), SwitchLimiter.Verdict.LOCKED);
+        eq("lock outranks the cooldown", limiter.check(2_600), SwitchLimiter.Verdict.LOCKED);
+        eq("lock time left", limiter.lockRemaining(3_500), 4_000L);
+        eq("still locked a millisecond before the end", limiter.check(7_499), SwitchLimiter.Verdict.LOCKED);
+        eq("free again when the lock ends", limiter.check(7_500), SwitchLimiter.Verdict.ALLOWED);
+        eq("no lock time left afterwards", limiter.lockRemaining(7_500), 0L);
+        // The lock wipes the slate: it takes a full new burst to lock again.
+        eq("after the lock: 1st", limiter.record(7_500), false);
+        eq("after the lock: 2nd", limiter.record(8_000), false);
+        eq("after the lock: 3rd", limiter.record(8_500), false);
+        eq("after the lock: 4th locks again", limiter.record(9_000), true);
+
+        // Switches spread out over more than the window never add up to a burst.
+        final SwitchLimiter relaxed = new SwitchLimiter(new SwitchLimiter.Rules(500, 3, 10_000, 5_000));
+        boolean everLocked = false;
+        for (long now = 0; now <= 60_000; now += 4_000) {
+            everLocked |= relaxed.record(now);
+        }
+        eq("a switch every 4 s never locks", everLocked, false);
+
+        // max-switches 0 turns the burst limit off; the cooldown still applies.
+        final SwitchLimiter cooldownOnly = new SwitchLimiter(new SwitchLimiter.Rules(500, 0, 10_000, 5_000));
+        boolean lockedWithoutLimit = false;
+        for (long now = 0; now < 20_000; now += 500) {
+            lockedWithoutLimit |= cooldownOnly.record(now);
+        }
+        eq("no burst limit: never locks", lockedWithoutLimit, false);
+        eq("no burst limit: cooldown still applies", cooldownOnly.check(19_600), SwitchLimiter.Verdict.COOLDOWN);
+
+        // No cooldown at all: only the burst limit is left.
+        final SwitchLimiter burstOnly = new SwitchLimiter(new SwitchLimiter.Rules(0, 2, 1_000, 1_000));
+        burstOnly.record(0);
+        eq("zero cooldown allows an immediate second switch", burstOnly.check(0), SwitchLimiter.Verdict.ALLOWED);
+        burstOnly.record(0);
+        eq("the third in the same instant locks", burstOnly.record(0), true);
+
+        // Nonsense config values are clamped instead of misbehaving.
+        final SwitchLimiter.Rules clamped = new SwitchLimiter.Rules(-5, -1, -1, -1);
+        eq("negative cooldown clamps to 0", clamped.cooldownMillis(), 0L);
+        eq("negative limit clamps to off", clamped.maxSwitches(), 0);
     }
 
     private static void eq(final String label, final Object got, final Object want) {

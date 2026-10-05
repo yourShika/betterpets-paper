@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.32.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.33.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -23,6 +23,21 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.33.0
+
+### 🛡️ Spam protection for quickslots
+
+Hammering the switch — a held key, a macro, a spammed command — can no longer keep the server busy.
+
+* ⏱️ **Burst guard:** more than `max-switches` quick switches within `window-seconds` lock quick switching for `lockout-seconds` (out of the box: more than 8 in 10 seconds → locked for 5). The player sees the remaining time in the action bar. `switch-cooldown-ticks` stays what it was: the minimum gap between two switches.
+* 🚦 **Every method counts together** — commands, sneak + mouse wheel and the mod — so changing the method does not get around the lock.
+* 📦 The number of messages the mod may send per second is capped more tightly (20 instead of 60); anything beyond that is dropped unanswered.
+* 🧩 **[Better Pets Quickslots 1.1.0](https://github.com/yourShika/betterpets-quickslots)**, the optional Fabric mod, is told about the cooldown and the lock and shows them as a countdown instead of sending requests the server would turn down. It also brings a **pet wheel**, a **modifier key** (hold Alt and press 1–9 or turn the mouse wheel — no numpad needed) and a **settings screen with a live preview**. Version 1.0.0 of the mod keeps working with this plugin version.
+
+Tune it or turn it off under `quickslots.spam-protection` in `config.yml`; an existing config gets the new section added automatically.
 
 ---
 
@@ -340,14 +355,19 @@ Slots are filled with `/pets quick set <slot> [pet]` — or in the slot screen o
 | ------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | Commands            | `/pets quick <slot>`, `next`, `prev`, `off`              | nothing                                                                                           |
 | Sneak + mouse wheel | hold sneak and scroll                                    | the [PacketEvents](https://github.com/retrooper/packetevents) plugin, `2.13.0+`                   |
-| Key bindings        | freely bindable keys, a slot screen, a button in `/pets` | the [Better Pets Quickslots](https://github.com/yourShika/betterpets-quickslots) Fabric mod (client) |
+| Keys and pet wheel  | a pet wheel, a modifier key, freely bindable keys, a slot screen, a button in `/pets` | the [Better Pets Quickslots](https://github.com/yourShika/betterpets-quickslots) Fabric mod (client) |
 
 ```yaml
 quickslots:
   enabled: true
   slots: 5                    # 1 - 9 per player
-  switch-cooldown-ticks: 10
+  switch-cooldown-ticks: 10   # minimum gap between two switches (20 = 1 second)
   same-slot-puts-away: true   # using the slot of the pet that is out puts it away
+  spam-protection:
+    enabled: true
+    max-switches: 8           # more than this many switches ...
+    window-seconds: 10        # ... within this time ...
+    lockout-seconds: 5        # ... lock quick switching for this long
   methods:                    # turn off whatever you do not want on your server
     commands: true
     sneak-scroll: true        # only ever active with PacketEvents installed
@@ -359,6 +379,7 @@ quickslots:
 * A slot remembers the pet **type**, so it survives converting the pet to an item and adding it back.
 * Every method follows the same rules as the menu: a disabled pet cannot be summoned, and an Alpaca that still carries items cannot be swapped out.
 * Sneak + mouse wheel only ever takes over the wheel of players who filled at least one quickslot. A single wheel notch switches pets; number keys keep changing the hotbar as usual.
+* The cooldown and the spam protection apply to all methods together. A switch that comes too soon is refused with a note in the action bar; too many in a short time lock quick switching for a few seconds.
 * Players without the mod are not affected by it, and the mod does nothing on servers without this plugin.
 
 ---
