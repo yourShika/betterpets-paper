@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.34.0-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.34.1-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -23,6 +23,16 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.34.1
+
+### 🧸 3D models: three corrections from the first look in the game
+
+* 👀 A model now **looks at its owner** — it used to look where the owner looked (the heads need to be turned the other way round; models do not).
+* 🏷️ The **name sits just above the model**, however tall it is and at whatever size it is shown (`model-nametag-gap`), instead of at one fixed height for all.
+* 🪽 A pet that walks **comes along through the air** when its owner flies or glides, like the heads do, and is back on the ground afterwards.
 
 ---
 

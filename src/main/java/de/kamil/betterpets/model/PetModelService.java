@@ -291,10 +291,14 @@ public final class PetModelService {
                     }
                 }
             }
-            indexLines.put(key, known);
-            return animations;
+            // An index from before model heights were kept: read the file again.
+            if (animations.containsKey("#height")) {
+                indexLines.put(key, known);
+                return animations;
+            }
         }
         final Map<String, Integer> animations = parseAnimations(path);
+        animations.putIfAbsent("#height", 0);
         final StringBuilder line = new StringBuilder(stamp).append(';');
         animations.forEach((name, ticks) -> line.append(name).append(':').append(ticks).append(','));
         indexLines.put(key, line.toString());
@@ -306,7 +310,35 @@ public final class PetModelService {
         try (com.google.gson.stream.JsonReader reader = new com.google.gson.stream.JsonReader(Files.newBufferedReader(path, StandardCharsets.UTF_8))) {
             reader.beginObject();
             while (reader.hasNext()) {
-                if (!reader.nextName().equals("animations") || reader.peek() != com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
+                final String section = reader.nextName();
+                if (section.equals("elements") && reader.peek() == com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
+                    // How tall the model is: the highest corner of any of its cubes, in sixteenths of a block.
+                    double top = 0.0;
+                    reader.beginArray();
+                    while (reader.hasNext()) {
+                        reader.beginObject();
+                        while (reader.hasNext()) {
+                            final String field = reader.nextName();
+                            if ((field.equals("from") || field.equals("to")) && reader.peek() == com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
+                                reader.beginArray();
+                                for (int axis = 0; reader.hasNext(); axis++) {
+                                    final double value = reader.nextDouble();
+                                    if (axis == 1) {
+                                        top = Math.max(top, value);
+                                    }
+                                }
+                                reader.endArray();
+                            } else {
+                                reader.skipValue();
+                            }
+                        }
+                        reader.endObject();
+                    }
+                    reader.endArray();
+                    animations.put("#height", (int) Math.round(top * 10.0));
+                    continue;
+                }
+                if (!section.equals("animations") || reader.peek() != com.google.gson.stream.JsonToken.BEGIN_ARRAY) {
                     reader.skipValue();
                     continue;
                 }
@@ -345,6 +377,21 @@ public final class PetModelService {
         }
         final Map<String, Integer> animations = modelAnimations.get(modelName);
         return animations == null ? Set.of() : animations.keySet();
+    }
+
+    /**
+     * How far above a model's feet its top is, in blocks and at the size it is shown - for putting the
+     * name just above it. Zero if the model is not known.
+     */
+    public double shownHeight(final String petId, final String modelName) {
+        final Map<String, Integer> animations = modelName == null ? null : modelAnimations.get(modelName);
+        if (animations == null) {
+            return 0.0;
+        }
+        final double fallback = plugin.getConfig().getDouble("model-scale.default", 1.0);
+        final double forPet = plugin.getConfig().getDouble("model-scale.pets." + normalizeModelName(petId), fallback);
+        final double scale = plugin.getConfig().getDouble("model-scale.models." + modelName, forPet);
+        return animations.getOrDefault("#height", 0) / 160.0 * Math.max(0.1, Math.min(5.0, scale));
     }
 
     /** How long an animation of a model runs, in ticks; three seconds if that is not known. */

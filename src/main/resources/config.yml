@@ -291,7 +291,9 @@ storage:
 # files into plugins/BetterPets/models/ named after the pet id (e.g. dog.bbmodel).
 # Vertical offset applied when a grounded model is snapped to the ground.
 model-ground-offset: 0.05
-# Height (blocks) of the pet name hologram above the model.
+# The pet's name floats this far (blocks) above the top of its model.
+model-nametag-gap: 0.3
+# Height (blocks) of the name above the pet's feet, only for a model whose height is not known.
 model-nametag-height: 2.6
 # Extra yaw (degrees) if a model was built facing a different direction.
 model-facing-yaw-offset-degrees: 0.0

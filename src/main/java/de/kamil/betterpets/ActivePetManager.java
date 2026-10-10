@@ -557,7 +557,7 @@ public final class ActivePetManager {
         } else {
             active.updateNametag(petNickname(definition, active.pet()));
             active.setNametagVisible(visible);
-            active.teleportNametag(modelNametagLocation(active.display().getLocation()));
+            active.teleportNametag(modelNametagLocation(active.display().getLocation(), definition.id(), active.modelName()));
         }
     }
 
@@ -727,7 +727,7 @@ public final class ActivePetManager {
             if (player.isInWater() && modelMoment(player, PetMoment.SWIM)) {
                 return;
             }
-            final boolean grounded = isModelGrounded(active);
+            final boolean grounded = isModelGrounded(active) && !ownerAirborne(player);
             if (grounded && anims.contains("walking")) {
                 desired = "walking";
             } else if (!grounded && anims.contains("flying")) {
@@ -774,7 +774,7 @@ public final class ActivePetManager {
         final java.util.List<String> variants = new java.util.ArrayList<>();
         for (final String animation : anims) {
             final boolean movement = animation.equals("idle") || animation.equals("walking") || animation.equals("flying");
-            if (!movement && !MOMENT_ANIMATIONS.contains(animation)) {
+            if (!movement && !animation.startsWith("#") && !MOMENT_ANIMATIONS.contains(animation)) {
                 variants.add(animation);
             }
         }
@@ -782,7 +782,7 @@ public final class ActivePetManager {
     }
 
     private TextDisplay spawnModelNametag(final Location base, final PetDefinition definition, final OwnedPet pet, final boolean visible, final UUID owner) {
-        final Location location = modelNametagLocation(base);
+        final Location location = modelNametagLocation(base, definition.id(), modelService.modelName(definition, pet.variant()).orElse(null));
         return location.getWorld().spawn(location, TextDisplay.class, entity -> {
             entity.text(petNickname(definition, pet));
             entity.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
@@ -1375,7 +1375,7 @@ public final class ActivePetManager {
     private void teleportActive(final ActivePet active, final Location target) {
         active.display().teleport(target);
         active.hitbox().teleport(target);
-        active.teleportNametag(modelNametagLocation(target));
+        active.teleportNametag(modelNametagLocation(target, active.pet().definitionId(), active.modelName()));
     }
 
     /** Runs every tick: drives each rider's mount and keeps the pet body pinned to it. */
@@ -1650,7 +1650,7 @@ public final class ActivePetManager {
         active.hitbox().setInteractionWidth(0.1F);
         active.hitbox().setInteractionHeight(0.1F);
         active.hitbox().teleport(target);
-        active.teleportNametag(modelNametagLocation(target));
+        active.teleportNametag(modelNametagLocation(target, active.pet().definitionId(), active.modelName()));
     }
 
     private Location followLocation(final Player player, final ActivePet active, final long tick) {
@@ -1680,7 +1680,7 @@ public final class ActivePetManager {
 
         final double bob = Math.sin(tick / 8.0) * 0.12;
         Location target = base.add(offset);
-        final boolean modelGrounded = active.modelHandle() != null && isModelGrounded(active);
+        final boolean modelGrounded = active.modelHandle() != null && isModelGrounded(active) && !ownerAirborne(player);
         if (modelGrounded) {
             target = groundModelLocation(player, target, active);
         } else {
@@ -1688,6 +1688,11 @@ public final class ActivePetManager {
         }
         faceTargetAtPlayer(target, player, active.modelHandle() != null);
         return target;
+    }
+
+    /** Flying or gliding: then even a pet that walks comes along through the air, as the heads do. */
+    private boolean ownerAirborne(final Player player) {
+        return player.isFlying() || player.isGliding() || isRiding(player);
     }
 
     private Location groundModelLocation(final Player player, final Location target, final ActivePet active) {
@@ -1732,14 +1737,23 @@ public final class ActivePetManager {
         if (awayFromPlayer.lengthSquared() < 0.01) {
             awayFromPlayer.setZ(1);
         }
-        target.setDirection(awayFromPlayer);
         if (model) {
+            // A model has its face at the front: it turns towards the player, and stays level while doing so.
+            target.setDirection(awayFromPlayer.multiply(-1).setY(0));
+            target.setPitch(0.0F);
             target.setYaw(target.getYaw() + (float) plugin.getConfig().getDouble("model-facing-yaw-offset-degrees", 0.0));
+        } else {
+            target.setDirection(awayFromPlayer);
         }
     }
 
-    private Location modelNametagLocation(final Location base) {
-        return base.clone().add(0, Math.max(0.5, plugin.getConfig().getDouble("model-nametag-height", 2.2)), 0);
+    /** Just above the model's head: its height as shown, plus model-nametag-gap. */
+    private Location modelNametagLocation(final Location base, final String petId, final String modelName) {
+        final double height = modelService.shownHeight(petId, modelName);
+        final double above = height > 0.0
+            ? height + plugin.getConfig().getDouble("model-nametag-gap", 0.3)
+            : Math.max(0.5, plugin.getConfig().getDouble("model-nametag-height", 2.2));
+        return base.clone().add(0, above, 0);
     }
 
     private void spawnUnicornGlitter(final Player player) {
