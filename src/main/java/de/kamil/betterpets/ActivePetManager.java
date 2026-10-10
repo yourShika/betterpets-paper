@@ -786,6 +786,7 @@ public final class ActivePetManager {
         return location.getWorld().spawn(location, TextDisplay.class, entity -> {
             entity.text(petNickname(definition, pet));
             entity.setBillboard(org.bukkit.entity.Display.Billboard.CENTER);
+            entity.setTeleportDuration(Math.max(1, plugin.getConfig().getInt("follow-teleport-duration-ticks", 8)));
             entity.setShadowed(true);
             entity.setSeeThrough(false);
             entity.setViewRange(visible ? 32.0F : 0.0F);
@@ -4111,6 +4112,10 @@ public final class ActivePetManager {
 
         private void teleportNametag(final Location location) {
             if (nametag != null && !nametag.isDead()) {
+                // Glides along exactly as the pet itself does, instead of jumping from spot to spot.
+                if (nametag.getTeleportDuration() != display.getTeleportDuration()) {
+                    nametag.setTeleportDuration(display.getTeleportDuration());
+                }
                 nametag.teleport(location);
             }
         }
