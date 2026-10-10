@@ -13,6 +13,13 @@ import java.io.File;
 import java.util.Optional;
 
 public final class BetterModelHook implements PetModelBridge {
+    // A few ticks of blending in and out, so that one animation flows into the next instead of the model
+    // snapping to a pose.
+    private static final AnimationModifier LOOP = AnimationModifier.builder()
+        .start(5).end(6).type(kr.toxicity.model.api.animation.AnimationIterator.Type.LOOP).build();
+    private static final AnimationModifier ONCE = AnimationModifier.builder()
+        .start(4).end(6).type(kr.toxicity.model.api.animation.AnimationIterator.Type.PLAY_ONCE).build();
+
     @Override
     public File dataFolder() {
         return BetterModel.platform().dataFolder();
@@ -30,7 +37,7 @@ public final class BetterModelHook implements PetModelBridge {
             if (Math.abs(scale - 1.0F) > 0.001F) {
                 tracker.scaler(kr.toxicity.model.api.tracker.ModelScaler.value(scale));
             }
-            tracker.animate("idle", AnimationModifier.DEFAULT);
+            tracker.animate("idle", LOOP);
             return new BetterModelTrackerHandle(tracker);
         });
     }
@@ -70,9 +77,31 @@ public final class BetterModelHook implements PetModelBridge {
         }
 
         @Override
-        public void play(final String animation) {
+        public void loop(final String animation) {
             if (!tracker.isClosed()) {
-                tracker.animate(animation, AnimationModifier.DEFAULT);
+                tracker.animate(animation, LOOP);
+            }
+        }
+
+        @Override
+        public void once(final String animation) {
+            if (!tracker.isClosed()) {
+                tracker.animate(animation, ONCE);
+            }
+        }
+
+        @Override
+        public void onceHeld(final String animation, final java.util.function.BooleanSupplier held) {
+            if (!tracker.isClosed()) {
+                // Held = time all but stands still for this animation; let go, it runs on to its end.
+                tracker.animate(animation, ONCE.toBuilder().speed(() -> held.getAsBoolean() ? 0.0005F : 1.0F).build());
+            }
+        }
+
+        @Override
+        public void stop(final String animation) {
+            if (!tracker.isClosed()) {
+                tracker.stopAnimation(animation);
             }
         }
     }

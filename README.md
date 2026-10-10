@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.34.2-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.34.3-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -23,6 +23,15 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.34.3
+
+### 🧸 3D models: animations that flow, and pets that sleep while you are away
+
+* 🎞️ **No more snapping back to the start pose.** Every change of animation used to start the next one from scratch — the model jumped to its rest pose, played a gesture, and then began "idle" all over again. Now "idle" simply keeps running underneath: walking and flying are laid over it and taken away again, gestures play once on top, and everything blends in and out over a few ticks.
+* 😴 **Asleep while you are AFK.** A pet whose model has a sleeping animation lies down once you have neither moved nor looked around for a while (`model-sleep-after-seconds`, 60 by default) or are in bed — and stays down until you are back, instead of getting up after a few seconds. Looking around lets it wake and get up; walking off gets it up at once.
 
 ---
 

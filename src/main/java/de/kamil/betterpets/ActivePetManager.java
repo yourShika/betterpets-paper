@@ -651,9 +651,8 @@ public final class ActivePetManager {
         }
     }
 
-    /** How long the owner has to stand still before the pet settles down, and then dozes off. */
+    /** How long the owner has to stand still before the pet settles down for a moment. */
     private static final int REST_AFTER_TICKS = 20 * 25;
-    private static final int SLEEP_AFTER_TICKS = 20 * 70;
 
     /**
      * Lets the owner's pet answer a moment with a fitting animation, if it is shown as a model and that
@@ -677,8 +676,13 @@ public final class ActivePetManager {
         final java.util.Set<String> anims = modelService.animations(active.modelName());
         for (final String animation : moment.animations) {
             if (anims.contains(animation)) {
-                playModelAnimation(active, animation);
-                active.tempAnimationUntil(now + modelService.animationTicks(active.modelName(), animation));
+                if (moment == PetMoment.SLEEP) {
+                    // Lies down, and stays down from the middle of the animation until the owner stirs.
+                    final int asleepFrom = now + modelService.animationTicks(active.modelName(), animation) / 2;
+                    playGesture(active, animation, Integer.MAX_VALUE, () -> active.resting() && Bukkit.getCurrentTick() >= asleepFrom);
+                } else {
+                    playGesture(active, animation, now + modelService.animationTicks(active.modelName(), animation), null);
+                }
                 active.momentReadyAt(moment, now + moment.pauseTicks);
                 return true;
             }
@@ -705,26 +709,40 @@ public final class ActivePetManager {
         final Location last = active.lastLocation();
         final boolean moving = last != null && last.getWorld() != null && last.getWorld().equals(now.getWorld())
             && last.distanceSquared(now) > 0.0025;
+        // Away from the keyboard: neither walking nor looking around.
+        final boolean stirring = moving || last == null
+            || Math.abs(last.getYaw() - now.getYaw()) > 0.5F || Math.abs(last.getPitch() - now.getPitch()) > 0.5F;
         active.lastLocation(now.clone());
         final int time = Bukkit.getCurrentTick();
-        if (moving || active.stillSince() == 0) {
+        if (stirring || active.stillSince() == 0) {
             active.stillSince(time);
         }
 
         if (time < active.tempAnimationUntil()) {
-            // The owner walks off: whoever was sitting or asleep gets up at once instead of sliding along.
-            if (moving && active.resting()) {
-                active.tempAnimationUntil(0);
+            if (active.resting() && (moving || (stirring && active.asleep()))) {
+                // The owner is back: whoever was sitting or asleep gets up instead of sliding along.
+                if (moving) {
+                    stopGesture(active);
+                } else {
+                    // Only looked around: let the sleeper wake and get up in its own time.
+                    active.tempAnimationUntil(time + modelService.animationTicks(active.modelName(), active.gesture()) / 2);
+                }
                 active.resting(false);
-            } else {
+                active.asleep(false);
+            }
+            if (!moving) {
                 return;
             }
+        } else {
+            active.resting(false);
+            active.asleep(false);
         }
-        active.resting(false);
 
         final String desired;
         if (moving) {
-            if (player.isInWater() && modelMoment(player, PetMoment.SWIM)) {
+            if (time < active.tempAnimationUntil()) {
+                // A gesture is still running on top; underneath, the walk goes on.
+            } else if (player.isInWater() && modelMoment(player, PetMoment.SWIM)) {
                 return;
             }
             final boolean grounded = isModelGrounded(active) && !ownerAirborne(player);
@@ -737,10 +755,16 @@ public final class ActivePetManager {
             }
         } else {
             final int still = time - active.stillSince();
-            // Standing about for a while: sit down; for a long while, or once the owner is in bed: sleep.
-            if ((still > SLEEP_AFTER_TICKS || player.isSleeping()) && modelMoment(player, PetMoment.SLEEP)) {
+            // Standing about for a while: sit down. Away for good, or in bed: lie down and sleep until
+            // the owner is back.
+            final int sleepAfter = 20 * Math.max(5, plugin.getConfig().getInt("model-sleep-after-seconds", 60));
+            if (still > sleepAfter || player.isSleeping()) {
                 active.resting(true);
-                return;
+                if (modelMoment(player, PetMoment.SLEEP)) {
+                    active.asleep(true);
+                    return;
+                }
+                active.resting(false);
             }
             if (still > REST_AFTER_TICKS && ThreadLocalRandom.current().nextDouble() < 0.5 && modelMoment(player, PetMoment.REST)) {
                 active.resting(true);
@@ -749,25 +773,55 @@ public final class ActivePetManager {
             if (tick % 40L == 0L && ThreadLocalRandom.current().nextDouble() < 0.2) {
                 final String variant = randomIdleVariant(anims);
                 if (variant != null) {
-                    playModelAnimation(active, variant);
-                    active.tempAnimationUntil(time + modelService.animationTicks(active.modelName(), variant));
+                    playGesture(active, variant, time + modelService.animationTicks(active.modelName(), variant), null);
                     return;
                 }
             }
             desired = "idle";
         }
-        if (!desired.equals(active.currentAnimation())) {
-            playModelAnimation(active, desired);
+        final String running = active.currentAnimation() == null ? "idle" : active.currentAnimation();
+        if (!desired.equals(running)) {
+            // "idle" always runs underneath. Walking and flying are laid over it and taken away again, so
+            // the model blends from one to the other instead of starting an animation over.
+            try {
+                if (!running.equals("idle")) {
+                    active.modelHandle().stop(running);
+                }
+                if (!desired.equals("idle")) {
+                    active.modelHandle().loop(desired);
+                }
+                active.currentAnimation(desired);
+            } catch (final RuntimeException | LinkageError ignored) {
+                // BetterModel rejected the animation name; keep the current animation.
+            }
         }
     }
 
-    private void playModelAnimation(final ActivePet active, final String animation) {
+    /** Plays a gesture once over the movement that is running; {@code held} may keep it standing still. */
+    private void playGesture(final ActivePet active, final String animation, final int until, final java.util.function.BooleanSupplier held) {
         try {
-            active.modelHandle().play(animation);
-            active.currentAnimation(animation);
+            if (held == null) {
+                active.modelHandle().once(animation);
+            } else {
+                active.modelHandle().onceHeld(animation, held);
+            }
+            active.gesture(animation);
+            active.tempAnimationUntil(until);
         } catch (final RuntimeException | LinkageError ignored) {
-            // BetterModel rejected the animation name; keep the current animation.
+            // BetterModel rejected the animation name; nothing is played.
         }
+    }
+
+    private void stopGesture(final ActivePet active) {
+        try {
+            if (active.gesture() != null) {
+                active.modelHandle().stop(active.gesture());
+            }
+        } catch (final RuntimeException | LinkageError ignored) {
+            // it ends by itself then
+        }
+        active.gesture(null);
+        active.tempAnimationUntil(0);
     }
 
     private String randomIdleVariant(final java.util.Set<String> anims) {
@@ -3983,6 +4037,8 @@ public final class ActivePetManager {
         private long tempAnimationUntil;
         private int stillSince;
         private boolean resting;
+        private boolean asleep;
+        private String gesture;
         private final Map<PetMoment, Integer> momentReadyAt = new java.util.EnumMap<>(PetMoment.class);
         private int groundCacheX = Integer.MIN_VALUE;
         private int groundCacheZ = Integer.MIN_VALUE;
@@ -4060,6 +4116,22 @@ public final class ActivePetManager {
 
         private boolean resting() {
             return resting;
+        }
+
+        private boolean asleep() {
+            return asleep;
+        }
+
+        private void asleep(final boolean asleep) {
+            this.asleep = asleep;
+        }
+
+        private String gesture() {
+            return gesture;
+        }
+
+        private void gesture(final String gesture) {
+            this.gesture = gesture;
         }
 
         private void resting(final boolean resting) {

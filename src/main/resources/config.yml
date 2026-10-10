@@ -291,6 +291,9 @@ storage:
 # files into plugins/BetterPets/models/ named after the pet id (e.g. dog.bbmodel).
 # Vertical offset applied when a grounded model is snapped to the ground.
 model-ground-offset: 0.05
+# A pet whose model has a sleeping animation lies down and sleeps once its owner has neither moved
+# nor looked around for this many seconds (or is in bed), and gets up when the owner is back.
+model-sleep-after-seconds: 60
 # The pet's name floats this far (blocks) above the top of its model.
 model-nametag-gap: 0.3
 # Height (blocks) of the name above the pet's feet, only for a model whose height is not known.
