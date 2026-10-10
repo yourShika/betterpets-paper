@@ -23,6 +23,12 @@
 #                   anyone may be that player by joining localhost:PORT while the run waits
 #   CLIENTS=2       start a second test client (E2E_B) as well, so the trade checks have their partner
 #   TRADES_ONLY=true   skip the checks that need one player only
+#   MODELS=<folder>    instead of the usual checks: install the model packages (.zip) from that folder
+#                   with scripts/install_models.py and check that every pet in every skin appears as a
+#                   3D model. Needs the BetterModel plugin: EXTRA_PLUGINS=<path to its jar>
+#   SERVER_HEAP     memory for the test server (default 1536M; hundreds of models need several GB)
+#   START_SECONDS   how long the server may take to start (default 180)
+#   EXTRA_PLUGINS   more plugin jars for the test server, separated by commas
 #   HOST=1          no checks at all: just the server, for trying the Quickslots mod against the real
 #                   plugin with your own game and keyboard (whoever joins gets pets in their quickslots)
 #   CLIENTS=0       start no client: join localhost:PORT as E2E_A yourself
@@ -89,6 +95,16 @@ fi
 rm -rf "$SERVER"/world* "$SERVER/plugins" "$SERVER/logs" "$SERVER/e2e-report.txt" "$SERVER"/server*.log
 mkdir -p "$SERVER/plugins/bStats"
 cp "$PETS_JAR" "$WORK/BetterPetsE2E.jar" "$SERVER/plugins/"
+if [ -n "${EXTRA_PLUGINS:-}" ]; then
+  IFS=',' read -r -a extra_plugins <<< "$EXTRA_PLUGINS"
+  for extra in "${extra_plugins[@]}"; do cp "$extra" "$SERVER/plugins/"; done
+fi
+if [ -n "${MODELS:-}" ]; then
+  # 3D models: installed the way an admin would, with the script that comes with the plugin.
+  mkdir -p "$SERVER/plugins/BetterPets"
+  echo "experimental-modules: true" > "$SERVER/plugins/BetterPets/config.yml"
+  "$PYTHON" "$PLUGIN_DIR/scripts/install_models.py" "$MODELS" "$SERVER/plugins/BetterPets"
+fi
 # No statistics are to leave this machine from a test server.
 printf 'enabled: false\nserverUuid: 00000000-0000-0000-0000-000000000000\nlogFailedRequests: false\n' \
   > "$SERVER/plugins/bStats/config.yml"
@@ -113,13 +129,13 @@ EOF
 
 server_pid=""
 start_server() {
-  ( cd "$SERVER" && exec "$JDK/bin/java" -Xms512M -Xmx1536M "-Djdk.net.unixdomain.tmpdir=$SOCKETS" \
+  ( cd "$SERVER" && exec "$JDK/bin/java" -Xms512M "-Xmx${SERVER_HEAP:-1536M}" "-Djdk.net.unixdomain.tmpdir=$SOCKETS" \
       -De2e.player="$PLAYER" -De2e.secondPlayerSeconds="$SECOND_PLAYER_SECONDS" \
-      -De2e.tradesOnly="${TRADES_ONLY:-false}" -De2e.host="$([ "${HOST:-0}" = "1" ] && echo true || echo false)" \
+      -De2e.tradesOnly="${TRADES_ONLY:-false}" -De2e.models="$([ -n "${MODELS:-}" ] && echo true || echo false)" -De2e.host="$([ "${HOST:-0}" = "1" ] && echo true || echo false)" \
       -jar "$(basename "$PAPER_JAR")" --nogui >> server.log 2>&1 ) &
   server_pid=$!
   echo "Starting the server (pid $server_pid) ..."
-  for _ in $(seq 1 180); do
+  for _ in $(seq 1 "${START_SECONDS:-180}"); do
     grep -q 'Done (' "$SERVER/server.log" 2>/dev/null && { echo "The server is up on port $PORT."; return 0; }
     kill -0 "$server_pid" 2>/dev/null || { echo "The server stopped while starting -- see $SERVER/server.log"; return 1; }
     sleep 1

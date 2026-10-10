@@ -384,8 +384,8 @@ public final class ActivePetManager {
             return;
         }
 
-        final boolean modelCandidate = modelService.canRender(definition);
-        final Location location = initialPetLocation(player, definition, modelCandidate);
+        final boolean modelCandidate = modelService.canRender(definition, pet.variant());
+        final Location location = initialPetLocation(player, definition, pet, modelCandidate);
         final ItemDisplay display = player.getWorld().spawn(location, ItemDisplay.class, entity -> {
             entity.setItemStack(modelCandidate ? ItemStack.empty() : itemFactory.menuItem(definition, pet, true));
             entity.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.GROUND);
@@ -401,8 +401,8 @@ public final class ActivePetManager {
             entity.getPersistentDataContainer().set(petUuidKey, PersistentDataType.STRING, pet.uuid().toString());
         });
         final boolean visible = storage.data(player.getUniqueId()).visible();
-        final PetModelHandle modelHandle = modelCandidate ? modelService.render(definition, display).orElse(null) : null;
-        final String modelName = modelHandle == null ? null : modelService.modelName(definition).orElse(null);
+        final PetModelHandle modelHandle = modelCandidate ? modelService.render(definition, pet.variant(), display).orElse(null) : null;
+        final String modelName = modelHandle == null ? null : modelService.modelName(definition, pet.variant()).orElse(null);
         if (modelCandidate && modelHandle == null) {
             display.setItemStack(itemFactory.menuItem(definition, pet, true));
             display.setCustomNameVisible(true);
@@ -427,6 +427,10 @@ public final class ActivePetManager {
 
         activePets.put(player.getUniqueId(), new ActivePet(pet, display, hitbox, player.getLocation().getYaw(), modelHandle, modelName, nametag));
         applyPassive(player, pet);
+        if (modelHandle != null) {
+            // Once it has appeared: say hello.
+            Bukkit.getScheduler().runTaskLater(plugin, () -> modelMoment(player, PetMoment.GREET), 15L);
+        }
         if (plugin.getConfig().getBoolean("debug-logging", false)) {
             plugin.getLogger().info("[Debug] Spawned active pet " + definition.id() + " for " + player.getName() + (modelHandle == null ? " with head fallback." : " with BetterModel model " + modelName + "."));
         }
@@ -518,11 +522,11 @@ public final class ActivePetManager {
 
     private void updatePetVisual(final Player owner, final ActivePet active, final PetDefinition definition) {
         final boolean visible = storage.data(owner.getUniqueId()).visible();
-        final String wantedModel = modelService.modelName(definition).orElse(null);
-        if (modelService.canRender(definition)) {
+        final String wantedModel = modelService.modelName(definition, active.pet().variant()).orElse(null);
+        if (modelService.canRender(definition, active.pet().variant())) {
             if (active.modelHandle() == null || !active.modelNameMatches(wantedModel)) {
                 active.closeModel();
-                final PetModelHandle handle = modelService.render(definition, active.display()).orElse(null);
+                final PetModelHandle handle = modelService.render(definition, active.pet().variant(), active.display()).orElse(null);
                 if (handle != null) {
                     final TextDisplay nametag = spawnModelNametag(active.display().getLocation(), definition, active.pet(), visible, owner.getUniqueId());
                     active.model(handle, wantedModel, nametag);
@@ -557,9 +561,9 @@ public final class ActivePetManager {
         }
     }
 
-    private Location initialPetLocation(final Player player, final PetDefinition definition, final boolean modelCandidate) {
+    private Location initialPetLocation(final Player player, final PetDefinition definition, final OwnedPet pet, final boolean modelCandidate) {
         Location location = player.getLocation().clone();
-        final boolean grounded = modelCandidate && modelService.modelName(definition).map(this::groundedByModelName).orElse(false);
+        final boolean grounded = modelCandidate && modelService.modelName(definition, pet.variant()).map(this::groundedByModelName).orElse(false);
         if (grounded) {
             location = groundModelLocation(player, location, null);
         } else {
@@ -601,8 +605,91 @@ public final class ActivePetManager {
     }
 
     /**
-     * Drives idle / walking / flying animations from player movement, and occasionally plays a random
-     * idle2-9 variant while standing still. All driven by animations present in the .bbmodel.
+     * Moments in an owner's play that a model can answer with an animation of its own. Models differ in
+     * what they bring along - a lion has "roar", a mole "digging", a cat "sitting" - so each moment
+     * names the animations that fit it, best first, and the first one the model has is played. A model
+     * that has none of them simply carries on. The number is the pause before the same moment counts
+     * again, in ticks.
+     */
+    public enum PetMoment {
+        GREET(100, "greeting", "happy", "celebrate", "neighing", "bow", "dance"),
+        HAPPY(100, "celebrate", "happy", "dance", "dancing", "magic", "blessing", "resonance", "glow_pulse", "greeting"),
+        ATTACK(120, "attack", "roar", "roaring", "pounce", "strike", "venom_strike", "pinch", "chomp", "fire_breath",
+            "sonic_boom", "frost_breath", "ground_slam", "stomp", "spellcast", "soul_harvest", "harvest", "screech",
+            "spitting", "throw_snowball", "scare", "menace", "threat", "threat_display", "howling", "rearing",
+            "tail_slap", "tail_sweep", "deep_grasp", "summon", "cursed", "arcane_focus"),
+        HURT(120, "startled", "hurt", "hide", "curl_up", "curl", "alert", "ink_guard", "warding", "guardian_pose", "inflating"),
+        DIG(160, "digging", "mining", "burrowing", "burrow", "masonry", "pecking", "gnawing", "forage", "foraging",
+            "sniffing", "inspect_block", "hammer_check", "collect", "scan"),
+        JUMP(200, "jump", "hopping", "double_jump", "playful_hop", "sky_leap", "jumping", "glide", "fluttering"),
+        TAKEOFF(100, "takeoff", "wing_stretch", "wing_display"),
+        LAND(100, "landing"),
+        EAT(200, "nut_eating", "nibbling", "grazing", "snack_play", "pollinating", "offer"),
+        TRADE(200, "barter", "treasure_reveal", "offer", "celebrate"),
+        REVIVE(0, "rebirth", "magic", "blessing", "celebrate"),
+        SWIM(0, "swimming", "swim_burst", "jet_burst"),
+        REST(0, "sitting", "resting", "roosting", "clinging", "reading", "grooming"),
+        SLEEP(0, "sleeping", "power_save", "resting", "roosting", "curl_up");
+
+        private final int pauseTicks;
+        private final List<String> animations;
+
+        PetMoment(final int pauseTicks, final String... animations) {
+            this.pauseTicks = pauseTicks;
+            this.animations = List.of(animations);
+        }
+    }
+
+    // Everything a moment above may play. What a model has beyond these (and beyond idle, walking and
+    // flying) are small gestures for no occasion - a tail curl, a wing stretch - and they join the random
+    // idle variants.
+    private static final Set<String> MOMENT_ANIMATIONS = new HashSet<>();
+
+    static {
+        for (final PetMoment moment : PetMoment.values()) {
+            MOMENT_ANIMATIONS.addAll(moment.animations);
+        }
+    }
+
+    /** How long the owner has to stand still before the pet settles down, and then dozes off. */
+    private static final int REST_AFTER_TICKS = 20 * 25;
+    private static final int SLEEP_AFTER_TICKS = 20 * 70;
+
+    /**
+     * Lets the owner's pet answer a moment with a fitting animation, if it is shown as a model and that
+     * model has one.
+     *
+     * @return whether an animation was started
+     */
+    public boolean modelMoment(final Player player, final PetMoment moment) {
+        final ActivePet active = activePets.get(player.getUniqueId());
+        if (active == null || active.modelHandle() == null) {
+            return false;
+        }
+        final int now = Bukkit.getCurrentTick();
+        if (now < active.momentReadyAt(moment)) {
+            return false;
+        }
+        // A gesture that is running is left to finish - a revive is the one thing worth cutting in for.
+        if (now < active.tempAnimationUntil() && moment != PetMoment.REVIVE) {
+            return false;
+        }
+        final java.util.Set<String> anims = modelService.animations(active.modelName());
+        for (final String animation : moment.animations) {
+            if (anims.contains(animation)) {
+                playModelAnimation(active, animation);
+                active.tempAnimationUntil(now + modelService.animationTicks(active.modelName(), animation));
+                active.momentReadyAt(moment, now + moment.pauseTicks);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Drives idle / walking / flying animations from player movement, shows the pet swimming, settling
+     * down and dozing off, and now and then plays a random idle variant or small gesture while standing
+     * still. All driven by animations present in the .bbmodel.
      */
     private void updateModelAnimation(final Player player, final ActivePet active) {
         final PetModelHandle handle = active.modelHandle();
@@ -619,13 +706,27 @@ public final class ActivePetManager {
         final boolean moving = last != null && last.getWorld() != null && last.getWorld().equals(now.getWorld())
             && last.distanceSquared(now) > 0.0025;
         active.lastLocation(now.clone());
-
-        if (tick < active.tempAnimationUntil()) {
-            return;
+        final int time = Bukkit.getCurrentTick();
+        if (moving || active.stillSince() == 0) {
+            active.stillSince(time);
         }
+
+        if (time < active.tempAnimationUntil()) {
+            // The owner walks off: whoever was sitting or asleep gets up at once instead of sliding along.
+            if (moving && active.resting()) {
+                active.tempAnimationUntil(0);
+                active.resting(false);
+            } else {
+                return;
+            }
+        }
+        active.resting(false);
 
         final String desired;
         if (moving) {
+            if (player.isInWater() && modelMoment(player, PetMoment.SWIM)) {
+                return;
+            }
             final boolean grounded = isModelGrounded(active);
             if (grounded && anims.contains("walking")) {
                 desired = "walking";
@@ -635,11 +736,21 @@ public final class ActivePetManager {
                 desired = "idle";
             }
         } else {
+            final int still = time - active.stillSince();
+            // Standing about for a while: sit down; for a long while, or once the owner is in bed: sleep.
+            if ((still > SLEEP_AFTER_TICKS || player.isSleeping()) && modelMoment(player, PetMoment.SLEEP)) {
+                active.resting(true);
+                return;
+            }
+            if (still > REST_AFTER_TICKS && ThreadLocalRandom.current().nextDouble() < 0.5 && modelMoment(player, PetMoment.REST)) {
+                active.resting(true);
+                return;
+            }
             if (tick % 40L == 0L && ThreadLocalRandom.current().nextDouble() < 0.2) {
                 final String variant = randomIdleVariant(anims);
                 if (variant != null) {
                     playModelAnimation(active, variant);
-                    active.tempAnimationUntil(tick + 60L);
+                    active.tempAnimationUntil(time + modelService.animationTicks(active.modelName(), variant));
                     return;
                 }
             }
@@ -661,9 +772,10 @@ public final class ActivePetManager {
 
     private String randomIdleVariant(final java.util.Set<String> anims) {
         final java.util.List<String> variants = new java.util.ArrayList<>();
-        for (int i = 2; i <= 9; i++) {
-            if (anims.contains("idle" + i)) {
-                variants.add("idle" + i);
+        for (final String animation : anims) {
+            final boolean movement = animation.equals("idle") || animation.equals("walking") || animation.equals("flying");
+            if (!movement && !MOMENT_ANIMATIONS.contains(animation)) {
+                variants.add(animation);
             }
         }
         return variants.isEmpty() ? null : variants.get(ThreadLocalRandom.current().nextInt(variants.size()));
@@ -896,6 +1008,7 @@ public final class ActivePetManager {
     }
 
     public void applyHitAbility(final Player player, final LivingEntity victim) {
+        modelMoment(player, PetMoment.ATTACK);
         final OwnedPet pet = activePet(player).orElse(null);
         if (pet == null) {
             return;
@@ -908,6 +1021,7 @@ public final class ActivePetManager {
     }
 
     public void applyDefenseAbility(final Player player, final Entity damager) {
+        modelMoment(player, PetMoment.HURT);
         final OwnedPet pet = activePet(player).orElse(null);
         if (pet == null) {
             return;
@@ -1935,6 +2049,7 @@ public final class ActivePetManager {
         // Totem-of-undying golden burst (non-deprecated replacement for EntityEffect.TOTEM_RESURRECT).
         player.getWorld().spawnParticle(Particle.TOTEM_OF_UNDYING, player.getLocation().add(0, 1.0, 0), 60, 0.4, 0.6, 0.4, 0.3);
         player.getWorld().playSound(player.getLocation(), Sound.ITEM_TOTEM_USE, 1.0F, 1.0F);
+        modelMoment(player, PetMoment.REVIVE);
         player.sendMessage(lang.colored("pet.phoenix-saved", net.kyori.adventure.text.format.NamedTextColor.GOLD));
         storage.save();
         return true;
@@ -3851,6 +3966,9 @@ public final class ActivePetManager {
         private String currentAnimation;
         private Location lastLocation;
         private long tempAnimationUntil;
+        private int stillSince;
+        private boolean resting;
+        private final Map<PetMoment, Integer> momentReadyAt = new java.util.EnumMap<>(PetMoment.class);
         private int groundCacheX = Integer.MIN_VALUE;
         private int groundCacheZ = Integer.MIN_VALUE;
         private double groundCacheY;
@@ -3915,6 +4033,30 @@ public final class ActivePetManager {
 
         private long tempAnimationUntil() {
             return tempAnimationUntil;
+        }
+
+        private int stillSince() {
+            return stillSince;
+        }
+
+        private void stillSince(final int stillSince) {
+            this.stillSince = stillSince;
+        }
+
+        private boolean resting() {
+            return resting;
+        }
+
+        private void resting(final boolean resting) {
+            this.resting = resting;
+        }
+
+        private int momentReadyAt(final PetMoment moment) {
+            return momentReadyAt.getOrDefault(moment, 0);
+        }
+
+        private void momentReadyAt(final PetMoment moment, final int tick) {
+            momentReadyAt.put(moment, tick);
         }
 
         private void tempAnimationUntil(final long tempAnimationUntil) {

@@ -24,9 +24,12 @@ public final class BetterModelHook implements PetModelBridge {
     }
 
     @Override
-    public Optional<PetModelHandle> attachModel(final String modelName, final Entity baseEntity) {
+    public Optional<PetModelHandle> attachModel(final String modelName, final Entity baseEntity, final float scale) {
         return BetterModel.model(modelName).map(renderer -> {
             final EntityTracker tracker = renderer.getOrCreate(BukkitAdapter.adapt(baseEntity), TrackerModifier.DEFAULT);
+            if (Math.abs(scale - 1.0F) > 0.001F) {
+                tracker.scaler(kr.toxicity.model.api.tracker.ModelScaler.value(scale));
+            }
             tracker.animate("idle", AnimationModifier.DEFAULT);
             return new BetterModelTrackerHandle(tracker);
         });

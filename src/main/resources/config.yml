@@ -296,7 +296,19 @@ model-nametag-height: 2.6
 # Extra yaw (degrees) if a model was built facing a different direction.
 model-facing-yaw-offset-degrees: 0.0
 # Per-pet model name overrides (petNameOrId -> modelFileName without .bbmodel).
+# Without an entry here the model is found by its file name: the pet id, then the skin the pet wears
+# (joined with one or two underscores), then optionally _grounded or _flying - cat.bbmodel,
+# cat__black.bbmodel, allay_happy_flying.bbmodel. A skin without a model of its own uses the pet's.
 model-overrides: {}
+# Pets that use the _flying model where both a _grounded and a _flying one exist. All others walk.
+model-flying-pets: [allay, bat, bee, firefly, pixie, guardian_angel, phoenix, ghast, owl, red_parrot,
+  magpie, woodpecker, silk_moth, griffin, lich, reaper, kraken, blue_dragon, red_dragon, shadow_dragon,
+  ender_dragon, elder_guardian, pufferfish, dolphin]
+# Size of the models: one for all, and other sizes for single pets (by id) or single model files.
+model-scale:
+  default: 1.0
+  pets: {}
+  models: {}
 
 
 # ═══ 10) MODULES ════════════════════════════════════════════════════════════

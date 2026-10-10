@@ -215,6 +215,10 @@ public final class E2EPlugin extends JavaPlugin implements Listener {
                     return null;
                 });
                 getDataFolder().mkdirs();
+                if (Boolean.getBoolean("e2e.models")) {
+                    models(first);
+                    return;
+                }
                 if (!Boolean.getBoolean("e2e.tradesOnly")) {
                     singlePlayer(first);
                 }
@@ -784,6 +788,56 @@ public final class E2EPlugin extends JavaPlugin implements Listener {
             }
             check("too many switches in a row are locked out for a while", went >= 4 && went <= 10,
                 went + " of 14 switches in 8 seconds went through");
+        });
+    }
+
+    // ------------------------------------------------------------------------------------------------
+    // 3D models (-De2e.models=true, with BetterModel and models installed on the test server)
+    // ------------------------------------------------------------------------------------------------
+
+    /** Summons every pet in every skin and looks whether it appears as a model or as a head. */
+    private void models(final Player a) throws Exception {
+        scenario("3D models", () -> {
+            sync(() -> {
+                pets.getConfig().set("max-pets-per-player", 1000);
+                return null;
+            });
+            final Object manager = call(pets, "activePetManager");
+            final java.lang.reflect.Field field = manager.getClass().getDeclaredField("activePets");
+            field.setAccessible(true);
+            final Map<?, ?> active = (Map<?, ?>) field.get(manager);
+            final List<String> heads = new ArrayList<>();
+            final java.util.Set<String> used = new java.util.TreeSet<>();
+            int shown = 0;
+            for (final Object definition : (Iterable<?>) call(call(pets, "petDefinitions"), "ordered")) {
+                final String id = (String) call(definition, "id");
+                claim(a, id, 1);
+                final List<String> skins = new ArrayList<>(((Map<?, ?>) call(definition, "variants")).keySet().stream().map(String::valueOf).toList());
+                if (skins.isEmpty()) {
+                    skins.add("");
+                }
+                for (final String skin : skins) {
+                    final Object owned = pet(a, id);
+                    final String model = sync(() -> {
+                        if (!skin.isEmpty()) {
+                            call(owned, "setVariant", skin);
+                        }
+                        call(manager, "despawn", a, true);
+                        call(pets, "summonPet", a, data(a), owned);
+                        final Object shownPet = active.get(a.getUniqueId());
+                        return shownPet == null ? null : (String) call(shownPet, "modelName");
+                    });
+                    if (model == null) {
+                        heads.add(skin.isEmpty() ? id : id + ":" + skin);
+                    } else {
+                        shown++;
+                        used.add(model);
+                    }
+                }
+            }
+            getLogger().info("Models in use: " + used);
+            check("every pet in every skin appears as a 3D model", heads.isEmpty() && shown > 0,
+                shown + " as models (" + used.size() + " different ones), " + heads.size() + " as heads " + heads);
         });
     }
 

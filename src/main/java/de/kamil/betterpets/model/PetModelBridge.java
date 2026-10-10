@@ -10,7 +10,7 @@ public interface PetModelBridge {
 
     boolean modelExists(String modelName);
 
-    Optional<PetModelHandle> attachModel(String modelName, Entity baseEntity);
+    Optional<PetModelHandle> attachModel(String modelName, Entity baseEntity, float scale);
 
     boolean reload();
 }

@@ -9,7 +9,7 @@
 ![Minecraft](https://img.shields.io/badge/Minecraft%20%2F%20Paper-26.2-brightgreen)
 ![Java](https://img.shields.io/badge/Java-21-orange)
 ![Platform](https://img.shields.io/badge/Platform-Paper-blue)
-![Version](https://img.shields.io/badge/Version-1.33.2-blueviolet)
+![Version](https://img.shields.io/badge/Version-1.34.0-blueviolet)
 ![Type](https://img.shields.io/badge/Type-Plugin%20Rewrite-purple)
 ![License](https://img.shields.io/badge/License-MIT-green)
 ![Languages](https://img.shields.io/badge/Languages-EN%20%2F%20DE%20%2F%20PL-yellow)
@@ -23,6 +23,24 @@
 It does **not** require datapacks, command functions, minecart menus, or a manual resource pack.
 Everything is handled directly through the plugin. Optional animated 3D models are handled through
 **BetterModel** when that plugin is installed and the (experimental) module is enabled.
+
+---
+
+## 🆕 What's New in v1.34.0
+
+### 🧸 3D models: a model per skin, sizes, and animations that answer what you do
+
+For servers that show pets as animated models through **BetterModel** (the optional, experimental module). Bring your own `.bbmodel` files — none are included.
+
+* 🎨 **A model for every skin.** The model is found by its file name: the pet id, the skin the pet is wearing, and optionally how it moves — `cat.bbmodel`, `cat__black.bbmodel`, `allay_happy_flying.bbmodel`. Change the skin in Customize and the model changes with it; a skin without a model of its own uses the pet's plain one. Where a pet has both a `_grounded` and a `_flying` model, the new `model-flying-pets` list decides.
+* 📏 **Sizes.** `model-scale` sets a size for all models, for single pets or for single model files — for the dragon that fills the room and the worm nobody can see.
+* 🎬 **More than idle and walking.** Models that bring further animations now use them when the moment fits: a greeting when the pet appears, an attack or roar when you hit something, a flinch when you are hit, digging when you break blocks, swimming in water, a jump now and then when you jump, take-off and landing with the elytra, eating along with you, a little celebration on a level-up, the Phoenix's rebirth — and sitting down, then dozing off, when you stand still for a while. A model plays what it has; nothing is required. Whatever else it brings (a tail curl, a wing stretch) joins the random idle gestures.
+* 🧰 **`scripts/install_models.py`** installs a folder of model packages onto a server: it picks the model for every pet and skin, leaves out what would only load twice, suggests sizes for the ones that stand out, and switches the module on.
+* ⚙️ Model files are read once and remembered (`models/animations.index`) — hundreds of them no longer slow every start. Idle gestures now last exactly as long as their animation.
+
+⚠️ Many detailed models need memory: 344 of them did not fit into 1.5 GB of heap in our test and loaded fine with 8 GB.
+
+Checked on a real Paper 26.2 server with BetterModel 3.2.0: all 79 pets in all their skins (307 combinations) appear as models (`MODELS=… bash e2e/run-e2e.sh`). How they look and move in the game has not been looked at by the author of these lines.
 
 ---
 

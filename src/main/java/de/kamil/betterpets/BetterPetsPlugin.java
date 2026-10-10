@@ -1084,6 +1084,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
             final int effectiveAmount = Math.max(1, (int) Math.round(amount * combined));
             final boolean leveled = pet.addExp(effectiveAmount, petXpMultiplier());
             if (leveled) {
+                activePets.modelMoment(player, ActivePetManager.PetMoment.HAPPY);
                 activePets.refreshDisplay(player);
                 definitions.get(pet.definitionId()).ifPresent(definition ->
                     player.sendMessage(lang.colored("pet.leveled", NamedTextColor.GREEN,
@@ -1251,6 +1252,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
         }
         // Now that all break bonuses have run, forget this position so the placed-block set stays bounded.
         activePets.forgetPlacedBlock(event.getBlock());
+        activePets.modelMoment(event.getPlayer(), ActivePetManager.PetMoment.DIG);
     }
 
     // The Silk Moth and the Salamander exchange a block's drops here, once it has really been broken.
@@ -1268,6 +1270,27 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPistonRetract(final org.bukkit.event.block.BlockPistonRetractEvent event) {
         activePets.noteMovedBlocks(event.getBlocks(), event.getDirection());
+    }
+
+    // Small things an owner does that a pet shown as a 3D model may join in with, if its model has an
+    // animation for it (see ActivePetManager.PetMoment). Nothing here changes what happens in the game.
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onOwnerJump(final com.destroystokyo.paper.event.player.PlayerJumpEvent event) {
+        if (ThreadLocalRandom.current().nextDouble() < 0.25) {
+            activePets.modelMoment(event.getPlayer(), ActivePetManager.PetMoment.JUMP);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onOwnerEat(final org.bukkit.event.player.PlayerItemConsumeEvent event) {
+        activePets.modelMoment(event.getPlayer(), ActivePetManager.PetMoment.EAT);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onOwnerGlide(final org.bukkit.event.entity.EntityToggleGlideEvent event) {
+        if (event.getEntity() instanceof Player player) {
+            activePets.modelMoment(player, event.isGliding() ? ActivePetManager.PetMoment.TAKEOFF : ActivePetManager.PetMoment.LAND);
+        }
     }
 
     private boolean isOre(final Material type) {
@@ -2214,6 +2237,7 @@ public final class BetterPetsPlugin extends JavaPlugin implements Listener {
      * free — and never profitable — at lower levels).
      */
     private void maybeGoblinTradeRefund(final PlayerTradeEvent event) {
+        activePets.modelMoment(event.getPlayer(), ActivePetManager.PetMoment.TRADE);
         if (event.isCancelled()) {
             return;
         }
